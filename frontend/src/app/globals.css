@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Aegis Wealth AI design tokens — Section 2.7.2 of the project documentation.
+ * No screen uses a raw colour value; everything reads from these variables.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Base surfaces */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text: #0f172a;
+  --text-muted: #475569;
+
+  /* Brand / primary */
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --primary-soft: #eff4ff;
+
+  /* Status */
+  --pass: #15803d;
+  --pass-bg: #f0fdf4;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --reject: #b91c1c;
+  --reject-bg: #fef2f2;
+
+  /* Asset classes (charts) — same colour for the same class in every chart */
+  --asset-cash: #64748b;
+  --asset-bond: #2563eb;
+  --asset-gold: #b7791f;
+  --asset-equity: #0f766e;
+
+  /* shadcn semantic mapping */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary-foreground: #ffffff;
+  --secondary: var(--primary-soft);
+  --secondary-foreground: var(--primary);
+  --muted: #eef0f3;
+  --muted-foreground: var(--text-muted);
+  --accent: var(--primary-soft);
+  --accent-foreground: var(--primary-hover);
+  --destructive: var(--reject);
+  --input: var(--border);
+  --ring: var(--primary);
+  --chart-1: var(--asset-cash);
+  --chart-2: var(--asset-bond);
+  --chart-3: var(--asset-gold);
+  --chart-4: var(--asset-equity);
+  --chart-5: var(--text-muted);
+  --radius: 0.5rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--primary-soft);
+  --sidebar-accent-foreground: var(--primary);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-(--bg) text-(--text);
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Tabular numbers everywhere a figure appears */
+  .tabular-nums,
+  [data-figure] {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Type scale — Section 2.7.2 (size/line-height in px) */
+  .text-caption {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .text-body {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .text-form {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .text-section {
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+  }
+  .text-page-title {
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 700;
+  }
+  .text-key-figure {
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Print layout for advice records — S11: print without navigation */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}

@@ -1,5 +1,6 @@
 import type { AssetClass, GateResult, GateRule, ProposalItem, ProposalMetrics, StressResult } from "@/lib/types";
 import { findProduct } from "@/mocks/data/products";
+import { formatMoney } from "@/lib/format";
 
 export interface GateInputs {
   items: ProposalItem[];
@@ -132,13 +133,35 @@ export function evaluateGate(input: GateInputs): GateResult {
     )
   );
 
-  const hardFail = rules.some((r) => r.type === "hard" && r.result === "fail");
-  const softFail = rules.some((r) => r.type === "soft" && r.result === "fail");
+  // Each rule's measured value against its limit, pass or fail (same wording as the backend gate).
+  const nonCash = items.filter((i) => i.asset_class !== "cash");
+  const largest = Math.max(0, ...nonCash.map((i) => i.weight_pct));
+  const highest = Math.max(0, ...items.map((i) => i.risk_level));
+  const longest = Math.max(0, ...items.map((i) => findProduct(i.product_code)?.lockup_months ?? 0));
+  const available = Math.round((metrics.liquid_share_pct / 100) * amount * 100) / 100;
+  const details: Record<string, string> = {
+    "R-01": `Weights total ${+total.toFixed(2)}%.`,
+    "R-02": `Highest product risk level is R${highest}; your tier is ${tier}.`,
+    "R-03": `Largest non-cash product is ${+largest.toFixed(1)}%; the limit is 40%.`,
+    "R-04": `${formatMoney(available)} is available within 1 day; you need ${formatMoney(nearTermNeed)}.`,
+    "R-05":
+      horizonYears < 3
+        ? `Equity and gold are ${+egWeight.toFixed(1)}%; the limit under 3 years is 20%.`
+        : `Your horizon is ${horizonYears} years, so the 20% cap on equity and gold does not apply.`,
+    "R-06": `Longest lock-up is ${longest} months; your horizon is ${horizonYears * 12} months.`,
+    "R-07": `Weighted annual fee is ${metrics.weighted_fee_pct.toFixed(2)}%; the limit is 1.00%.`,
+    "R-08": `Historical maximum drawdown is ${metrics.max_drawdown_pct.toFixed(1)}%; you can accept ${maxAcceptableLossPct}%.`,
+    "R-09": `Worst hypothetical loss is ${worstLossAbs.toFixed(2)}% (${worst?.name ?? "worst case"}); you can accept ${maxAcceptableLossPct}%.`,
+  };
+  const withDetails = rules.map((r) => ({ ...r, detail: details[r.id] ?? "" }));
+
+  const hardFail = withDetails.some((r) => r.type === "hard" && r.result === "fail");
+  const softFail = withDetails.some((r) => r.type === "soft" && r.result === "fail");
   const decision = hardFail ? "REJECT" : softFail ? "WARNING" : "PASS";
 
-  return { decision, rules, acknowledged_rule_ids: [] };
+  return { decision, rules: withDetails, acknowledged_rule_ids: [] };
 }
 
 function rule(id: string, type: "hard" | "soft", pass: boolean, message: string | null): GateRule {
-  return { id, type, result: pass ? "pass" : "fail", message: pass ? null : message };
+  return { id, type, result: pass ? "pass" : "fail", message: pass ? null : message, detail: "" };
 }

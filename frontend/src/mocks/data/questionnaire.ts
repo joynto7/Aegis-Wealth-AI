@@ -1,5 +1,8 @@
 import type { Question, Questionnaire } from "@/lib/types";
 
+/** Internal shape: the public Question plus each option's points, which the API never exposes. */
+export type ScoredQuestion = Omit<Question, "options"> & { options: { id: string; label: string; points: number }[] };
+
 /**
  * The 10-question questionnaire (Section 2.5.2): 5 capacity (C1-C5),
  * 5 willingness (W1-W5). Points are internal only — the public endpoint
@@ -8,7 +11,7 @@ import type { Question, Questionnaire } from "@/lib/types";
 
 export const QUESTIONNAIRE_VERSION = "q-2026-10";
 
-export const QUESTIONS: Question[] = [
+export const QUESTIONS: ScoredQuestion[] = [
   {
     id: "C1",
     group: "capacity",
@@ -135,11 +138,11 @@ export function toPublicQuestionnaire(): Questionnaire {
     version: QUESTIONNAIRE_VERSION,
     questions: QUESTIONS.map((q) => ({
       ...q,
-      options: q.options.map(({ id, label }) => ({ id, label, points: undefined as unknown as number })),
+      options: q.options.map(({ id, label }) => ({ id, label })),
     })),
   };
 }
 
-export function findQuestion(id: string): Question | undefined {
+export function findQuestion(id: string): ScoredQuestion | undefined {
   return QUESTIONS.find((q) => q.id === id);
 }

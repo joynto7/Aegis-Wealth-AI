@@ -19,7 +19,7 @@ import { RULES } from "@/mocks/data/rules";
 import { respondToChat } from "@/mocks/services/chat";
 import { verifyChain } from "@/mocks/services/chain";
 import { DATA_AS_OF } from "@/mocks/data/scenarios";
-import type { AdviceRecord, LogEntry, Order, Profile, Proposal, ReplayReaction } from "@/lib/types";
+import type { AdviceRecord, ChatReply, LogEntry, Order, Profile, Proposal, ReplayReaction } from "@/lib/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -507,33 +507,31 @@ export const handlers = [
 
   // ----------------------------------------------------------------- chat
   http.post("/api/chat", async ({ request }) => {
-    const auth = authenticate(request);
-    if (!isAuthResult(auth)) return auth;
-    const forbidden = requireRole(auth.user, "client");
-    if (forbidden) return forbidden;
-    if (db.chatRateLimited(auth.user.id)) {
-      return errorResponse(429, "RATE_LIMITED", "Too many messages; wait a moment and try again.");
-    }
-    const body = (await request.json()) as { message?: string; proposal_id?: number };
-    const message = (body.message ?? "").trim();
-    if (!message || message.length > 1000) {
-      return errorResponse(422, "VALIDATION_ERROR", "A message must be 1 to 1,000 characters.", { fields: [{ field: "message", problem: "length" }] });
-    }
-    db.recordChatMessage(auth.user.id);
-    db.addChatMessage(auth.user.id, { message_id: db.nextId("message"), role: "user", content: message, created_at: new Date().toISOString() });
-    await delay(350);
-    const reply = respondToChat(auth.user.id, message, body.proposal_id);
-    db.addChatMessage(auth.user.id, {
-      message_id: reply.message_id,
-      role: "assistant",
-      content: reply.reply,
-      mode: reply.mode,
-      grounding: reply.grounding,
-      tool_calls: reply.tool_calls,
-      citations: reply.citations,
-      created_at: reply.created_at,
+    const turn = await chatTurn(request);
+    return turn instanceof Response ? turn : HttpResponse.json(turn);
+  }),
+
+  // P1 streaming chat: the same turn as server-sent events (status, each tool call, then the reply).
+  http.post("/api/chat/stream", async ({ request }) => {
+    const turn = await chatTurn(request);
+    if (turn instanceof Response) return turn;
+    const frames: [string, unknown][] = [
+      ["status", { type: "status", text: "Thinking" }],
+      ...turn.tool_calls.map((call): [string, unknown] => ["tool", { type: "tool", call }]),
+      ["status", { type: "status", text: "Answering from a checked template" }],
+      ["reply", turn],
+    ];
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        for (const [event, data] of frames) {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          await delay(150);
+        }
+        controller.close();
+      },
     });
-    return HttpResponse.json(reply);
+    return new HttpResponse(stream, { headers: { "Content-Type": "text/event-stream" } });
   }),
 
   http.get("/api/chat/history", ({ request }) => {
@@ -655,3 +653,32 @@ export const handlers = [
     return HttpResponse.json({ status: "ok", db: "ok", llm: "fallback", data_as_of: DATA_AS_OF });
   }),
 ];
+
+/** One chat turn for both chat endpoints: checks, saves both messages, returns the reply or an error response. */
+async function chatTurn(request: Request): Promise<ChatReply | Response> {
+  const auth = authenticateAs(request, "client");
+  if (!isAuthResult(auth)) return auth;
+  if (db.chatRateLimited(auth.user.id)) {
+    return errorResponse(429, "RATE_LIMITED", "Too many messages. Wait a minute and try again.");
+  }
+  const body = (await request.json()) as { message?: string; proposal_id?: number };
+  const message = (body.message ?? "").trim();
+  if (!message || message.length > 1000) {
+    return errorResponse(422, "VALIDATION_ERROR", "A message must be 1 to 1,000 characters.", { fields: [{ field: "message", problem: "length" }] });
+  }
+  db.recordChatMessage(auth.user.id);
+  db.addChatMessage(auth.user.id, { message_id: db.nextId("message"), role: "user", content: message, created_at: new Date().toISOString() });
+  await delay(350);
+  const reply = respondToChat(auth.user.id, message, body.proposal_id);
+  db.addChatMessage(auth.user.id, {
+    message_id: reply.message_id,
+    role: "assistant",
+    content: reply.reply,
+    mode: reply.mode,
+    grounding: reply.grounding,
+    tool_calls: reply.tool_calls,
+    citations: reply.citations,
+    created_at: reply.created_at,
+  });
+  return reply;
+}

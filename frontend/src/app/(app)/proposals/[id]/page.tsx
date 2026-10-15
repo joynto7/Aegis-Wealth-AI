@@ -23,12 +23,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePageTitle } from "@/components/shell/page-title";
 import { DockedChat } from "@/components/shell/chat-drawer";
 import { Stepper } from "@/components/shared/stepper";
-import { useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
+import { useComplianceRules, useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
 
+/** The gate decision with every rule's reason: its name, its verdict and the measured value against its limit. */
 function GatePanel({ gate }: { gate: Proposal["gate"] }) {
+  const rules = useComplianceRules();
+  const names = new Map((rules.data?.items ?? []).map((r) => [r.id, r.name]));
   return (
     <Card>
       <CardContent className="space-y-3 px-6 py-5">
@@ -36,16 +39,25 @@ function GatePanel({ gate }: { gate: Proposal["gate"] }) {
           <h3 className="text-form font-semibold text-(--text)">Compliance gate</h3>
           <StatusBadge decision={gate.decision} />
         </div>
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {gate.rules.map((r: GateRule) => (
             <li key={r.id} className="flex items-start gap-2 text-body">
               {r.result === "pass" ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-(--pass)" />
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-(--pass)" aria-hidden />
               ) : (
-                <XCircle className={cn("mt-0.5 size-4 shrink-0", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")} />
+                <XCircle
+                  className={cn("mt-0.5 size-4 shrink-0", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")}
+                  aria-hidden
+                />
               )}
-              <span className={r.result === "fail" ? "text-(--text)" : "text-(--text-muted)"}>
-                <span className="font-mono text-caption">{r.id}</span> — {r.message ?? "Passed."}
+              <span className="min-w-0">
+                <span className={r.result === "fail" ? "font-medium text-(--text)" : "text-(--text)"}>
+                  <span className="font-mono text-caption">{r.id}</span> {names.get(r.id) ?? ""}
+                  <span className="sr-only">{r.result === "pass" ? " passed" : r.type === "hard" ? " failed" : " warning"}</span>
+                  {r.result === "fail" ? <span className="text-caption text-(--text-muted)"> · {r.type === "hard" ? "hard rule" : "warning"}</span> : null}
+                </span>
+                {r.message ? <span className="block text-(--text)">{r.message}</span> : null}
+                <span className="block text-caption text-(--text-muted)">{r.detail}</span>
               </span>
             </li>
           ))}
@@ -55,14 +67,102 @@ function GatePanel({ gate }: { gate: Proposal["gate"] }) {
   );
 }
 
+/** FR-4.5 (P1): this version beside the one it replaced, with every change highlighted. */
+function VersionCompare({ current, parentId }: { current: Proposal; parentId: number }) {
+  const [open, setOpen] = useState(false);
+  const parent = useProposal(open ? parentId : null);
+  const before = parent.data;
+  const codes = before
+    ? Array.from(new Set([...before.items.map((i) => i.product_code), ...current.items.map((i) => i.product_code)]))
+    : [];
+  const weightOf = (p: Proposal, code: string) => p.items.find((i) => i.product_code === code)?.weight_pct ?? 0;
+  const nameOf = (code: string) =>
+    current.items.find((i) => i.product_code === code)?.name ?? before?.items.find((i) => i.product_code === code)?.name ?? code;
+  const metrics: { label: string; key: keyof Proposal["metrics"]; decimals?: number }[] = [
+    { label: "Weighted annual fee", key: "weighted_fee_pct", decimals: 2 },
+    { label: "Historical max drawdown", key: "max_drawdown_pct" },
+    { label: "Available within 1 day", key: "liquid_share_pct" },
+    { label: "Largest single product", key: "largest_weight_pct" },
+  ];
+  return (
+    <Card>
+      <CardContent className="space-y-3 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-body text-(--text)">
+            Compare with version {current.version - 1} <span className="text-(--text-muted)">(#{parentId})</span>
+          </p>
+          <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open ? "Hide changes" : "Show changes"}
+          </Button>
+        </div>
+        {open ? (
+          parent.isLoading || !before ? (
+            <Skeleton className="h-32 w-full" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-body">
+                <caption className="sr-only">Weights and metrics before and after this revision</caption>
+                <thead className="border-b border-(--border) text-caption text-(--text-muted)">
+                  <tr>
+                    <th className="py-2">Product</th>
+                    <th className="py-2 text-right">Version {before.version}</th>
+                    <th className="py-2 text-right">Version {current.version}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {codes.map((code) => {
+                    const a = weightOf(before, code);
+                    const b = weightOf(current, code);
+                    const changed = a !== b;
+                    return (
+                      <tr key={code} className={cn("border-b border-(--border)", changed && "bg-(--primary-soft) font-medium")}>
+                        <td className="py-1.5">
+                          {nameOf(code)} {changed ? <span className="sr-only">(changed)</span> : null}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">{a.toFixed(1)}%</td>
+                        <td className="py-1.5 text-right tabular-nums">{b.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                  {metrics.map((m) => {
+                    const a = before.metrics[m.key];
+                    const b = current.metrics[m.key];
+                    return (
+                      <tr key={m.key} className={cn("border-b border-(--border) text-(--text-muted)", a !== b && "bg-(--primary-soft) text-(--text)")}>
+                        <td className="py-1.5">{m.label}</td>
+                        <td className="py-1.5 text-right tabular-nums">{a.toFixed(m.decimals ?? 1)}%</td>
+                        <td className="py-1.5 text-right tabular-nums">{b.toFixed(m.decimals ?? 1)}%</td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td className="py-2">Gate decision</td>
+                    <td className="py-2 text-right">
+                      <StatusBadge decision={before.gate.decision} />
+                    </td>
+                    <td className="py-2 text-right">
+                      <StatusBadge decision={current.gate.decision} />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function MetricCards({ proposal }: { proposal: Proposal }) {
   const m = proposal.metrics;
+  // NFR-4.3: every number has a unit and a one-line meaning.
   const cards = [
-    { label: "Annual volatility", value: <Percent value={m.volatility_pct} /> },
-    { label: "Historical max drawdown", value: <Percent value={m.max_drawdown_pct} /> },
-    { label: "Weighted annual fee", value: <Percent value={m.weighted_fee_pct} decimals={2} /> },
-    { label: "Available within 1 day", value: <Percent value={m.liquid_share_pct} /> },
-    { label: "Largest single product", value: <Percent value={m.largest_weight_pct} /> },
+    { label: "Annual volatility", value: <Percent value={m.volatility_pct} />, hint: "How much this mix's value has typically swung in a year." },
+    { label: "Historical max drawdown", value: <Percent value={m.max_drawdown_pct} />, hint: "The biggest fall from a peak in the history data." },
+    { label: "Weighted annual fee", value: <Percent value={m.weighted_fee_pct} decimals={2} />, hint: "What the products charge per year, on average." },
+    { label: "Available within 1 day", value: <Percent value={m.liquid_share_pct} />, hint: "The share you could withdraw by tomorrow." },
+    { label: "Largest single product", value: <Percent value={m.largest_weight_pct} />, hint: "No product other than cash may exceed 40%." },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -70,6 +170,7 @@ function MetricCards({ proposal }: { proposal: Proposal }) {
         <div key={c.label} className="rounded-xl border border-(--border) bg-(--surface) p-4">
           <p className="text-caption text-(--text-muted)">{c.label}</p>
           <p className="text-form font-semibold text-(--text)">{c.value}</p>
+          <p className="mt-1 text-caption text-(--text-muted)">{c.hint}</p>
         </div>
       ))}
     </div>
@@ -205,7 +306,9 @@ function ProposalDetail({ id }: { id: number }) {
           )}
         </p>
 
-        {proposal.status === "superseded" ? (
+        {proposal.parent_id ? <VersionCompare current={proposal} parentId={proposal.parent_id} /> : null}
+
+      {proposal.status === "superseded" ? (
           <Alert>
             <AlertTitle>This version was superseded</AlertTitle>
             <AlertDescription>
@@ -246,23 +349,29 @@ function ProposalDetail({ id }: { id: number }) {
               <table className="w-full text-left text-body">
                 <thead className="border-b border-(--border) text-caption text-(--text-muted)">
                   <tr>
-                    <th className="py-2">Product</th>
-                    <th className="py-2">Asset class</th>
-                    <th className="py-2">Risk</th>
-                    <th className="py-2">Weight</th>
-                    <th className="py-2">Amount</th>
+                    <th className="py-2">Product and why it was chosen</th>
+                    <th className="whitespace-nowrap px-3 py-2">Asset class</th>
+                    <th className="whitespace-nowrap px-3 py-2 text-right">Risk</th>
+                    <th className="whitespace-nowrap px-3 py-2 text-right">Weight</th>
+                    <th className="whitespace-nowrap py-2 pl-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {proposal.items.map((item: ProposalItem) => (
-                    <tr key={item.product_code} className="border-b border-(--border) last:border-0">
-                      <td className="py-2 font-medium text-(--text)">{item.name}</td>
-                      <td className="py-2 text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</td>
-                      <td className="py-2">R{item.risk_level}</td>
-                      <td className="py-2">
+                    <tr key={item.product_code} className="border-b border-(--border) align-top last:border-0">
+                      <td className="max-w-md py-2 pr-4">
+                        <span className="font-medium text-(--text)">{item.name}</span>
+                        <span className="block text-caption text-(--text-muted)">
+                          <span className="sr-only">Why: </span>
+                          {item.rationale}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">R{item.risk_level}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">
                         <Percent value={item.weight_pct} />
                       </td>
-                      <td className="py-2">
+                      <td className="whitespace-nowrap py-2 pl-3 text-right">
                         <Money value={item.amount} withCents />
                       </td>
                     </tr>

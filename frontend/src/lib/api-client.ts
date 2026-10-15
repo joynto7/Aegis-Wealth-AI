@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ErrorCode } from "./types";
+import type { ApiErrorBody, ChatReply, ErrorCode, ToolCallSummary } from "./types";
 import { getSessionToken } from "./session-token";
 import { API_MOCK } from "./api-mode";
 
@@ -75,11 +75,64 @@ async function request<T>(
       res.status,
       err?.code ?? "INTERNAL",
       err?.message ?? "Something went wrong. Please try again.",
-      err?.details
+      err?.details ?? undefined
     );
   }
 
   return json as T;
+}
+
+export type ChatStreamEvent = { type: "status"; text: string } | { type: "tool"; call: ToolCallSummary };
+
+/**
+ * POST /api/chat/stream (P1 streaming chat): progress events while the agent
+ * works, then the checked reply. The reply text only arrives after the
+ * grounding check, so nothing unverified is ever shown.
+ */
+export async function streamChat(
+  body: { message: string; proposal_id?: number },
+  onEvent: (event: ChatStreamEvent) => void
+): Promise<ChatReply> {
+  const token = API_MOCK ? getSessionToken() : null;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { "X-Aegis-Session": token } : {}) },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, "INTERNAL", "Could not reach the server. Check your connection and try again.");
+  }
+  if (!res.ok || !res.body || !res.headers.get("content-type")?.includes("text/event-stream")) {
+    const err = ((await res.json().catch(() => null)) as ApiErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "INTERNAL", err?.message ?? "Something went wrong. Please try again.", err?.details ?? undefined);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    let boundary: number;
+    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const kind = /^event: (.*)$/m.exec(frame)?.[1];
+      const data = /^data: (.*)$/m.exec(frame)?.[1];
+      if (!kind || !data) continue;
+      const payload = JSON.parse(data);
+      if (kind === "reply") return payload as ChatReply;
+      if (kind === "error") {
+        const err = (payload as ApiErrorBody).error;
+        throw new ApiError(500, err.code, err.message, err.details ?? undefined);
+      }
+      if (kind === "status" || kind === "tool") onEvent(payload as ChatStreamEvent);
+    }
+    if (done) break;
+  }
+  throw new ApiError(0, "INTERNAL", "The advisor stopped before replying. Please try again.");
 }
 
 export const api = {

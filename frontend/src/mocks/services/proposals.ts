@@ -41,9 +41,18 @@ export function reviseProposal(
   rawItems: { product_code: string; weight_pct: number }[]
 ): { proposal?: Proposal; error?: string } {
   const items: ProposalItem[] = [];
+  const before = new Map(parent.items.map((i) => [i.product_code, i]));
   for (const raw of rawItems) {
     const product = findProduct(raw.product_code);
     if (!product) return { error: `Unknown product code: ${raw.product_code}` };
+    const prev = before.get(product.code);
+    // Same wording as the backend: keep the engine's reason, note only the latest weight change.
+    const base = prev?.rationale.replace(/\s*Weight changed by (?:you|the advisor agent) from [\d.]+% to [\d.]+%\./g, "");
+    const rationale = !prev
+      ? `Added by you in revise mode: ${product.annual_fee_pct.toFixed(2)}% a year, risk level R${product.risk_level}, ${product.liquidity_days}-day access.`
+      : prev.weight_pct === raw.weight_pct
+        ? prev.rationale
+        : `${base} Weight changed by you from ${prev.weight_pct.toFixed(1)}% to ${raw.weight_pct.toFixed(1)}%.`;
     items.push({
       product_code: product.code,
       name: product.name,
@@ -51,6 +60,7 @@ export function reviseProposal(
       risk_level: product.risk_level,
       weight_pct: raw.weight_pct,
       amount: Math.round(((raw.weight_pct / 100) * parent.amount) * 100) / 100,
+      rationale,
     });
   }
   const classWeightsPct: Record<AssetClass, number> = { cash: 0, bond: 0, gold: 0, equity: 0 };

@@ -112,6 +112,35 @@
   --sidebar-ring: var(--primary);
 }
 
+/*
+ * Dark mode (P1). Same token names, so every screen follows. Contrast on
+ * --surface (#111827): text 13.6:1, muted 7.0:1, primary 6.9:1, pass 10:1,
+ * warning 10.7:1, reject 6.5:1; --primary-foreground on --primary 7.3:1.
+ */
+.dark {
+  --bg: #0b1120;
+  --surface: #111827;
+  --border: #273244;
+  --text: #e5e7eb;
+  --text-muted: #9ca3af;
+
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-soft: #172554;
+
+  --pass: #4ade80;
+  --pass-bg: #052e16;
+  --warning: #fbbf24;
+  --warning-bg: #451a03;
+  --reject: #f87171;
+  --reject-bg: #450a0a;
+
+  --muted: #1f2937;
+  --primary-foreground: #0b1120;
+  --sidebar-primary-foreground: #0b1120;
+  color-scheme: dark;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

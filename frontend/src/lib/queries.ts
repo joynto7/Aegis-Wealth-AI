@@ -8,7 +8,6 @@ import { clearSessionToken, getSessionToken, setSessionToken } from "@/lib/sessi
 import type {
   AdviceRecord,
   ChatMessage,
-  ChatReply,
   CompareResult,
   ConfirmTokenResponse,
   ExecuteResponse,
@@ -274,15 +273,6 @@ export function useChatHistory() {
   return useQuery<{ items: ChatMessage[] }>({
     queryKey: ["chat", "history"],
     queryFn: () => api.get("/chat/history"),
-  });
-}
-
-export function useSendChat() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { message: string; proposal_id?: number }) => api.post<ChatReply>("/chat", body),
-    // Returned so mutateAsync resolves only once the saved history is back.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "history"] }),
   });
 }
 

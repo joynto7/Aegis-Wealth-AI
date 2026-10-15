@@ -16,7 +16,7 @@ export function Stepper({ current, className }: { current: StepperStepName; clas
             <span
               className={cn(
                 "flex size-6 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
-                state === "done" && "bg-(--primary) text-white",
+                state === "done" && "bg-(--primary) text-(--primary-foreground)",
                 state === "current" && "bg-(--primary-soft) text-(--primary) ring-2 ring-(--primary)",
                 state === "upcoming" && "bg-(--muted) text-(--text-muted)"
               )}

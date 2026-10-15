@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
 const apiBaseUrl = process.env.API_BASE_URL;
 
 const nextConfig: NextConfig = {
+  // A self-contained server for the Docker image (frontend/Dockerfile).
+  output: "standalone",
   async rewrites() {
     return apiBaseUrl ? [{ source: "/api/:path*", destination: `${apiBaseUrl}/api/:path*` }] : [];
   },

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut, ChevronDown } from "lucide-react";
+import { Menu, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { DataLabel } from "@/components/shared/data-label";
 import { useTopBarTitle } from "@/components/shell/page-title";
@@ -19,6 +20,7 @@ import {
 
 export function TopBar({ user, onOpenMobileNav }: { user: User; onOpenMobileNav: () => void }) {
   const title = useTopBarTitle();
+  const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
   const logout = useLogout();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -55,6 +57,10 @@ export function TopBar({ user, onOpenMobileNav }: { user: User; onOpenMobileNav:
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
+              {resolvedTheme === "dark" ? <Sun className="size-4" aria-hidden /> : <Moon className="size-4" aria-hidden />}
+              {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={handleLogout} disabled={loggingOut}>
               <LogOut className="size-4" aria-hidden />
               Log out

@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setChatOpen(true)}
               className={cn(
-                "no-print fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-(--primary) px-4 py-3 text-body font-medium text-white shadow-lg transition-colors hover:bg-(--primary-hover)",
+                "no-print fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-(--primary) px-4 py-3 text-body font-medium text-(--primary-foreground) shadow-lg transition-colors hover:bg-(--primary-hover)",
                 chatDocked && "xl:hidden"
               )}
             >

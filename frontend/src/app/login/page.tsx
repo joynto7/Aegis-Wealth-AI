@@ -47,7 +47,8 @@ function LoginForm() {
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === "RATE_LIMITED") {
-        setFormError("Too many attempts; try again in a minute.");
+        // The server says which limit applied: too many attempts, or this account locked for a few minutes.
+        setFormError(e.message || "Too many attempts; try again in a minute.");
       } else if (e instanceof ApiError && e.code === "INVALID_CREDENTIALS") {
         setFormError("Email or password is incorrect.");
       } else {

@@ -62,6 +62,13 @@ for (const tier of [1, 2, 3, 4, 5]) {
   }
 }
 check("AT-06 empty class moves weight into the cash item", buildAllocation(3, 10000, 8, 9000).items.reduce((s, i) => s + i.weight_pct, 0), 100);
+{
+  // 7,000 / 100,000 x 100 is 7.000000000000001 in floating point, and rounding the other classes
+  // up can push the total to 101: the floor must still be exactly 7%, and the total exactly 100.
+  const tight = buildAllocation(5, 100000, 10, 7000);
+  check("AT-06 liquidity floor survives float noise and rounding (tier 5, need 7%)", [tight.class_weights_pct.cash, tight.items.reduce((s, i) => s + i.weight_pct, 0)], [7, 100]);
+  check("every item explains why it was chosen", alloc.items.every((i) => i.rationale.length > 20), true);
+}
 
 section("Metrics + Stress for that allocation");
 const metrics = computeMetrics(alloc.items);
@@ -86,6 +93,7 @@ const gate = evaluateGate({
 });
 console.log(gate.decision, gate.rules.filter((r) => r.result === "fail"));
 check("Scenario 1 step 8: gate PASS", gate.decision, "PASS");
+check("every gate rule reports its measured value", gate.rules.every((r) => r.detail.length > 0), true);
 
 section("AT-08 Fee comparison (SBF-01, SBF-02, BND-01; 50000; 8y) expect ~1460.89 / 1941.26 / 2418.36");
 const cmp = compareProducts(["SBF-01", "SBF-02", "BND-01"], 50000, 8);
@@ -115,7 +123,7 @@ console.log(badItems, "total:", badItems.reduce((s, i) => s + i.weight_pct, 0));
   const m = computeMetrics(items);
   const g = evaluateGate({ items, classWeightsPct: classWeights, metrics: m, stress: computeStress(classWeights, 200000), tier: 3, amount: 200000, horizonYears: 8, nearTermNeed: 30000, maxAcceptableLossPct: 20 });
   check("AT-07 / Scenario 1 step 10: REJECT naming R-03", [g.decision, g.rules.some((r) => r.id === "R-03" && r.result === "fail")], ["REJECT", true]);
-  const r02Items = [...alloc.items.filter((i) => i.product_code !== "IDX-01"), { product_code: "HGF-01", name: "Sample High-Growth Fund A", asset_class: "equity" as const, risk_level: 5, weight_pct: 25, amount: 50000 }];
+  const r02Items = [...alloc.items.filter((i) => i.product_code !== "IDX-01"), { product_code: "HGF-01", name: "Sample High-Growth Fund A", asset_class: "equity" as const, risk_level: 5, weight_pct: 25, amount: 50000, rationale: "" }];
   const g2 = evaluateGate({ items: r02Items, classWeightsPct: alloc.class_weights_pct, metrics: computeMetrics(r02Items), stress, tier: 3, amount: 200000, horizonYears: 8, nearTermNeed: 30000, maxAcceptableLossPct: 20 });
   check("AT-07: product above tier gives REJECT with R-02", [g2.decision, g2.rules.find((r) => r.id === "R-02")?.result], ["REJECT", "fail"]);
 }

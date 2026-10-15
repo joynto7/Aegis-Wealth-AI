@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { useChatHistory, useSendChat } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { useChatHistory } from "@/lib/queries";
+import { ApiError, streamChat } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ToolCallSummary } from "@/lib/types";
 
 const SUGGESTED = ["Why this proposal?", "What's my risk tier?", "Which product costs me least?"];
 
@@ -67,7 +69,9 @@ export function DockedChat({ proposalId, className }: { proposalId?: number; cla
 
 function ChatConversation({ proposalId }: { proposalId?: number }) {
   const history = useChatHistory();
-  const send = useSendChat();
+  const qc = useQueryClient();
+  const [pending, setPending] = useState(false);
+  const [live, setLive] = useState<{ status: string; tools: ToolCallSummary[] }>({ status: "", tools: [] });
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,12 +81,14 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, send.isPending]);
+  }, [messages.length, pending, live.tools.length]);
 
   async function submit(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || send.isPending) return;
+    if (!trimmed || pending) return;
     setDraft("");
+    setPending(true);
+    setLive({ status: "Thinking", tools: [] });
     const optimisticUser: ChatMessage = {
       message_id: nextLocalId.current--,
       role: "user",
@@ -91,11 +97,28 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
     };
     setLocalMessages((prev) => [...prev, optimisticUser]);
     try {
-      // useSendChat refetches the saved history before resolving, and that
-      // history already holds this turn — so drop the optimistic copies.
-      await send.mutateAsync({ message: trimmed, proposal_id: proposalId });
+      // Progress events show each tool call and the broker's decision as it happens.
+      await streamChat({ message: trimmed, proposal_id: proposalId }, (event) =>
+        setLive((prev) =>
+          event.type === "status" ? { ...prev, status: event.text } : { ...prev, tools: [...prev.tools, event.call] }
+        )
+      );
+      // The saved history already holds this turn, so the optimistic copy goes once it is back.
+      await qc.invalidateQueries({ queryKey: ["chat", "history"] });
       setLocalMessages([]);
-    } catch {
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "RATE_LIMITED") {
+        setLocalMessages((prev) => [
+          ...prev,
+          {
+            message_id: nextLocalId.current--,
+            role: "assistant",
+            content: e.message,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
       setLocalMessages((prev) => [
         ...prev,
         {
@@ -107,6 +130,9 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
           created_at: new Date().toISOString(),
         },
       ]);
+    } finally {
+      setPending(false);
+      setLive({ status: "", tools: [] });
     }
   }
 
@@ -134,7 +160,7 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
         ) : (
           messages.map((m) => <ChatBubble key={m.message_id} message={m} />)
         )}
-        {send.isPending ? <TypingIndicator /> : null}
+        {pending ? <LiveProgress status={live.status} tools={live.tools} /> : null}
       </div>
 
       <form
@@ -158,7 +184,7 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
           className="min-h-10 flex-1 resize-none"
           aria-label="Message Aegis"
         />
-        <Button type="submit" size="icon" disabled={!draft.trim() || send.isPending} aria-label="Send message">
+        <Button type="submit" size="icon" disabled={!draft.trim() || pending} aria-label="Send message">
           <Send className="size-4" />
         </Button>
       </form>
@@ -166,12 +192,30 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
   );
 }
 
-function TypingIndicator() {
+/** The agent at work: what it is doing now, and every tool call with its tier and the broker's decision. */
+function LiveProgress({ status, tools }: { status: string; tools: ToolCallSummary[] }) {
   return (
-    <div className="flex items-center gap-1 text-caption text-(--text-muted)" role="status" aria-label="Aegis is typing">
-      <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted) [animation-delay:-0.3s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted) [animation-delay:-0.15s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted)" />
+    <div className="space-y-1.5" role="status" aria-label={`Aegis is working: ${status}`}>
+      <div className="flex items-center gap-2 text-caption text-(--text-muted)">
+        <span className="flex gap-1" aria-hidden>
+          <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted) [animation-delay:-0.3s]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted) [animation-delay:-0.15s]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-(--text-muted)" />
+        </span>
+        {status}…
+      </div>
+      {tools.length ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {tools.map((t, i) => (
+            <li
+              key={i}
+              className="rounded-full border border-(--border) bg-(--surface) px-2 py-0.5 text-caption text-(--text-muted)"
+            >
+              {t.tool} · {t.tier} · {t.decision}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -187,13 +231,13 @@ function ChatBubble({ message }: { message: ChatMessage }) {
           isUser ? "bg-(--primary)" : "bg-(--muted)"
         )}
       >
-        {isUser ? <UserIcon className="size-3.5 text-white" /> : <Bot className="size-3.5 text-(--text-muted)" />}
+        {isUser ? <UserIcon className="size-3.5 text-(--primary-foreground)" /> : <Bot className="size-3.5 text-(--text-muted)" />}
       </div>
       <div className={cn("max-w-[85%] space-y-1.5", isUser && "items-end text-right")}>
         <div
           className={cn(
             "rounded-xl px-3 py-2 text-body",
-            isUser ? "bg-(--primary) text-white" : "bg-(--muted) text-(--text)"
+            isUser ? "bg-(--primary) text-(--primary-foreground)" : "bg-(--muted) text-(--text)"
           )}
         >
           {message.content}

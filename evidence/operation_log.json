@@ -1,0 +1,428 @@
+[
+  {
+    "id": 1,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "login",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {}
+  },
+  {
+    "id": 2,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "profile_submitted",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "profile_id": 1,
+      "version": 1,
+      "status": "needs_review",
+      "tier": 3
+    }
+  },
+  {
+    "id": 3,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "proposal_created",
+    "tool": null,
+    "tier": "T2",
+    "decision": "denied",
+    "detail": {
+      "reason": "CONTRADICTIONS_OPEN"
+    }
+  },
+  {
+    "id": 4,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "profile_submitted",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "profile_id": 2,
+      "version": 2,
+      "status": "complete",
+      "tier": 4
+    }
+  },
+  {
+    "id": 5,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "replay_reaction",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "episode_id": "E1",
+      "reaction": "sell_all",
+      "tier_before": 4,
+      "tier_after": 3
+    }
+  },
+  {
+    "id": 6,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "proposal_created",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 1
+    }
+  },
+  {
+    "id": 7,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "system",
+    "action": "gate_decided",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "proposal_id": 1,
+      "decision": "PASS",
+      "failed_rule_ids": []
+    }
+  },
+  {
+    "id": 8,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "proposal_revised",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 2,
+      "parent_id": 1
+    }
+  },
+  {
+    "id": 9,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "system",
+    "action": "gate_decided",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "proposal_id": 2,
+      "decision": "REJECT",
+      "failed_rule_ids": [
+        "R-03",
+        "R-08",
+        "R-09"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "proposal_revised",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 3,
+      "parent_id": 2
+    }
+  },
+  {
+    "id": 11,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "system",
+    "action": "gate_decided",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "proposal_id": 3,
+      "decision": "PASS",
+      "failed_rule_ids": []
+    }
+  },
+  {
+    "id": 12,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "agent",
+    "action": "tool_call",
+    "tool": "get_proposal",
+    "tier": "T1",
+    "decision": "allowed",
+    "detail": {
+      "summary": "Loaded proposal #3",
+      "proposal_id": 3
+    }
+  },
+  {
+    "id": 13,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "quiz_attempted",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 3,
+      "passed": true
+    }
+  },
+  {
+    "id": 14,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "token_issued",
+    "tool": null,
+    "tier": "T3",
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 3
+    }
+  },
+  {
+    "id": 15,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "client",
+    "action": "orders_executed",
+    "tool": null,
+    "tier": "T3",
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 3,
+      "order_ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "cash_after": 300000.0
+    }
+  },
+  {
+    "id": 16,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 2,
+    "actor": "system",
+    "action": "record_created",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "record_id": 1,
+      "hash": "0027b3940d462b2926db5041877430938008ea28765caccdb1637aa69e73bc0e"
+    }
+  },
+  {
+    "id": 17,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "client",
+    "action": "login",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {}
+  },
+  {
+    "id": 18,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "client",
+    "action": "profile_submitted",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "profile_id": 3,
+      "version": 1,
+      "status": "complete",
+      "tier": 4
+    }
+  },
+  {
+    "id": 19,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "client",
+    "action": "replay_reaction",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "episode_id": "E2",
+      "reaction": "sell_all",
+      "tier_before": 4,
+      "tier_after": 3
+    }
+  },
+  {
+    "id": 20,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "client",
+    "action": "proposal_created",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 4
+    }
+  },
+  {
+    "id": 21,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "system",
+    "action": "gate_decided",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "proposal_id": 4,
+      "decision": "PASS",
+      "failed_rule_ids": []
+    }
+  },
+  {
+    "id": 22,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "tool_call",
+    "tool": "get_proposal",
+    "tier": "T1",
+    "decision": "allowed",
+    "detail": {
+      "summary": "Loaded proposal #4",
+      "proposal_id": 4
+    }
+  },
+  {
+    "id": 23,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "proposal_revised",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "proposal_id": 5,
+      "parent_id": 4
+    }
+  },
+  {
+    "id": 24,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "system",
+    "action": "gate_decided",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "proposal_id": 5,
+      "decision": "REJECT",
+      "failed_rule_ids": [
+        "R-02",
+        "R-03",
+        "R-08",
+        "R-09"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "tool_call",
+    "tool": "revise_proposal",
+    "tier": "T2",
+    "decision": "allowed",
+    "detail": {
+      "summary": "Saved version 2 as #5: gate REJECT",
+      "proposal_id": 5
+    }
+  },
+  {
+    "id": 26,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "permission_denied",
+    "tool": "get_proposal",
+    "tier": "T1",
+    "decision": "denied",
+    "detail": {
+      "summary": "Blocked get_proposal: not your data",
+      "reason": "T1 covers only the client's own data",
+      "error": "PERMISSION_DENIED: T1 covers only the client's own data"
+    }
+  },
+  {
+    "id": 27,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "login",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {}
+  },
+  {
+    "id": 28,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "chain_verified",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "scope": "all",
+      "valid": true,
+      "checked": 1,
+      "broken_record_id": null
+    }
+  },
+  {
+    "id": 29,
+    "ts": "2026-10-15T17:54:52Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "evidence_exported",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "format": "json"
+    }
+  }
+]

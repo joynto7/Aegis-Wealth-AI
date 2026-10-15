@@ -1,0 +1,84 @@
+{
+  "run_at": "2026-10-15T17:56:49Z",
+  "target": "deterministic p95 < 2 s; chat < 10 s (NFR-1.1, NFR-1.2)",
+  "endpoints": [
+    {
+      "endpoint": "GET /api/profile/current",
+      "calls": 20,
+      "p95_ms": 2.3,
+      "median_ms": 1.7,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/replay/E1",
+      "calls": 20,
+      "p95_ms": 2.0,
+      "median_ms": 1.7,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/products",
+      "calls": 20,
+      "p95_ms": 1.7,
+      "median_ms": 1.6,
+      "ok": true
+    },
+    {
+      "endpoint": "POST /api/products/compare",
+      "calls": 20,
+      "p95_ms": 1.8,
+      "median_ms": 1.7,
+      "ok": true
+    },
+    {
+      "endpoint": "POST /api/proposals",
+      "calls": 20,
+      "p95_ms": 4.5,
+      "median_ms": 4.1,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/proposals/1",
+      "calls": 20,
+      "p95_ms": 3.0,
+      "median_ms": 2.2,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/proposals/1/quiz",
+      "calls": 20,
+      "p95_ms": 2.5,
+      "median_ms": 1.8,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/sandbox/account",
+      "calls": 20,
+      "p95_ms": 1.7,
+      "median_ms": 1.5,
+      "ok": true
+    },
+    {
+      "endpoint": "POST /api/records/verify",
+      "calls": 20,
+      "p95_ms": 2.3,
+      "median_ms": 1.8,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/logs",
+      "calls": 20,
+      "p95_ms": 3.1,
+      "median_ms": 2.2,
+      "ok": true
+    }
+  ],
+  "chat": {
+    "turns": 10,
+    "mode": "fallback",
+    "max_ms": 8.6,
+    "median_ms": 3.2,
+    "ok": true
+  },
+  "result": "PASS"
+}

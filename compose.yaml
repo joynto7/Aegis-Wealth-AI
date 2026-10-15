@@ -1,0 +1,33 @@
+# One command: docker compose up --build  ->  web http://localhost:3000, API docs http://localhost:8000/docs
+# Tests:        docker compose run --rm api pytest -q
+# Red-team run: docker compose run --rm api python scripts/redteam.py
+services:
+  api:
+    build: ./backend
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-8}
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000
+      # Requests arrive through the web container's /api rewrite; take the client IP from it for rate limits.
+      TRUST_PROXY_HEADERS: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - api-data:/app/var
+      # Scripts write evidence to /evidence, i.e. ./evidence on the host.
+      - ./evidence:/evidence
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_MOCK: "0"
+        API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-data:

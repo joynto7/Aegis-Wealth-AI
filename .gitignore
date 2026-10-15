@@ -1,0 +1,18 @@
+# Secrets (NFR-3.5): only .env.example, with names and no values, is committed.
+.env
+.env.*
+!.env.example
+
+# Backend
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-wal
+*.db-shm
+
+# Local tooling
+.claude/
+.DS_Store

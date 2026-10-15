@@ -2,11 +2,36 @@
 
 import { useState } from "react";
 import dynamicImport from "next/dynamic";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ApiError } from "@/lib/api-client";
+
+/**
+ * Section 2.7.6: a 401 from anywhere should bounce the user to /login, not
+ * leave them half-authenticated. Re-checking "me" is enough — if the session
+ * is really gone, useMe() flips to an error and AppShell's own effect
+ * redirects; if it was a one-off, this just re-validates quietly.
+ */
+function handleAuthError(error: unknown, queryClient: QueryClient, queryKey?: readonly unknown[]) {
+  if (error instanceof ApiError && error.code === "UNAUTHENTICATED") {
+    if (queryKey?.[0] !== "me") queryClient.invalidateQueries({ queryKey: ["me"] });
+  }
+}
 
 function makeQueryClient() {
-  return new QueryClient({
+  // A plain mutable holder, so the caches (created first) can reach the
+  // client (created after) once it exists — onError only ever fires later,
+  // well after `holder.client` is assigned below.
+  const holder: { client?: QueryClient } = {};
+  const queryCache = new QueryCache({
+    onError: (error, query) => handleAuthError(error, holder.client!, query.queryKey),
+  });
+  const mutationCache = new MutationCache({
+    onError: (error) => handleAuthError(error, holder.client!),
+  });
+  const queryClient = new QueryClient({
+    queryCache,
+    mutationCache,
     defaultOptions: {
       queries: {
         staleTime: 10_000,
@@ -15,6 +40,8 @@ function makeQueryClient() {
       },
     },
   });
+  holder.client = queryClient;
+  return queryClient;
 }
 
 let browserQueryClient: QueryClient | undefined;

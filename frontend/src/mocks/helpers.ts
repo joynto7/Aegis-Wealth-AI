@@ -7,28 +7,14 @@ export function errorResponse(status: number, code: ErrorCode, message: string, 
   return HttpResponse.json({ error: { code, message, details } }, { status });
 }
 
-export function parseCookies(header: string | null): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (!k) continue;
-    out[k] = decodeURIComponent(rest.join("="));
-  }
-  return out;
-}
-
-export function sessionCookieHeader(token: string, maxAgeSeconds: number) {
-  return `aegis_session=${token}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax`;
-}
-
-export const CLEAR_SESSION_COOKIE = "aegis_session=; Path=/; Max-Age=0; SameSite=Lax";
-
 export type AuthResult = { user: SeededUser; token: string };
 
 export function authenticate(request: Request): AuthResult | Response {
-  const cookies = parseCookies(request.headers.get("cookie"));
-  const token = cookies["aegis_session"];
+  // A Service Worker never sees the real `Cookie` header (browsers strip it
+  // before the request reaches a worker's fetch handler), so the session
+  // travels as an ordinary header instead — see src/lib/session-token.ts.
+  const token = request.headers.get("X-Aegis-Session");
+  if (!token) return errorResponse(401, "UNAUTHENTICATED", "Please log in again.");
   const session = db.getSession(token);
   if (!session) return errorResponse(401, "UNAUTHENTICATED", "Please log in again.");
   const user = findUserById(session.userId);

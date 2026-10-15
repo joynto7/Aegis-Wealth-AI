@@ -1,13 +1,6 @@
 import { http, HttpResponse, delay } from "msw";
 import { db, logAction } from "@/mocks/db";
-import {
-  authenticate,
-  CLEAR_SESSION_COOKIE,
-  errorResponse,
-  isAuthResult,
-  requireRole,
-  sessionCookieHeader,
-} from "@/mocks/helpers";
+import { authenticate, errorResponse, isAuthResult, requireRole } from "@/mocks/helpers";
 import { findUserByEmail } from "@/mocks/data/users";
 import { randomToken, hashToken, CONFIRM_TOKEN_TTL_MS } from "@/mocks/engines/tokens";
 import { canonicalStringify, nextHash, sha256Hex, GENESIS_HASH } from "@/mocks/engines/chain";
@@ -49,12 +42,17 @@ export const handlers = [
       return errorResponse(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
     }
     const token = randomToken();
-    db.createSession(user.id, token);
+    const expiresAt = db.createSession(user.id, token);
     logAction({ userId: user.id, actor: user.role === "compliance" ? "compliance" : "client", action: "login", decision: "allowed", detail: {} });
-    return HttpResponse.json(
-      { user: { id: user.id, email: user.email, role: user.role, display_name: user.display_name } },
-      { headers: { "Set-Cookie": sessionCookieHeader(token, 8 * 60 * 60) } }
-    );
+    // A real backend sets this via a Set-Cookie response header. MSW
+    // responses are synthetic, so the browser never applies Set-Cookie on
+    // them — the token travels in the body instead, and the page itself
+    // writes the cookie (see src/lib/session-cookie.ts).
+    return HttpResponse.json({
+      user: { id: user.id, email: user.email, role: user.role, display_name: user.display_name },
+      session_token: token,
+      expires_at: new Date(expiresAt).toISOString(),
+    });
   }),
 
   http.post("/api/auth/logout", async ({ request }) => {
@@ -63,7 +61,7 @@ export const handlers = [
       db.deleteSession(auth.token);
       logAction({ userId: auth.user.id, actor: auth.user.role === "compliance" ? "compliance" : "client", action: "logout", decision: "allowed", detail: {} });
     }
-    return new HttpResponse(null, { status: 204, headers: { "Set-Cookie": CLEAR_SESSION_COOKIE } });
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.get("/api/auth/me", ({ request }) => {

@@ -1,16 +1,17 @@
 import type { ApiErrorBody, ErrorCode } from "./types";
+import { getSessionToken } from "./session-token";
 
 /**
  * Typed fetch wrapper (Section 2.7.4: ApiClient). Turns the standard error
  * envelope (Section 2.6.2) into an ApiError(code, message, details); never
  * lets a raw stack trace or network error reach a screen.
  *
- * All endpoints are mocked by MSW in the browser (src/mocks). There is no
- * real backend in this build; the mock layer sets a real `aegis_session`
- * cookie on login (httpOnly is a server-only concept and doesn't apply to a
- * browser-side mock, but the cookie is otherwise handled exactly like
- * Section 2.6.1 describes) and `credentials: "include"` below carries it on
- * every request automatically — screen code never touches it directly.
+ * All endpoints are mocked by MSW in the browser (src/mocks) — there is no
+ * real backend in this build. A real session cookie (Section 2.6.1) can't
+ * carry auth across a Service Worker boundary (browsers strip the `Cookie`
+ * header before a Service Worker ever sees an intercepted request), so this
+ * mock layer sends the session token as an ordinary header instead; screen
+ * code never touches it directly.
  */
 
 export class ApiError extends Error {
@@ -35,8 +36,10 @@ async function request<T>(
   body?: unknown,
   extraHeaders?: Record<string, string>
 ): Promise<T> {
+  const token = getSessionToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...(token ? { "X-Aegis-Session": token } : {}),
     ...extraHeaders,
   };
 
@@ -46,7 +49,6 @@ async function request<T>(
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: "include",
     });
   } catch {
     throw new ApiError(0, "INTERNAL", "Could not reach the server. Check your connection and try again.");

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api-client";
+import { clearSessionToken, setSessionToken } from "@/lib/session-token";
 import type {
   AdviceRecord,
   ChatMessage,
@@ -44,8 +45,10 @@ export function useMe() {
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { email: string; password: string }) => api.post<{ user: User }>("/auth/login", body),
+    mutationFn: (body: { email: string; password: string }) =>
+      api.post<{ user: User; session_token: string; expires_at: string }>("/auth/login", body),
     onSuccess: (data) => {
+      setSessionToken(data.session_token);
       qc.setQueryData(["me"], data.user);
     },
   });
@@ -56,6 +59,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => api.post<void>("/auth/logout"),
     onSuccess: () => {
+      clearSessionToken();
       qc.clear();
     },
   });

@@ -8,17 +8,24 @@ import type {
   Profile,
   Proposal,
   ChatMessage,
+  QuizResult,
 } from "@/lib/types";
 import { SEED_USERS } from "@/mocks/data/users";
 import { findProduct } from "@/mocks/data/products";
 
 /**
- * In-memory mock "database". Lives for the lifetime of the browser tab
- * (module state inside the Service Worker / page bundle) — there is no real
- * backend in this build, so this stands in for Section 1.3.1's SQLite store.
- * Seeded with two clients and one compliance officer per FR-1.4, each
- * client's sandbox account starting with CNY 500,000 cash.
+ * Mock "database" — there is no real backend in this build, so this stands
+ * in for Section 1.3.1's SQLite store. Seeded with two clients and one
+ * compliance officer per FR-1.4, each client's sandbox account starting
+ * with CNY 500,000 cash.
+ *
+ * It lives in page memory and is snapshotted to this tab's sessionStorage
+ * after every mocked response (see src/mocks/browser.ts), so a refresh or a
+ * typed URL keeps the session and the data. Closing the tab, or opening a
+ * new one, starts a fresh demo.
  */
+
+const SNAPSHOT_KEY = "aegis_mock_db_v1";
 
 interface Session {
   token: string;
@@ -44,6 +51,7 @@ interface QuizAttemptState {
   proposalId: number;
   answers: Record<string, string>;
   passed: boolean;
+  results: QuizResult["results"];
   created_at: string;
 }
 
@@ -58,13 +66,69 @@ class MockDb {
   logs: LogEntry[] = [];
   confirmTokens = new Map<string, ConfirmTokenState>();
   quizAttempts = new Map<number, QuizAttemptState[]>();
-  loginFailures: number[] = []; // timestamps within the last minute
+  loginAttempts: number[] = []; // timestamps within the last minute
+  /** episode ids already answered, per profile id ("unique per profile and episode", Section 3.5). */
+  replayReactions = new Map<number, Set<string>>();
   chatTimestamps = new Map<number, number[]>();
 
   private ids = { proposal: 100, log: 1, message: 1, order: 1, record: 1, session: 1, profile: 1 };
 
   nextId(key: keyof MockDb["ids"]) {
     return this.ids[key]++;
+  }
+
+  // --- persistence ------------------------------------------------------
+  /** Saves the whole store to this tab's sessionStorage. Never throws. */
+  persist() {
+    try {
+      const snapshot = {
+        ids: this.ids,
+        sessions: [...this.sessions],
+        profiles: [...this.profiles],
+        proposals: [...this.proposals],
+        chat: [...this.chat],
+        sandbox: [...this.sandbox].map(([id, s]) => [id, { cash: s.cash, positions: [...s.positions] }]),
+        orders: [...this.orders],
+        records: [...this.records],
+        logs: this.logs,
+        confirmTokens: [...this.confirmTokens],
+        quizAttempts: [...this.quizAttempts],
+        replayReactions: [...this.replayReactions].map(([id, episodes]) => [id, [...episodes]]),
+      };
+      window.sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch {
+      // Storage full, blocked or unavailable: the demo still works in memory.
+    }
+  }
+
+  /** Loads the store saved by persist(), if this tab has one. Never throws. */
+  restore() {
+    try {
+      const raw = typeof window === "undefined" ? null : window.sessionStorage.getItem(SNAPSHOT_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      this.ids = s.ids;
+      this.sessions = new Map(s.sessions);
+      this.profiles = new Map(s.profiles);
+      this.proposals = new Map(s.proposals);
+      this.chat = new Map(s.chat);
+      this.sandbox = new Map(
+        (s.sandbox as [number, { cash: number; positions: [string, { units: number; avg_nav: number }][] }][]).map(
+          ([id, state]) => [id, { cash: state.cash, positions: new Map(state.positions) }]
+        )
+      );
+      this.orders = new Map(s.orders);
+      this.records = new Map(s.records);
+      this.logs = s.logs;
+      this.confirmTokens = new Map(s.confirmTokens);
+      this.quizAttempts = new Map(s.quizAttempts);
+      this.replayReactions = new Map(
+        (s.replayReactions as [number, string[]][]).map(([id, episodes]) => [id, new Set(episodes)])
+      );
+    } catch {
+      // A snapshot from an older build or a corrupt one: start fresh.
+      window.sessionStorage.removeItem(SNAPSHOT_KEY);
+    }
   }
 
   seed() {
@@ -229,16 +293,18 @@ class MockDb {
   }
 
   // --- rate limiting ------------------------------------------------------
-  recordLoginFailure() {
+  // Section 2.8.2: at most 10 log-in attempts a minute — every attempt
+  // counts, not just failed ones.
+  recordLoginAttempt() {
     const now = Date.now();
-    this.loginFailures = this.loginFailures.filter((t) => now - t < 60_000);
-    this.loginFailures.push(now);
+    this.loginAttempts = this.loginAttempts.filter((t) => now - t < 60_000);
+    this.loginAttempts.push(now);
   }
 
   loginRateLimited(): boolean {
     const now = Date.now();
-    this.loginFailures = this.loginFailures.filter((t) => now - t < 60_000);
-    return this.loginFailures.length >= 10;
+    this.loginAttempts = this.loginAttempts.filter((t) => now - t < 60_000);
+    return this.loginAttempts.length >= 10;
   }
 
   chatRateLimited(userId: number): boolean {
@@ -270,6 +336,7 @@ function nowIso() {
 
 export const db = new MockDb();
 db.seed();
+db.restore();
 
 export function logAction(opts: {
   userId: number | null;

@@ -85,19 +85,26 @@ export function buildAllocation(
     p.min_investment <= classAmount &&
     (p.asset_class !== "cash" || classWeight === 0 || nearTermNeed <= 0 || isLiquid(p));
 
-  const items: ProposalItem[] = [];
+  const itemsByClass: Record<AssetClass, ProposalItem[]> = { cash: [], bond: [], gold: [], equity: [] };
   const finalWeights: Record<AssetClass, number> = { ...rounded };
 
-  for (const cls of CLASSES) {
-    const weightPct = rounded[cls];
-    if (weightPct <= 0) continue;
+  const candidatesFor = (cls: AssetClass, weightPct: number) => {
     const classAmount = (weightPct / 100) * amount;
     let candidates = PRODUCTS.filter((p) => p.asset_class === cls && qualifies(p, classAmount, weightPct));
     // Cash class with a near-term need: only liquid products qualify.
     if (cls === "cash" && nearTermNeed > 0) {
       candidates = candidates.filter(isLiquid);
     }
-    candidates = [...candidates].sort(sortCandidates);
+    return [...candidates].sort(sortCandidates);
+  };
+
+  // Non-cash classes first, so an empty class (step 7) can still move its
+  // weight into the cash slot before the cash product is chosen.
+  for (const cls of CLASSES) {
+    if (cls === "cash") continue;
+    const weightPct = rounded[cls];
+    if (weightPct <= 0) continue;
+    const candidates = candidatesFor(cls, weightPct);
 
     if (candidates.length === 0) {
       // 7. Empty class: weight moves to cash.
@@ -107,19 +114,24 @@ export function buildAllocation(
       continue;
     }
 
-    if (cls !== "cash" && weightPct > 40 && candidates.length >= 2) {
+    if (weightPct > 40 && candidates.length >= 2) {
       // 6. Split between the two cheapest products.
       const [p1, p2] = candidates;
       const half = Math.floor(weightPct / 2);
       const w1 = half + (weightPct % 2); // first takes the odd 1%
       const w2 = half;
-      items.push(itemFrom(p1, w1, amount));
-      items.push(itemFrom(p2, w2, amount));
+      itemsByClass[cls].push(itemFrom(p1, w1, amount), itemFrom(p2, w2, amount));
     } else {
-      items.push(itemFrom(candidates[0], weightPct, amount));
+      itemsByClass[cls].push(itemFrom(candidates[0], weightPct, amount));
     }
   }
 
+  if (finalWeights.cash > 0) {
+    const [cashProduct] = candidatesFor("cash", finalWeights.cash);
+    if (cashProduct) itemsByClass.cash.push(itemFrom(cashProduct, finalWeights.cash, amount));
+  }
+
+  const items = CLASSES.flatMap((cls) => itemsByClass[cls]);
   return { items, class_weights_pct: finalWeights, notes };
 }
 

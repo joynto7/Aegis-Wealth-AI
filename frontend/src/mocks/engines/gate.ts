@@ -20,8 +20,9 @@ export function evaluateGate(input: GateInputs): GateResult {
 
   const rules: GateRule[] = [];
 
-  // R-01 Allocation total
-  const total = Object.values(classWeightsPct).reduce((a, b) => a + b, 0);
+  // R-01 Allocation total — over the items themselves, so a weight that
+  // never made it into a product can't slip through.
+  const total = items.reduce((a, i) => a + i.weight_pct, 0);
   rules.push(
     rule("R-01", "hard", Math.abs(total - 100) <= 0.01, "Weights must add up to 100%.")
   );
@@ -61,7 +62,7 @@ export function evaluateGate(input: GateInputs): GateResult {
       "R-04",
       "hard",
       availableWithinOneDay >= nearTermNeed - 0.01,
-      availableWithinOneDay < nearTermNeed
+      availableWithinOneDay < nearTermNeed - 0.01
         ? `Only CNY ${availableWithinOneDay.toFixed(2)} is available within 1 day; you need CNY ${nearTermNeed.toFixed(2)}.`
         : null
     )

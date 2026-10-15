@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/components/shell/page-title";
 import { useRecord } from "@/lib/queries";
 import { formatDateTime } from "@/lib/format";
-import { ASSET_CLASS_LABEL } from "@/mocks/data/products";
+import { ASSET_CLASS_LABEL } from "@/lib/labels";
 
 function HashRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -37,7 +37,7 @@ function HashRow({ label, value }: { label: string; value: string }) {
       >
         <Copy className="size-3.5" />
       </Button>
-      {copied ? <span className="no-print text-caption text-(--pass)">Copied</span> : null}
+      {copied ? <span className="no-print text-caption text-(--text-muted)">Copied</span> : null}
     </div>
   );
 }

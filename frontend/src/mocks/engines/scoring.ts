@@ -1,5 +1,4 @@
 import { QUESTIONS } from "@/mocks/data/questionnaire";
-import { TIER_LABELS } from "@/mocks/data/modelPortfolios";
 
 /**
  * Risk-profile scoring (Section 2.5.2). Pure, deterministic, no randomness.
@@ -27,9 +26,7 @@ export function tierFromScore(score: number): number {
   return 5;
 }
 
-export function tierLabel(tier: number): string {
-  return TIER_LABELS[tier] ?? "Unknown";
-}
+export { tierLabel } from "@/lib/labels";
 
 export interface ScoreResult {
   capacity_score: number;

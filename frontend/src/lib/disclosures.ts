@@ -1,4 +1,8 @@
-/** disclosures.json — risk disclosure texts shown on the Confirm screen (Section 2.5.1). */
+/**
+ * disclosures.json — risk disclosure texts shown on the Confirm screen and
+ * stored (id and version) in the advice record (Section 2.5.1). The API
+ * contract has no disclosures endpoint, so the texts ship with the client.
+ */
 export interface Disclosure {
   id: string;
   version: string;

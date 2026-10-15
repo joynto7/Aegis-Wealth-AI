@@ -1,4 +1,4 @@
-import { tierLabel } from "@/mocks/engines/scoring";
+import { tierLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 /** TierBadge (Section 2.7.4): "Tier 3 · Balanced" in neutral blue — never colour-coded by risk. */

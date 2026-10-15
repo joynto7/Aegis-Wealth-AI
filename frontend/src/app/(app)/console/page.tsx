@@ -8,6 +8,7 @@ import { RoleGate } from "@/components/shared/role-gate";
 import { ErrorState } from "@/components/shared/error-state";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { DecisionLabel } from "@/components/shared/decision-label";
 import { Money } from "@/components/shared/money";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,19 +133,7 @@ function OperationLogTab() {
                     <td className="py-2">{l.action.replace(/_/g, " ")}</td>
                     <td className="py-2">{l.tier ?? "—"}</td>
                     <td className="py-2">
-                      {l.decision ? (
-                        <span
-                          className={
-                            l.decision === "denied"
-                              ? "inline-flex items-center rounded-full bg-(--reject-bg) px-2 py-0.5 text-caption text-(--reject)"
-                              : "inline-flex items-center rounded-full bg-(--pass-bg) px-2 py-0.5 text-caption text-(--pass)"
-                          }
-                        >
-                          {l.decision}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
+                      <DecisionLabel decision={l.decision} />
                     </td>
                   </tr>
                 ))}
@@ -309,18 +298,34 @@ function RulesTab() {
 }
 
 function ExportTab() {
+  const [pending, setPending] = useState<"json" | "csv" | null>(null);
+  const [failed, setFailed] = useState<{ format: "json" | "csv"; error: unknown } | null>(null);
+
+  async function exportAs(format: "json" | "csv") {
+    setPending(format);
+    setFailed(null);
+    try {
+      await downloadLogsExport(format);
+    } catch (error) {
+      setFailed({ format, error });
+    } finally {
+      setPending(null);
+    }
+  }
+
   return (
     <Card className="max-w-md">
       <CardContent className="space-y-3 px-6 py-5">
         <p className="text-body text-(--text-muted)">Export the full operation log for the evidence pack.</p>
         <div className="flex gap-2">
-          <Button onClick={() => downloadLogsExport("json")}>
-            <Download className="size-4" /> JSON
+          <Button onClick={() => exportAs("json")} disabled={pending !== null}>
+            <Download className="size-4" /> {pending === "json" ? "Exporting…" : "JSON"}
           </Button>
-          <Button variant="outline" onClick={() => downloadLogsExport("csv")}>
-            <Download className="size-4" /> CSV
+          <Button variant="outline" onClick={() => exportAs("csv")} disabled={pending !== null}>
+            <Download className="size-4" /> {pending === "csv" ? "Exporting…" : "CSV"}
           </Button>
         </div>
+        {failed ? <ErrorState error={failed.error} onRetry={() => exportAs(failed.format)} /> : null}
       </CardContent>
     </Card>
   );

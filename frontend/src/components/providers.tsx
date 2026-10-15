@@ -5,6 +5,7 @@ import dynamicImport from "next/dynamic";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api-client";
+import { API_MOCK } from "@/lib/api-mode";
 
 /**
  * Section 2.7.6: a 401 from anywhere should bounce the user to /login, not
@@ -60,14 +61,14 @@ const MockGate = dynamicImport(() => import("@/components/mock-gate").then((m) =
   ssr: false,
 });
 
-/** There is no real backend in this build — every /api/* call is served by MSW (src/mocks). */
+/** With NEXT_PUBLIC_API_MOCK on (the default until the backend exists), every /api/* call is served by MSW (src/mocks). */
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(getQueryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <MockGate>{children}</MockGate>
+        {API_MOCK ? <MockGate>{children}</MockGate> : children}
       </TooltipProvider>
     </QueryClientProvider>
   );

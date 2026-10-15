@@ -1,8 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api-client";
-import { clearSessionToken, setSessionToken } from "@/lib/session-token";
+import { API_MOCK } from "@/lib/api-mode";
+import { clearSessionToken, getSessionToken, setSessionToken } from "@/lib/session-token";
 import type {
   AdviceRecord,
   ChatMessage,
@@ -46,9 +48,10 @@ export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { email: string; password: string }) =>
-      api.post<{ user: User; session_token: string; expires_at: string }>("/auth/login", body),
+      api.post<{ user: User; session_token?: string; expires_at?: string }>("/auth/login", body),
     onSuccess: (data) => {
-      setSessionToken(data.session_token);
+      // Only the mock layer returns the token; the real backend sets the httpOnly cookie instead.
+      if (data.session_token) setSessionToken(data.session_token);
       qc.setQueryData(["me"], data.user);
     },
   });
@@ -97,6 +100,11 @@ export function useSubmitProfile() {
     onSuccess: (profile) => {
       qc.setQueryData(["profile", "current"], profile);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      toast.success(
+        profile.status === "complete"
+          ? `Risk profile saved: tier ${profile.tier}.`
+          : "Risk profile saved. Fix the flagged answers to continue."
+      );
     },
   });
 }
@@ -123,6 +131,7 @@ export function useReplayReaction() {
       api.post<Profile>("/profile/current/replay-reaction", body),
     onSuccess: (profile) => {
       qc.setQueryData(["profile", "current"], profile);
+      toast.success("Your reaction was saved.");
     },
   });
 }
@@ -185,6 +194,7 @@ export function useCreateProposal() {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      toast.success(`Proposal #${proposal.id} created. The gate returned ${proposal.gate.decision}.`);
     },
   });
 }
@@ -197,6 +207,7 @@ export function useReviseProposal(proposalId: number) {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      toast.success(`Version ${proposal.version} saved. The gate returned ${proposal.gate.decision}.`);
     },
   });
 }
@@ -207,6 +218,7 @@ export function useAcknowledgeWarnings(proposalId: number) {
     mutationFn: (ruleIds: string[]) => api.post<Proposal>(`/proposals/${proposalId}/acknowledge`, { rule_ids: ruleIds }),
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
+      toast.success("Warnings acknowledged.");
     },
   });
 }
@@ -223,8 +235,9 @@ export function useSubmitQuiz(proposalId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (answers: Record<string, string>) => api.post<QuizResult>(`/proposals/${proposalId}/quiz`, { answers }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["proposals", proposalId] });
+      if (result.passed) toast.success("Quiz passed.");
     },
   });
 }
@@ -240,7 +253,8 @@ export function useExecuteProposal(proposalId: number) {
   return useMutation({
     mutationFn: (token: string) =>
       api.post<ExecuteResponse>(`/proposals/${proposalId}/execute`, undefined, { "X-Confirm-Token": token }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      toast.success(`${result.orders.length} orders filled. Advice record #${result.record_id} created.`);
       qc.invalidateQueries({ queryKey: ["proposals"] });
       qc.invalidateQueries({ queryKey: ["sandbox"] });
       qc.invalidateQueries({ queryKey: ["records"] });
@@ -267,9 +281,8 @@ export function useSendChat() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { message: string; proposal_id?: number }) => api.post<ChatReply>("/chat", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chat", "history"] });
-    },
+    // Returned so mutateAsync resolves only once the saved history is back.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "history"] }),
   });
 }
 
@@ -341,7 +354,16 @@ export function useHealth() {
 }
 
 export async function downloadLogsExport(format: "json" | "csv") {
-  const res = await fetch(`/api/logs/export?format=${format}`);
+  // Goes through fetch directly (the body is a file, not JSON), so it must
+  // carry the session itself, like ApiClient does.
+  const token = API_MOCK ? getSessionToken() : null;
+  const res = await fetch(`/api/logs/export?format=${format}`, {
+    headers: token ? { "X-Aegis-Session": token } : undefined,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    throw new ApiError(res.status, (body?.error?.code as never) ?? "INTERNAL", body?.error?.message ?? "The export failed.");
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -349,4 +371,5 @@ export async function downloadLogsExport(format: "json" | "csv") {
   a.download = `operation_log.${format}`;
   a.click();
   URL.revokeObjectURL(url);
+  toast.success(`Operation log exported as ${format.toUpperCase()}.`);
 }

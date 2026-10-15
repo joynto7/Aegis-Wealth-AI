@@ -10,6 +10,8 @@ import { formatMoney } from "@/lib/format";
 interface BuiltOption {
   label: string;
   correct: boolean;
+  /** Why this option is right or wrong, shown after a failed attempt. */
+  why: string;
 }
 
 function rotate<T>(arr: T[], by: number): T[] {
@@ -25,19 +27,55 @@ function buildCanonical(proposal: Proposal): Record<"Q1" | "Q2" | "Q3", BuiltOpt
 
   return {
     Q1: [
-      { label: formatMoney(worstLossAbs), correct: true },
-      { label: "CNY 0, losses are not possible", correct: false },
-      { label: formatMoney(worstLossAbs / 2), correct: false },
+      {
+        label: formatMoney(worstLossAbs),
+        correct: true,
+        why: `${formatMoney(worstLossAbs)} is the worst loss across the three stress scenarios (${worst?.name ?? "worst case"}).`,
+      },
+      {
+        label: "CNY 0, losses are not possible",
+        correct: false,
+        why: "Losses are possible: every stress scenario shows this mix losing value.",
+      },
+      {
+        label: formatMoney(worstLossAbs / 2),
+        correct: false,
+        why: "That is only half of the worst stress-scenario loss.",
+      },
     ],
     Q2: [
-      { label: "The value can go down as well as up.", correct: true },
-      { label: "Returns are fixed in advance.", correct: false },
-      { label: "The sandbox cannot lose value.", correct: false },
+      {
+        label: "The value can go down as well as up.",
+        correct: true,
+        why: "Investments can fall as well as rise; nothing here is guaranteed.",
+      },
+      {
+        label: "Returns are fixed in advance.",
+        correct: false,
+        why: "No return is fixed: the figures shown are history or hypothetical scenarios, not promises.",
+      },
+      {
+        label: "The sandbox cannot lose value.",
+        correct: false,
+        why: "Sandbox positions are valued at NAV, so they can lose value like real ones.",
+      },
     ],
     Q3: [
-      { label: formatMoney(withdrawable), correct: true },
-      { label: formatMoney(proposal.amount), correct: false },
-      { label: "CNY 0", correct: false },
+      {
+        label: formatMoney(withdrawable),
+        correct: true,
+        why: `Only the liquid share (${proposal.metrics.liquid_share_pct}% of the amount) can be withdrawn within 1 day.`,
+      },
+      {
+        label: formatMoney(proposal.amount),
+        correct: false,
+        why: "Not all of it: some products take more than 1 day to sell or are locked up.",
+      },
+      {
+        label: "CNY 0",
+        correct: false,
+        why: `The liquid share (${proposal.metrics.liquid_share_pct}% of the amount) can be withdrawn within 1 day.`,
+      },
     ],
   };
 }
@@ -51,10 +89,11 @@ const QUESTION_TEXT: Record<"Q1" | "Q2" | "Q3", string> = {
 function optionsForProposal(proposal: Proposal) {
   const canonical = buildCanonical(proposal);
   const rotation = proposal.id % 3;
-  const built: Record<"Q1" | "Q2" | "Q3", { id: string; label: string; correct: boolean }[]> = {} as never;
+  const built: Record<"Q1" | "Q2" | "Q3", { id: string; label: string; correct: boolean; why: string }[]> =
+    {} as never;
   (Object.keys(canonical) as ("Q1" | "Q2" | "Q3")[]).forEach((qid) => {
     const rotated = rotate(canonical[qid], rotation);
-    built[qid] = rotated.map((opt, idx) => ({ id: String(idx + 1), label: opt.label, correct: opt.correct }));
+    built[qid] = rotated.map((opt, idx) => ({ id: String(idx + 1), ...opt }));
   });
   return built;
 }
@@ -77,7 +116,7 @@ export function checkQuiz(proposal: Proposal, answers: Record<string, string>): 
     const correct = !!option?.correct;
     const explanation = correct
       ? "Correct."
-      : `Not quite — ${correctOption.label} is right. ${QUESTION_TEXT[qid]}`;
+      : `${option ? `Not quite: ${option.why} ` : "No answer chosen. "}The right answer is ${correctOption.label}: ${correctOption.why}`;
     return { id: qid, correct, explanation };
   });
   return { passed: results.every((r) => r.correct), results };

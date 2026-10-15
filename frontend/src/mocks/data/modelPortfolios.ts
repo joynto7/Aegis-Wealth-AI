@@ -9,10 +9,4 @@ export const MODEL_PORTFOLIOS: Record<number, Record<AssetClass, number>> = {
   5: { cash: 5, bond: 15, gold: 10, equity: 70 },
 };
 
-export const TIER_LABELS: Record<number, string> = {
-  1: "Conservative",
-  2: "Moderately conservative",
-  3: "Balanced",
-  4: "Growth",
-  5: "Aggressive",
-};
+export { TIER_LABELS } from "@/lib/labels";

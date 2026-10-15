@@ -11,6 +11,7 @@ import { Percent } from "@/components/shared/percent";
 import { DataLabel } from "@/components/shared/data-label";
 import { ChartCard } from "@/components/shared/chart-card";
 import { FeeBars } from "@/components/charts/fee-bars";
+import { SuitabilityBadge } from "@/components/shared/suitability-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -111,12 +112,12 @@ function ProductCompareContent() {
 
           <div className="grid gap-4 md:grid-cols-3">
             {result.items.map((item) => (
-              <Card key={item.code} className={item.code === result.cheapest_code ? "ring-2 ring-(--pass)" : undefined}>
+              <Card key={item.code} className={item.code === result.cheapest_code ? "ring-2 ring-(--primary)" : undefined}>
                 <CardContent className="space-y-3 px-6 py-5">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold text-(--text)">{item.name}</p>
                     {item.code === result.cheapest_code ? (
-                      <Badge className="shrink-0 bg-(--pass-bg) text-(--pass)">Lowest cost</Badge>
+                      <Badge className="shrink-0 bg-(--primary-soft) text-(--primary)">Lowest cost</Badge>
                     ) : null}
                   </div>
                   <dl className="space-y-1.5 text-body">
@@ -128,13 +129,7 @@ function ProductCompareContent() {
                     <Row label="Lock-up" value={`${item.lockup_months} month(s)`} />
                     <Row
                       label="Suitable"
-                      value={
-                        item.suitable === null ? "—" : item.suitable ? (
-                          <span className="text-(--pass)">Yes</span>
-                        ) : (
-                          <span className="text-(--warning)">Above your tier</span>
-                        )
-                      }
+                      value={<SuitabilityBadge suitable={item.suitable} linkUnknown />}
                     />
                   </dl>
                 </CardContent>

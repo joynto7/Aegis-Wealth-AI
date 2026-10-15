@@ -15,6 +15,7 @@ import { usePageTitle } from "@/components/shell/page-title";
 import { useLogs, useSandboxAccount, useSandboxOrders } from "@/lib/queries";
 import { formatDateTime } from "@/lib/format";
 import type { AssetClass } from "@/lib/types";
+import { DecisionLabel } from "@/components/shared/decision-label";
 
 function AccountOverview() {
   const { data: account, isLoading, error, refetch } = useSandboxAccount();
@@ -111,7 +112,7 @@ function AccountOverview() {
                   <td className="py-2">
                     <Money value={o.amount} withCents />
                   </td>
-                  <td className="py-2 capitalize text-(--pass)">{o.status}</td>
+                  <td className="py-2 capitalize">{o.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -144,11 +145,7 @@ function ActivityLog() {
                 <td className="py-2 text-(--text-muted)">{formatDateTime(l.ts)}</td>
                 <td className="py-2">{l.action.replace(/_/g, " ")}</td>
                 <td className="py-2">
-                  {l.decision ? (
-                    <span className={l.decision === "denied" ? "text-(--reject)" : "text-(--pass)"}>{l.decision}</span>
-                  ) : (
-                    "—"
-                  )}
+                  <DecisionLabel decision={l.decision} />
                 </td>
               </tr>
             ))}

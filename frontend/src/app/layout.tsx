@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-full flex flex-col bg-(--bg) text-(--text) font-sans">
         <Providers>{children}</Providers>
-        <Toaster position="top-right" richColors closeButton />
+        <Toaster position="top-right" closeButton />
       </body>
     </html>
   );

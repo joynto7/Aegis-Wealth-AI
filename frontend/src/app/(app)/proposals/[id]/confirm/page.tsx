@@ -7,6 +7,7 @@ import { CheckCircle2, PartyPopper } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
 import { ErrorState } from "@/components/shared/error-state";
+import { Stepper } from "@/components/shared/stepper";
 import { Money } from "@/components/shared/money";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,15 +26,16 @@ import {
   useQuiz,
   useSubmitQuiz,
 } from "@/lib/queries";
-import { DISCLOSURES } from "@/mocks/data/disclosures";
+import { DISCLOSURES } from "@/lib/disclosures";
 import { ApiError } from "@/lib/api-client";
 import type { ExecuteResponse } from "@/lib/types";
 
 function SuccessView({ result }: { result: ExecuteResponse }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-center gap-3 rounded-xl border border-(--pass) bg-(--pass-bg) px-6 py-10 text-center">
-        <PartyPopper className="size-8 text-(--pass)" />
+      <Stepper current="Done" />
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-(--border) bg-(--surface) px-6 py-10 text-center">
+        <PartyPopper className="size-8 text-(--primary)" aria-hidden />
         <p className="text-form font-semibold text-(--text)">Orders filled</p>
         <p className="text-body text-(--text-muted)">
           Cash remaining: <Money value={result.cash_after} />
@@ -83,7 +85,8 @@ function ConfirmContent({ id }: { id: number }) {
   const router = useRouter();
   const { data: proposal, isLoading, error, refetch } = useProposal(id);
   const acknowledge = useAcknowledgeWarnings(id);
-  const quiz = useQuiz(proposal?.status === "rejected" ? null : id);
+  const open = proposal?.status === "passed" || proposal?.status === "warning" || proposal?.status === "acknowledged";
+  const quiz = useQuiz(open ? id : null);
   const submitQuiz = useSubmitQuiz(id);
   const confirm = useConfirmProposal(id);
   const execute = useExecuteProposal(id);
@@ -115,19 +118,54 @@ function ConfirmContent({ id }: { id: number }) {
 
   if (result) return <SuccessView result={result} />;
 
+  if (proposal.status === "executed" || proposal.status === "superseded") {
+    return (
+      <div className="space-y-6">
+        <Stepper current={proposal.status === "executed" ? "Done" : "Confirm"} />
+        <PageHeader title="Confirm and Execute" />
+        <ErrorState
+          error={
+            new ApiError(
+              409,
+              "STATE_CONFLICT",
+              proposal.status === "executed"
+                ? "This proposal was already executed."
+                : "This version was superseded by a newer one. Confirm the latest version instead."
+            )
+          }
+        />
+        <div>
+          <Button onClick={() => router.push(proposal.status === "executed" ? "/records" : `/proposals/${id}`)}>
+            {proposal.status === "executed" ? "View advice records" : "Back to proposal"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const softFailRules = proposal.gate.rules.filter((r) => r.type === "soft" && r.result === "fail");
   const needsAck = proposal.status === "warning";
   const allAcked = softFailRules.every((r) => ackChecked.has(r.id));
 
   async function acknowledgeAll() {
     const ids = softFailRules.map((r) => r.id);
-    await acknowledge.mutateAsync(ids);
-    setAckChecked(new Set(ids));
+    setActionError(null);
+    try {
+      await acknowledge.mutateAsync(ids);
+      setAckChecked(new Set(ids));
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "We couldn't save your acknowledgement. Please try again.");
+    }
   }
 
   async function onSubmitQuiz() {
-    const res = await submitQuiz.mutateAsync(quizAnswers);
-    setQuizResult(res);
+    setActionError(null);
+    try {
+      const res = await submitQuiz.mutateAsync(quizAnswers);
+      setQuizResult(res);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "We couldn't check your answers. Please try again.");
+    }
   }
 
   async function onConfirmAndExecute() {
@@ -156,6 +194,7 @@ function ConfirmContent({ id }: { id: number }) {
 
   return (
     <div className="space-y-6">
+      <Stepper current="Confirm" />
       <PageHeader title="Confirm and Execute" description="Four quick steps, then your sandbox orders fill." />
 
       <Card>
@@ -199,7 +238,7 @@ function ConfirmContent({ id }: { id: number }) {
                 {acknowledge.isPending ? "Saving…" : "Confirm I've read these warnings"}
               </Button>
             ) : (
-              <p className="flex items-center gap-1.5 text-caption text-(--pass)">
+              <p className="flex items-center gap-1.5 text-caption text-(--text)">
                 <CheckCircle2 className="size-4" /> Warnings acknowledged
               </p>
             )}
@@ -231,7 +270,7 @@ function ConfirmContent({ id }: { id: number }) {
         <CardContent className="space-y-4 px-6 py-5">
           <h3 className="text-form font-semibold text-(--text)">{needsAck ? "3." : "2."} Comprehension quiz</h3>
           {quizPassed ? (
-            <p className="flex items-center gap-1.5 text-caption text-(--pass)">
+            <p className="flex items-center gap-1.5 text-caption text-(--text)">
               <CheckCircle2 className="size-4" /> Quiz passed
             </p>
           ) : quiz.isLoading ? (
@@ -278,7 +317,7 @@ function ConfirmContent({ id }: { id: number }) {
 
       {actionError ? (
         <Alert variant="destructive">
-          <AlertTitle>Couldn&apos;t execute</AlertTitle>
+          <AlertTitle>Something needs your attention</AlertTitle>
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       ) : null}

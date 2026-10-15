@@ -13,8 +13,20 @@ same request/response shapes, error envelope and fixed value names a real FastAP
 return — including the scoring, allocation, metrics, stress, compliance-gate, quiz and hash-chain
 engines as pure, deterministic functions (`src/mocks/engines/`), per Section 2.5's formulas. This
 follows the "mock-first frontend" rule in Section 2.10.3: the UI is complete and demoable on its
-own, and swapping MSW for a real backend later means only deleting `src/mocks` and pointing
-`ApiClient` at the real API — no screen code changes.
+own, and switching to the real backend means setting `NEXT_PUBLIC_API_MOCK=0` and `API_BASE_URL` —
+no screen code changes. Screens never import from `src/mocks`; shared labels and the disclosure
+texts live in `src/lib`.
+
+### Mock switch (Section 2.10.3)
+
+| Variable | Effect |
+| --- | --- |
+| `NEXT_PUBLIC_API_MOCK` | `1` (or unset, the default until the backend exists): MSW answers `/api/*` in the browser. `0`: requests go to the real backend. |
+| `API_BASE_URL` | Where Next.js forwards `/api/*` when mocks are off, e.g. `http://localhost:8000` or `http://api:8000` in Docker Compose. |
+
+In mock mode the session token is kept in `localStorage` and sent as an `X-Aegis-Session` header,
+because a Service Worker never sees the `Cookie` header. Against the real backend the httpOnly
+`aegis_session` cookie is used and no token is stored in the browser.
 
 The AI advisor chat always runs in **fallback mode** (FR-6.4): there is no model key configured, so
 replies come from the same keyword-matched templates the real backend falls back to when the
@@ -39,8 +51,13 @@ you to `/login`.
 | chen@example.com | Client | password123 |
 | officer@example.com | Compliance officer | password123 |
 
-Each client's sandbox account is seeded with CNY 500,000 in cash. Data resets on a full page
-reload — the mock "database" is in-memory module state, not persisted.
+Each client's sandbox account is seeded with CNY 500,000 in cash. The mock "database" is kept in
+the tab's `sessionStorage`: refreshing or typing a URL keeps you logged in with your data, while
+closing the tab (or opening a new one) starts a fresh demo.
+
+Open the app at <http://localhost:3000>. The mock API runs in a service worker, and browsers only
+allow those on `localhost` or HTTPS, so the "Network" address that `npm run dev` prints and
+private windows show "Couldn't start the mock API layer" instead of the log-in form.
 
 ## Scripts
 
@@ -50,7 +67,7 @@ npm run build       # production build
 npm run start        # serve the production build
 npm run lint          # ESLint
 npx tsc --noEmit        # typecheck
-npx tsx scripts/verify.ts  # sanity-check the engines against the documentation's worked examples
+npx tsx scripts/verify.ts  # check the engines against the documentation's worked examples (exits 1 on a mismatch)
 ```
 
 ## Structure

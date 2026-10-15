@@ -1,10 +1,12 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { CompareItem } from "@/lib/types";
 import { formatMoney } from "@/lib/format";
 
-const COLORS = ["#2563eb", "#0f766e", "#b7791f"];
+// One neutral colour: these bars are products, not asset classes, so they
+// must not borrow the asset-class palette (Section 2.7.2).
+const BAR_COLOR = "#475569";
 
 export function FeeBars({ items }: { items: CompareItem[] }) {
   const data = items.map((i) => ({ name: i.code, label: i.name, fee_cost: i.fee_cost }));
@@ -20,11 +22,7 @@ export function FeeBars({ items }: { items: CompareItem[] }) {
             labelFormatter={(label, payload) => payload?.[0]?.payload?.label ?? label}
             contentStyle={{ borderRadius: 8, borderColor: "var(--border)", fontSize: 13 }}
           />
-          <Bar dataKey="fee_cost" radius={[4, 4, 0, 0]}>
-            {data.map((d, i) => (
-              <Cell key={d.name} fill={COLORS[i % COLORS.length]} />
-            ))}
-          </Bar>
+          <Bar dataKey="fee_cost" radius={[4, 4, 0, 0]} fill={BAR_COLOR} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -1,6 +1,6 @@
 import { http, HttpResponse, delay } from "msw";
 import { db, logAction } from "@/mocks/db";
-import { authenticate, errorResponse, isAuthResult, requireRole } from "@/mocks/helpers";
+import { authenticate, authenticateAs, errorResponse, isAuthResult, requireRole } from "@/mocks/helpers";
 import { findUserByEmail } from "@/mocks/data/users";
 import { randomToken, hashToken, CONFIRM_TOKEN_TTL_MS } from "@/mocks/engines/tokens";
 import { canonicalStringify, nextHash, sha256Hex, GENESIS_HASH } from "@/mocks/engines/chain";
@@ -8,23 +8,60 @@ import { toPublicQuestionnaire } from "@/mocks/data/questionnaire";
 import { MAX_ACCEPTABLE_LOSS_PCT } from "@/mocks/data/questionnaire";
 import { scoreQuestionnaire, computeTier, tierLabel } from "@/mocks/engines/scoring";
 import { checkContradictions } from "@/mocks/engines/contradictions";
-import { REPLAY_EPISODES } from "@/mocks/data/replayEpisodes";
+import { REPLAY_EPISODES, findEpisode } from "@/mocks/data/replayEpisodes";
 import { runReplay } from "@/mocks/engines/replay";
 import { PRODUCTS, findProduct } from "@/mocks/data/products";
 import { compareProducts } from "@/mocks/engines/fees";
 import { createProposal, reviseProposal, toSummary } from "@/mocks/services/proposals";
 import { buildQuiz, checkQuiz } from "@/mocks/engines/quiz";
-import { DISCLOSURES } from "@/mocks/data/disclosures";
+import { DISCLOSURES } from "@/lib/disclosures";
 import { RULES } from "@/mocks/data/rules";
 import { respondToChat } from "@/mocks/services/chat";
 import { verifyChain } from "@/mocks/services/chain";
 import { DATA_AS_OF } from "@/mocks/data/scenarios";
-import type { AdviceRecord, LogEntry, Order, Profile } from "@/lib/types";
+import type { AdviceRecord, LogEntry, Order, Profile, Proposal, ReplayReaction } from "@/lib/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function age(iso: string) {
   return Date.now() - new Date(iso).getTime();
+}
+
+const REACTIONS: ReplayReaction[] = ["hold", "buy_more", "sell_some", "sell_all"];
+
+/** T2 preconditions (Section 2.8.1): a complete profile, no open contradiction, under 365 days old. */
+export function t2PreconditionError(profile: Profile | undefined): Response | null {
+  if (!profile || age(profile.created_at) > 365 * DAY_MS) {
+    return errorResponse(409, "PROFILE_REQUIRED", "You need a current risk profile first.");
+  }
+  if (profile.contradictions.length) {
+    return errorResponse(
+      409,
+      "CONTRADICTIONS_OPEN",
+      "Your risk profile has an answer that contradicts another. Fix it before requesting a proposal."
+    );
+  }
+  return null;
+}
+
+/** Executed and superseded proposals are final (Section 2.3.2): nothing on them can change. */
+function closedProposalError(proposal: Proposal): Response | null {
+  if (proposal.status === "executed" || proposal.status === "superseded") {
+    return errorResponse(409, "STATE_CONFLICT", `This proposal is ${proposal.status} and can no longer change.`);
+  }
+  return null;
+}
+
+function rejectedProposalError(proposal: Proposal): Response | null {
+  if (proposal.status !== "rejected") return null;
+  return errorResponse(409, "GATE_REJECTED", "This proposal was rejected by the compliance gate.", {
+    rule_ids: proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "hard").map((r) => r.id),
+  });
+}
+
+function csvCell(value: unknown): string {
+  const text = value === null || value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export const handlers = [
@@ -34,10 +71,11 @@ export const handlers = [
     if (db.loginRateLimited()) {
       return errorResponse(429, "RATE_LIMITED", "Too many attempts; try again in a minute.");
     }
+    db.recordLoginAttempt();
     const body = (await request.json()) as { email?: string; password?: string };
-    const user = body.email ? findUserByEmail(body.email) : undefined;
+    const email = body.email?.trim();
+    const user = email ? findUserByEmail(email) : undefined;
     if (!user || user.password !== body.password) {
-      db.recordLoginFailure();
       logAction({ userId: user?.id ?? null, actor: "system", action: "login", decision: "denied", detail: {} });
       return errorResponse(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
     }
@@ -46,8 +84,8 @@ export const handlers = [
     logAction({ userId: user.id, actor: user.role === "compliance" ? "compliance" : "client", action: "login", decision: "allowed", detail: {} });
     // A real backend sets this via a Set-Cookie response header. MSW
     // responses are synthetic, so the browser never applies Set-Cookie on
-    // them — the token travels in the body instead, and the page itself
-    // writes the cookie (see src/lib/session-cookie.ts).
+    // them — the token travels in the body instead, and the page keeps it
+    // and sends it back as a header (see src/lib/session-token.ts).
     return HttpResponse.json({
       user: { id: user.id, email: user.email, role: user.role, display_name: user.display_name },
       session_token: token,
@@ -73,7 +111,7 @@ export const handlers = [
 
   // ------------------------------------------------------------- profile
   http.get("/api/profile/questionnaire", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     return HttpResponse.json(toPublicQuestionnaire());
   }),
@@ -118,7 +156,7 @@ export const handlers = [
   }),
 
   http.get("/api/profile/current", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const profile = db.currentProfile(auth.user.id);
     if (!profile) return errorResponse(404, "NOT_FOUND", "No risk profile yet.");
@@ -127,13 +165,13 @@ export const handlers = [
 
   // -------------------------------------------------------------- replay
   http.get("/api/replay/episodes", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     return HttpResponse.json({ episodes: REPLAY_EPISODES });
   }),
 
   http.get("/api/replay/:episodeId", ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const profile = db.currentProfile(auth.user.id);
     if (!profile) return errorResponse(409, "PROFILE_REQUIRED", "Complete your risk profile first.");
@@ -146,15 +184,28 @@ export const handlers = [
   }),
 
   http.post("/api/profile/current/replay-reaction", async ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const profile = db.currentProfile(auth.user.id);
     if (!profile) return errorResponse(409, "PROFILE_REQUIRED", "Complete your risk profile first.");
-    const body = (await request.json()) as { episode_id?: string; reaction?: string };
-    if (!body.episode_id || !body.reaction) {
-      return errorResponse(422, "VALIDATION_ERROR", "episode_id and reaction are required.");
+    if (profile.status !== "complete") {
+      return errorResponse(409, "CONTRADICTIONS_OPEN", "Fix the contradictions in your risk profile before the replay.");
     }
-    profile.replay = { episode_id: body.episode_id, reaction: body.reaction as never };
+    const body = (await request.json()) as { episode_id?: string; reaction?: string };
+    const fields = [
+      ...(!body.episode_id || !findEpisode(body.episode_id) ? [{ field: "episode_id", problem: "unknown episode" }] : []),
+      ...(!REACTIONS.includes(body.reaction as ReplayReaction) ? [{ field: "reaction", problem: `one of ${REACTIONS.join(", ")}` }] : []),
+    ];
+    if (fields.length) {
+      return errorResponse(422, "VALIDATION_ERROR", "Choose an episode and one of the four reactions.", { fields });
+    }
+    const answered = db.replayReactions.get(profile.id) ?? new Set<string>();
+    if (answered.has(body.episode_id!)) {
+      return errorResponse(409, "STATE_CONFLICT", "You already answered this episode. Retake the profile to answer again.");
+    }
+    answered.add(body.episode_id!);
+    db.replayReactions.set(profile.id, answered);
+    profile.replay = { episode_id: body.episode_id!, reaction: body.reaction as ReplayReaction };
     if (body.reaction === "sell_all" && profile.replay_adjustment < 1) {
       profile.replay_adjustment = 1;
     }
@@ -210,6 +261,10 @@ export const handlers = [
     if (horizon < 1 || horizon > 30) {
       return errorResponse(422, "VALIDATION_ERROR", "Horizon must be between 1 and 30 years.", { fields: [{ field: "horizon_years", problem: "out of range" }] });
     }
+    const unknown = codes.filter((c) => !findProduct(c));
+    if (unknown.length) {
+      return errorResponse(422, "VALIDATION_ERROR", `Unknown product code: ${unknown.join(", ")}.`, { fields: [{ field: "product_codes", problem: "unknown code" }] });
+    }
     const profile = db.currentProfile(auth.user.id);
     const result = compareProducts(codes, amount, horizon);
     const items = result.items.map((i) => ({ ...i, suitable: profile ? i.risk_level <= profile.tier : null }));
@@ -223,12 +278,8 @@ export const handlers = [
     const forbidden = requireRole(auth.user, "client");
     if (forbidden) return forbidden;
     const profile = db.currentProfile(auth.user.id);
-    if (!profile || age(profile.created_at) > 365 * DAY_MS) {
-      return errorResponse(409, "PROFILE_REQUIRED", "You need a current risk profile first.");
-    }
-    if (profile.contradictions.length) {
-      return errorResponse(409, "CONTRADICTIONS_OPEN", "Your risk profile has an answer that contradicts another. Fix it before requesting a proposal.");
-    }
+    const precondition = t2PreconditionError(profile);
+    if (precondition) return precondition;
     const body = (await request.json()) as { amount?: number; horizon_years?: number; near_term_need?: number };
     const amount = body.amount ?? 0;
     const horizon = body.horizon_years ?? 0;
@@ -236,28 +287,31 @@ export const handlers = [
     if (amount < 10000) {
       return errorResponse(422, "VALIDATION_ERROR", "Amount must be at least CNY 10,000.", { fields: [{ field: "amount", problem: "too small" }] });
     }
-    if (horizon < 1 || horizon > 30) {
-      return errorResponse(422, "VALIDATION_ERROR", "Horizon must be between 1 and 30 years.", { fields: [{ field: "horizon_years", problem: "out of range" }] });
+    if (!Number.isInteger(horizon) || horizon < 1 || horizon > 30) {
+      return errorResponse(422, "VALIDATION_ERROR", "Horizon must be a whole number of years from 1 to 30.", { fields: [{ field: "horizon_years", problem: "out of range" }] });
+    }
+    if (need < 0 || need > amount) {
+      return errorResponse(422, "VALIDATION_ERROR", "Near-term need must be between CNY 0 and the amount.", { fields: [{ field: "near_term_need", problem: "out of range" }] });
     }
     const sandbox = db.sandboxFor(auth.user.id);
     if (amount > sandbox.cash) {
       return errorResponse(409, "INSUFFICIENT_CASH", `Your sandbox account only holds CNY ${sandbox.cash.toLocaleString()}.`);
     }
-    const proposal = createProposal(auth.user.id, profile, amount, horizon, need);
+    const proposal = createProposal(auth.user.id, profile!, amount, horizon, need);
     logAction({ userId: auth.user.id, actor: "client", action: "proposal_created", decision: "allowed", detail: { proposal_id: proposal.id } });
     logAction({ userId: auth.user.id, actor: "system", action: "gate_decided", decision: "allowed", detail: { proposal_id: proposal.id, decision: proposal.gate.decision } });
     return HttpResponse.json(proposal, { status: 201 });
   }),
 
   http.get("/api/proposals", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const list = [...db.proposalsFor(auth.user.id)].reverse().map(toSummary);
     return HttpResponse.json({ items: list });
   }),
 
   http.get("/api/proposals/:proposalId", ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
@@ -265,7 +319,7 @@ export const handlers = [
   }),
 
   http.post("/api/proposals/:proposalId/revise", async ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const parent = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!parent) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
@@ -273,14 +327,22 @@ export const handlers = [
       return errorResponse(409, "STATE_CONFLICT", "This proposal can no longer be revised.");
     }
     const profile = db.currentProfile(auth.user.id);
-    if (!profile) return errorResponse(409, "PROFILE_REQUIRED", "You need a current risk profile first.");
+    const precondition = t2PreconditionError(profile);
+    if (precondition) return precondition;
     const body = (await request.json()) as { items?: { product_code: string; weight_pct: number }[] };
     const items = body.items ?? [];
+    const codes = items.map((i) => i.product_code);
+    if (items.length < 1 || items.length > 6 || new Set(codes).size !== codes.length) {
+      return errorResponse(422, "VALIDATION_ERROR", "Use 1 to 6 different products.", { fields: [{ field: "items", problem: "1 to 6 unique products" }] });
+    }
+    if (items.some((i) => typeof i.weight_pct !== "number" || i.weight_pct < 0 || i.weight_pct > 100)) {
+      return errorResponse(422, "VALIDATION_ERROR", "Each weight must be between 0 and 100.", { fields: [{ field: "items", problem: "weight out of range" }] });
+    }
     const total = items.reduce((s, i) => s + i.weight_pct, 0);
     if (Math.abs(total - 100) > 0.01) {
       return errorResponse(422, "VALIDATION_ERROR", "Weights must add up to 100%.", { fields: [{ field: "items", problem: "weights must total 100" }] });
     }
-    const result = reviseProposal(auth.user.id, parent, profile, items);
+    const result = reviseProposal(auth.user.id, parent, profile!, items);
     if (result.error || !result.proposal) {
       return errorResponse(422, "VALIDATION_ERROR", result.error ?? "Could not revise this proposal.");
     }
@@ -290,11 +352,12 @@ export const handlers = [
   }),
 
   http.post("/api/proposals/:proposalId/acknowledge", async ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
-    if (proposal.status === "rejected") return errorResponse(409, "GATE_REJECTED", "This proposal was rejected by the compliance gate.", { rule_ids: proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "hard").map((r) => r.id) });
+    const blocked = rejectedProposalError(proposal) ?? closedProposalError(proposal);
+    if (blocked) return blocked;
     const body = (await request.json()) as { rule_ids?: string[] };
     const incoming = body.rule_ids ?? [];
     const set = new Set([...proposal.gate.acknowledged_rule_ids, ...incoming]);
@@ -307,32 +370,37 @@ export const handlers = [
   }),
 
   http.get("/api/proposals/:proposalId/quiz", ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
+    const blocked = rejectedProposalError(proposal) ?? closedProposalError(proposal);
+    if (blocked) return blocked;
     return HttpResponse.json({ questions: buildQuiz(proposal) });
   }),
 
   http.post("/api/proposals/:proposalId/quiz", async ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
+    const blocked = rejectedProposalError(proposal) ?? closedProposalError(proposal);
+    if (blocked) return blocked;
     const body = (await request.json()) as { answers?: Record<string, string> };
     const result = checkQuiz(proposal, body.answers ?? {});
     proposal.quiz_passed = result.passed;
-    db.addQuizAttempt(proposal.id, { proposalId: proposal.id, answers: body.answers ?? {}, passed: result.passed, created_at: new Date().toISOString() });
+    db.addQuizAttempt(proposal.id, { proposalId: proposal.id, answers: body.answers ?? {}, passed: result.passed, results: result.results, created_at: new Date().toISOString() });
     logAction({ userId: auth.user.id, actor: "client", action: "quiz_attempted", decision: result.passed ? "allowed" : "denied", detail: { proposal_id: proposal.id, passed: result.passed } });
     return HttpResponse.json(result);
   }),
 
   http.post("/api/proposals/:proposalId/confirm", async ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
-    if (proposal.status === "rejected") return errorResponse(409, "GATE_REJECTED", "This proposal was rejected by the compliance gate.");
+    const rejected = rejectedProposalError(proposal);
+    if (rejected) return rejected;
     if (proposal.status === "warning") return errorResponse(409, "WARNINGS_NOT_ACKNOWLEDGED", "Tick every warning before confirming.");
     if (proposal.status !== "passed" && proposal.status !== "acknowledged") {
       return errorResponse(409, "STATE_CONFLICT", "This proposal can no longer be confirmed.");
@@ -349,7 +417,7 @@ export const handlers = [
   }),
 
   http.post("/api/proposals/:proposalId/execute", async ({ request, params }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
@@ -364,6 +432,9 @@ export const handlers = [
     if (state.usedAt) return errorResponse(409, "TOKEN_USED", "This confirmation token was already used.");
     const currentItemsHash = await sha256Hex(canonicalStringify(proposal.items));
     if (currentItemsHash !== state.itemsHash) return errorResponse(409, "STATE_CONFLICT", "This proposal changed since you confirmed it.");
+    if (proposal.status !== "passed" && proposal.status !== "acknowledged") {
+      return errorResponse(409, "STATE_CONFLICT", `This proposal is ${proposal.status} and can no longer be executed.`);
+    }
 
     const sandbox = db.sandboxFor(auth.user.id);
     if (sandbox.cash < proposal.amount) {
@@ -399,15 +470,17 @@ export const handlers = [
     const lastQuiz = quizAttempts[quizAttempts.length - 1];
     const existingRecords = db.recordsFor(auth.user.id);
     const prevHash = existingRecords.length ? existingRecords[existingRecords.length - 1].hash : GENESIS_HASH;
-    const content: AdviceRecord["content"] = {
+    // Deep copies: advice records are never updated after insert (Section 3.5),
+    // so later changes to the live proposal must not reach the hashed content.
+    const content: AdviceRecord["content"] = structuredClone({
       profile: { version: profile.version, tier: profile.tier, capacity_score: profile.capacity_score, willingness_score: profile.willingness_score, replay_adjustment: profile.replay_adjustment },
       proposal,
       gate: proposal.gate,
-      quiz: { passed: lastQuiz?.passed ?? true, results: [] },
+      quiz: { passed: lastQuiz?.passed ?? false, results: lastQuiz?.results ?? [] },
       disclosures: DISCLOSURES.map((d) => ({ id: d.id, version: d.version })),
       consent_at: nowIso,
       orders,
-    };
+    });
     const hash = await nextHash(prevHash, content);
     const record: AdviceRecord = {
       id: db.nextId("record"),
@@ -464,7 +537,7 @@ export const handlers = [
   }),
 
   http.get("/api/chat/history", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get("limit") ?? 50);
@@ -474,7 +547,7 @@ export const handlers = [
 
   // -------------------------------------------------------------- sandbox
   http.get("/api/sandbox/account", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     const sandbox = db.sandboxFor(auth.user.id);
     const positions = db.positionsFor(auth.user.id);
@@ -483,7 +556,7 @@ export const handlers = [
   }),
 
   http.get("/api/sandbox/orders", ({ request }) => {
-    const auth = authenticate(request);
+    const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
     return HttpResponse.json({ items: [...db.ordersFor(auth.user.id)].reverse() });
   }),
@@ -559,9 +632,9 @@ export const handlers = [
     const format = url.searchParams.get("format") ?? "json";
     logAction({ userId: auth.user.id, actor: "compliance", action: "evidence_exported", decision: "allowed", detail: { format } });
     if (format === "csv") {
-      const header = "id,ts,user_id,actor,action,tool,tier,decision\n";
+      const header = "id,ts,user_id,actor,action,tool,tier,decision,detail\n";
       const rows = db.logs
-        .map((l) => [l.id, l.ts, l.user_id ?? "", l.actor, l.action, l.tool ?? "", l.tier ?? "", l.decision ?? ""].join(","))
+        .map((l) => [l.id, l.ts, l.user_id, l.actor, l.action, l.tool, l.tier, l.decision, l.detail].map(csvCell).join(","))
         .join("\n");
       return new HttpResponse(header + rows, {
         headers: { "Content-Type": "text/csv", "Content-Disposition": 'attachment; filename="operation_log.csv"' },

@@ -1,7 +1,13 @@
 import { setupWorker } from "msw/browser";
 import { handlers } from "./handlers";
+import { db } from "./db";
 
 export const worker = setupWorker(...handlers);
+
+// Keep the mock store across reloads in this tab (see src/mocks/db.ts):
+// save after every mocked response, and once more as the page goes away.
+worker.events.on("response:mocked", () => db.persist());
+if (typeof window !== "undefined") window.addEventListener("pagehide", () => db.persist());
 
 /**
  * Starts the worker exactly once per page, no matter how many times this

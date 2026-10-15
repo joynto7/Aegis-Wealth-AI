@@ -1,4 +1,4 @@
-import type { ChatReply, Citation, Proposal, ToolCallSummary } from "@/lib/types";
+import type { ChatReply, Citation, Profile, Proposal, ToolCallSummary } from "@/lib/types";
 import { db, logAction } from "@/mocks/db";
 import { PRODUCTS } from "@/mocks/data/products";
 import { findRule } from "@/mocks/data/rules";
@@ -36,6 +36,18 @@ function currentProposal(userId: number, proposalId?: number): Proposal | undefi
   return [...list].reverse().find((p) => p.status !== "superseded") ?? list[list.length - 1];
 }
 
+/**
+ * The permission broker's T2 check (Section 2.8.1): the agent may create or
+ * revise a proposal only for a complete, contradiction-free profile under
+ * 365 days old. Returns the denial reason, or null when allowed.
+ */
+function t2DenialReason(profile: Profile | undefined): string | null {
+  if (!profile) return "PROFILE_REQUIRED";
+  if (Date.now() - new Date(profile.created_at).getTime() > 365 * 24 * 60 * 60 * 1000) return "PROFILE_REQUIRED";
+  if (profile.contradictions.length) return "CONTRADICTIONS_OPEN";
+  return null;
+}
+
 function nextStepFor(status: Proposal["status"]): string {
   switch (status) {
     case "rejected":
@@ -62,11 +74,27 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
 
   const addTool = (tool: string, tier: "T0" | "T1" | "T2", decision: "allowed" | "denied", summary: string) => {
     toolCalls.push({ tool, tier, decision, summary });
-    logAction({ userId, actor: "agent", action: "tool_call", tool, tier, decision, detail: { summary } });
+    logAction({
+      userId,
+      actor: "agent",
+      action: decision === "denied" ? "permission_denied" : "tool_call",
+      tool,
+      tier,
+      decision,
+      detail: decision === "denied" ? { reason: summary } : { summary },
+    });
   };
 
+  const t2Denial = t2DenialReason(profile);
+
   if (intent === "override_attempt") {
-    if (!proposal || proposal.status === "executed" || proposal.status === "superseded") {
+    if (t2Denial) {
+      addTool("revise_proposal", "T2", "denied", t2Denial);
+      reply =
+        t2Denial === "CONTRADICTIONS_OPEN"
+          ? "I can't change your proposal while your risk profile has an open contradiction. Fix it in Risk Profile first. I also have no execution tool: only your own click on Confirm can place orders."
+          : "I can't change a proposal until you have a current risk profile. I also have no execution tool: only your own click on Confirm can place orders.";
+    } else if (!proposal || proposal.status === "executed" || proposal.status === "superseded") {
       reply =
         "I can't place or change any order myself — I have no execution tool. Generate a current proposal first, then review it and press Confirm for any real change.";
       addTool("create_proposal", "T2", "denied", "No actionable proposal to revise");
@@ -85,6 +113,13 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
       addTool("revise_proposal", "T2", "allowed", `Attempted to raise ${thematic.code} to 60%`);
       const result = reviseProposal(userId, proposal, profile!, rawItems);
       if (result.proposal) {
+        logAction({
+          userId,
+          actor: "agent",
+          action: "proposal_revised",
+          decision: "allowed",
+          detail: { proposal_id: result.proposal.id, parent_id: proposal.id },
+        });
         const failed = result.proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "hard");
         logAction({
           userId,
@@ -137,10 +172,14 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
     }
   } else if (intent === "explain_rejection" && proposal) {
     addTool("get_proposal", "T1", "allowed", `Loaded proposal #${proposal.id}`);
-    const failed = proposal.gate.rules.find((r) => r.result === "fail");
+    const failed = proposal.gate.rules.find((r) => r.result === "fail" && r.type === "hard");
+    const warned = proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "soft");
     if (failed) {
       reply = `The gate rejected this version: ${failed.id}, ${failed.message} Change that item and the gate runs again.`;
       citations.push({ tool: "get_proposal", path: "gate.rules", value: failed.id });
+    } else if (warned.length) {
+      reply = `The gate did not reject this version, but it raised a warning: ${warned[0].id}, ${warned[0].message} Tick each warning on the Confirm screen to continue.`;
+      citations.push({ tool: "get_proposal", path: "gate.rules", value: warned[0].id });
     } else {
       reply = `Your latest version passed the gate with no rejected rules. Its status is ${proposal.status}.`;
     }

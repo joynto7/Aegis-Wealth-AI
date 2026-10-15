@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -26,7 +25,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageTitle } from "@/components/shell/page-title";
 import { useProducts } from "@/lib/queries";
-import { PRODUCT_TYPE_LABEL } from "@/mocks/data/products";
+import { PRODUCT_TYPE_LABEL } from "@/lib/labels";
+import { SuitabilityBadge } from "@/components/shared/suitability-badge";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -72,11 +72,7 @@ function ProductDetailDrawer({ product, onClose }: { product: Product | null; on
                   <Percent value={product.max_drawdown_pct} />
                 </dd>
               </dl>
-              {product.suitable === false ? (
-                <Badge variant="outline" className="border-(--warning) text-(--warning)">
-                  Above your tier
-                </Badge>
-              ) : null}
+              <SuitabilityBadge suitable={product.suitable} linkUnknown />
               <p className="text-caption text-(--text-muted)">{product.data_label} · {product.nav_date}</p>
             </div>
           </>
@@ -198,11 +194,7 @@ function ProductShelf() {
               >
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-(--text)">{p.name}</p>
-                  {p.suitable === false ? (
-                    <Badge variant="outline" className="shrink-0 border-(--warning) text-(--warning)">
-                      Above tier
-                    </Badge>
-                  ) : null}
+                  {p.suitable === false ? <SuitabilityBadge suitable={false} short /> : null}
                 </div>
                 <p className="text-caption text-(--text-muted)">
                   {PRODUCT_TYPE_LABEL[p.type]} · R{p.risk_level} · <Percent value={p.annual_fee_pct} decimals={2} /> fee
@@ -268,17 +260,7 @@ function ProductRow({
         {product.lockup_months}mo
       </td>
       <td className="cursor-pointer px-2 py-2" onClick={onOpen}>
-        {product.suitable === null ? (
-          <span className="text-(--text-muted)">—</span>
-        ) : product.suitable ? (
-          <Badge variant="outline" className="border-(--pass) text-(--pass)">
-            Suitable
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="border-(--warning) text-(--warning)">
-            Above your tier
-          </Badge>
-        )}
+        <SuitabilityBadge suitable={product.suitable} />
       </td>
     </tr>
   );

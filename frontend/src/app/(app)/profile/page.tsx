@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
 import { TierBadge } from "@/components/shared/tier-badge";
 import { ErrorState } from "@/components/shared/error-state";
+import { Stepper } from "@/components/shared/stepper";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -123,14 +124,19 @@ function RiskProfileForm() {
   const showResult = mode === "result" && effectiveProfile;
 
   async function onSubmit() {
-    const profile = await submit.mutateAsync(answers);
-    setJustSubmitted(profile);
-    setMode("result");
+    try {
+      const profile = await submit.mutateAsync(answers);
+      setJustSubmitted(profile);
+      setMode("result");
+    } catch {
+      // Shown next to the Submit button from submit.error.
+    }
   }
 
   if (showResult && effectiveProfile) {
     return (
-      <div>
+      <div className="space-y-6">
+        <Stepper current="Profile" />
         <PageHeader title="Risk Profile" description="Your capacity and willingness scores set a suitable risk tier." />
         <ResultPanel
           profile={effectiveProfile}
@@ -150,6 +156,7 @@ function RiskProfileForm() {
 
   return (
     <div>
+      <Stepper current="Profile" className="mb-6" />
       <PageHeader
         title="Risk Profile"
         description="Answer all 10 questions. Five are about your capacity for risk, five about your willingness to take it."

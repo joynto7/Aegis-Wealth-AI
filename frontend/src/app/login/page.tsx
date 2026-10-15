@@ -36,7 +36,10 @@ function LoginForm() {
     setFormError(null);
     try {
       const { user } = await login.mutateAsync(values);
-      const next = params.get("next");
+      // Only same-origin paths ("/x", never "//host" or "https://host"), so
+      // the link can't send someone to another site after they log in.
+      const raw = params.get("next");
+      const next = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : null;
       if (next && ((user.role === "client" && !next.startsWith("/console")) || (user.role === "compliance" && next.startsWith("/console")))) {
         router.replace(next);
       } else {

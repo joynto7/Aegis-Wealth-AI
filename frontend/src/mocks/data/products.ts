@@ -1,4 +1,4 @@
-import type { AssetClass, Product, ProductType } from "@/lib/types";
+import type { Product } from "@/lib/types";
 
 /**
  * The 20 sample products (Section 2.5.1 "Product shelf composition").
@@ -208,7 +208,7 @@ export const PRODUCTS: ProductRecord[] = [
     type: "gold_etf",
     asset_class: "gold",
     risk_level: 3,
-    annual_fee_pct: 0.45,
+    annual_fee_pct: 0.4,
     liquidity_days: 2,
     lockup_months: 0,
     min_investment: 1000,
@@ -359,24 +359,6 @@ export const PRODUCTS: ProductRecord[] = [
     data_label: "Sample data",
   },
 ];
-
-export const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
-  deposit: "Bank deposit",
-  money_market_fund: "Money market fund",
-  short_term_bond_fund: "Short-term bond fund",
-  bond_fund: "Bond fund",
-  gold_etf: "Gold ETF",
-  index_etf: "Broad index ETF",
-  active_equity_fund: "Active equity fund",
-  thematic_equity_fund: "High-growth thematic fund",
-};
-
-export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
-  cash: "Cash",
-  bond: "Bond",
-  gold: "Gold",
-  equity: "Equity",
-};
 
 export function isLiquid(p: ProductRecord): boolean {
   return p.liquidity_days <= 1 && p.lockup_months === 0;

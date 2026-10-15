@@ -18,6 +18,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const proposalMatch = pathname.match(/^\/proposals\/(\d+)(\/confirm)?$/);
+  const proposalId = proposalMatch ? Number(proposalMatch[1]) : undefined;
+  // The Proposal Workspace docks the chat open at 1280 px and wider (Section 2.7.3).
+  const chatDocked = !!proposalMatch && !proposalMatch[2];
 
   useEffect(() => {
     if (!isLoading && (isError || !user)) {
@@ -70,7 +74,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar user={user} onOpenMobileNav={() => setMobileNavOpen(true)} />
           <main className="flex-1 overflow-y-auto print:overflow-visible">
-            <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 print:max-w-none print:p-0">{children}</div>
+            {/* Client pages leave room at the bottom so the floating "Ask Aegis" button never covers the last action. */}
+            <div
+              className={cn(
+                "mx-auto max-w-[1200px] px-4 py-6 md:px-6 print:max-w-none print:p-0",
+                user.role === "client" && "pb-24"
+              )}
+            >
+              {children}
+            </div>
           </main>
         </div>
 
@@ -79,12 +91,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setChatOpen(true)}
-              className="no-print fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-(--primary) px-4 py-3 text-body font-medium text-white shadow-lg transition-colors hover:bg-(--primary-hover)"
+              className={cn(
+                "no-print fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-(--primary) px-4 py-3 text-body font-medium text-white shadow-lg transition-colors hover:bg-(--primary-hover)",
+                chatDocked && "xl:hidden"
+              )}
             >
               <MessageCircleQuestion className="size-5" aria-hidden />
               Ask Aegis
             </button>
-            <ChatDrawer open={chatOpen} onOpenChange={setChatOpen} />
+            <ChatDrawer open={chatOpen} onOpenChange={setChatOpen} proposalId={proposalId} />
           </>
         ) : null}
       </div>

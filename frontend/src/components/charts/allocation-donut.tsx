@@ -3,7 +3,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { AssetClass } from "@/lib/types";
 import { ASSET_COLORS, ASSET_ORDER } from "@/lib/asset-colors";
-import { ASSET_CLASS_LABEL } from "@/mocks/data/products";
+import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { formatPercent } from "@/lib/format";
 
 export function AllocationDonut({ weights }: { weights: Record<AssetClass, number> }) {

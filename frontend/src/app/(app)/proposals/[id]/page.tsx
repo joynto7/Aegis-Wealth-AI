@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -20,8 +21,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageTitle } from "@/components/shell/page-title";
-import { useProposal, useReviseProposal } from "@/lib/queries";
-import { ASSET_CLASS_LABEL, PRODUCTS } from "@/mocks/data/products";
+import { DockedChat } from "@/components/shell/chat-drawer";
+import { Stepper } from "@/components/shared/stepper";
+import { useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
+import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
 
@@ -75,6 +78,7 @@ function MetricCards({ proposal }: { proposal: Proposal }) {
 
 function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () => void }) {
   const revise = useReviseProposal(proposal.id);
+  const products = useProducts({});
   const router = useRouter();
   const [rows, setRows] = useState(() => proposal.items.map((i) => ({ product_code: i.product_code, weight_pct: i.weight_pct })));
   const total = rows.reduce((s, r) => s + (Number(r.weight_pct) || 0), 0);
@@ -96,18 +100,23 @@ function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () =
       <CardContent className="space-y-4 px-6 py-5">
         <div className="flex items-center justify-between">
           <h3 className="text-form font-semibold text-(--text)">Revise allocation</h3>
-          <span className={cn("text-body font-semibold tabular-nums", Math.abs(total - 100) > 0.01 ? "text-(--reject)" : "text-(--pass)")}>
+          <span className="text-body font-semibold tabular-nums text-(--text)" aria-live="polite">
             {total.toFixed(0)}% of 100%
+            {Math.abs(total - 100) > 0.01 ? (
+              <span className="ml-2 font-normal text-(--text-muted)">
+                ({total > 100 ? `${(total - 100).toFixed(0)}% over` : `${(100 - total).toFixed(0)}% short`}; Save needs exactly 100%)
+              </span>
+            ) : null}
           </span>
         </div>
         <div className="space-y-2">
           {rows.map((row, i) => {
             const original = proposal.items[i];
-            const candidates = PRODUCTS.filter((p) => p.asset_class === original.asset_class);
+            const candidates = (products.data?.items ?? []).filter((p) => p.asset_class === original.asset_class);
             return (
               <div key={i} className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[2fr_1fr_auto]">
                 <Select value={row.product_code} onValueChange={(v) => updateProduct(i, v)}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={`Product for ${ASSET_CLASS_LABEL[original.asset_class]} slot ${i + 1}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -122,6 +131,9 @@ function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () =
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
+                    min={0}
+                    max={100}
+                    aria-label={`Weight of slot ${i + 1} in percent`}
                     className="w-20"
                     value={row.weight_pct}
                     onChange={(e) => updateWeight(i, Number(e.target.value))}
@@ -148,6 +160,7 @@ function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () =
 
 function ProposalDetail({ id }: { id: number }) {
   const { data: proposal, isLoading, error, refetch } = useProposal(id);
+  const proposals = useProposals();
   const router = useRouter();
   const [revising, setRevising] = useState(false);
 
@@ -157,102 +170,140 @@ function ProposalDetail({ id }: { id: number }) {
   if (error || !proposal) return <ErrorState error={error} onRetry={() => refetch()} />;
 
   const classWeights: Record<AssetClass, number> = proposal.class_weights_pct;
+  const latest =
+    proposal.status === "superseded"
+      ? proposals.data?.items.find((p) => p.id > proposal.id && p.status !== "superseded")
+      : undefined;
+  const canContinue = proposal.status === "passed" || proposal.status === "warning" || proposal.status === "acknowledged";
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Proposal #${proposal.id} · v${proposal.version}`}
-        description={`CNY ${proposal.amount.toLocaleString()} over ${proposal.horizon_years} years for tier ${proposal.tier}.`}
-        action={
-          <div className="flex items-center gap-2">
-            <TierBadge tier={proposal.tier} />
-            <StatusBadge decision={proposal.gate.decision} />
-          </div>
-        }
-      />
+    <div className="flex items-start gap-6">
+      <div className="min-w-0 flex-1 space-y-6">
+        <Stepper current={proposal.status === "executed" ? "Done" : "Proposal"} />
+        <PageHeader
+          title={`Proposal #${proposal.id} · v${proposal.version}`}
+          description={`CNY ${proposal.amount.toLocaleString()} over ${proposal.horizon_years} years for tier ${proposal.tier}.`}
+          action={
+            <div className="flex items-center gap-2">
+              <TierBadge tier={proposal.tier} />
+              <StatusBadge decision={proposal.gate.decision} />
+            </div>
+          }
+        />
 
-      {proposal.status === "superseded" ? (
-        <Alert>
-          <AlertTitle>This version was superseded</AlertTitle>
-          <AlertDescription>A newer version replaced it. It is kept for the record only.</AlertDescription>
-        </Alert>
-      ) : null}
+        <p className="text-caption text-(--text-muted)">
+          Version {proposal.version}
+          {proposal.parent_id ? (
+            <>
+              {" "}· revised from{" "}
+              <Link href={`/proposals/${proposal.parent_id}`} className="text-(--primary) hover:underline">
+                #{proposal.parent_id}
+              </Link>
+            </>
+          ) : (
+            " · first version"
+          )}
+        </p>
 
-      {proposal.notes.length ? (
-        <Alert>
-          <AlertTitle>Notes</AlertTitle>
-          <AlertDescription>{proposal.notes.join(" ")}</AlertDescription>
-        </Alert>
-      ) : null}
+        {proposal.status === "superseded" ? (
+          <Alert>
+            <AlertTitle>This version was superseded</AlertTitle>
+            <AlertDescription>
+              A newer version replaced it. It is kept for the record only and cannot be changed.
+              {latest ? (
+                <>
+                  {" "}
+                  <Link href={`/proposals/${latest.id}`} className="font-medium text-(--primary) hover:underline">
+                    Open the latest version (#{latest.id})
+                  </Link>
+                </>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Allocation" summary="Allocation by asset class." dataLabel={proposal.data_label}>
-          <AllocationDonut weights={classWeights} />
-          <AllocationLegend weights={classWeights} />
-        </ChartCard>
-        <GatePanel gate={proposal.gate} />
-      </div>
+        {proposal.notes.length ? (
+          <Alert>
+            <AlertTitle>Notes</AlertTitle>
+            <AlertDescription>{proposal.notes.join(" ")}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <MetricCards proposal={proposal} />
-
-      <Card>
-        <CardContent className="px-6 py-5">
-          <h3 className="mb-3 text-form font-semibold text-(--text)">Holdings</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-body">
-              <thead className="border-b border-(--border) text-caption text-(--text-muted)">
-                <tr>
-                  <th className="py-2">Product</th>
-                  <th className="py-2">Asset class</th>
-                  <th className="py-2">Risk</th>
-                  <th className="py-2">Weight</th>
-                  <th className="py-2">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {proposal.items.map((item: ProposalItem) => (
-                  <tr key={item.product_code} className="border-b border-(--border) last:border-0">
-                    <td className="py-2 font-medium text-(--text)">{item.name}</td>
-                    <td className="py-2 text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</td>
-                    <td className="py-2">R{item.risk_level}</td>
-                    <td className="py-2">
-                      <Percent value={item.weight_pct} />
-                    </td>
-                    <td className="py-2">
-                      <Money value={item.amount} withCents />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <ChartCard
-        title="Stress tests"
-        summary="Hypothetical instant shocks and the resulting loss."
-        dataLabel="Hypothetical"
-      >
-        <StressBars stress={proposal.stress} />
-      </ChartCard>
-
-      {revising ? (
-        <ReviseForm proposal={proposal} onCancel={() => setRevising(false)} />
-      ) : (
-        <div className="flex flex-wrap justify-end gap-2">
-          {proposal.status !== "executed" && proposal.status !== "superseded" ? (
-            <Button variant="outline" onClick={() => setRevising(true)}>
-              Revise
-            </Button>
-          ) : null}
-          {proposal.status === "passed" || proposal.status === "warning" || proposal.status === "acknowledged" ? (
-            <Button onClick={() => router.push(`/proposals/${proposal.id}/confirm`)}>
-              Continue to confirm <ArrowRight className="size-4" />
-            </Button>
-          ) : null}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard title="Allocation" summary="Allocation by asset class." dataLabel={proposal.data_label}>
+            <AllocationDonut weights={classWeights} />
+            <AllocationLegend weights={classWeights} />
+          </ChartCard>
+          <GatePanel gate={proposal.gate} />
         </div>
-      )}
+
+        <MetricCards proposal={proposal} />
+
+        <Card>
+          <CardContent className="px-6 py-5">
+            <h3 className="mb-3 text-form font-semibold text-(--text)">Holdings</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-body">
+                <thead className="border-b border-(--border) text-caption text-(--text-muted)">
+                  <tr>
+                    <th className="py-2">Product</th>
+                    <th className="py-2">Asset class</th>
+                    <th className="py-2">Risk</th>
+                    <th className="py-2">Weight</th>
+                    <th className="py-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proposal.items.map((item: ProposalItem) => (
+                    <tr key={item.product_code} className="border-b border-(--border) last:border-0">
+                      <td className="py-2 font-medium text-(--text)">{item.name}</td>
+                      <td className="py-2 text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</td>
+                      <td className="py-2">R{item.risk_level}</td>
+                      <td className="py-2">
+                        <Percent value={item.weight_pct} />
+                      </td>
+                      <td className="py-2">
+                        <Money value={item.amount} withCents />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <ChartCard
+          title="Stress tests"
+          summary="Hypothetical instant shocks and the resulting loss."
+          dataLabel="Hypothetical"
+        >
+          <StressBars stress={proposal.stress} />
+        </ChartCard>
+
+        {revising ? (
+          <ReviseForm proposal={proposal} onCancel={() => setRevising(false)} />
+        ) : (
+          <div className="flex flex-wrap justify-end gap-2">
+            {proposal.status !== "executed" && proposal.status !== "superseded" ? (
+              <Button variant="outline" onClick={() => setRevising(true)}>
+                Revise
+              </Button>
+            ) : null}
+            {canContinue || proposal.status === "rejected" ? (
+              <Button disabled={!canContinue} onClick={() => router.push(`/proposals/${proposal.id}/confirm`)}>
+                Continue to confirm <ArrowRight className="size-4" />
+              </Button>
+            ) : null}
+          </div>
+        )}
+        {proposal.status === "rejected" && !revising ? (
+          <p className="text-right text-caption text-(--text-muted)">
+            The gate rejected this version. Revise it so every hard rule passes to continue.
+          </p>
+        ) : null}
+      </div>
+      <DockedChat proposalId={proposal.id} className="hidden xl:flex" />
     </div>
   );
 }

@@ -1,0 +1,24 @@
+{
+  "version": "ep-2026-10",
+  "data_label": "Illustrative",
+  "episodes": [
+    {
+      "id": "E1",
+      "name": "Global financial crisis",
+      "start": "2007-11",
+      "end": "2009-10"
+    },
+    {
+      "id": "E2",
+      "name": "Pandemic crash",
+      "start": "2020-01",
+      "end": "2020-12"
+    },
+    {
+      "id": "E3",
+      "name": "Rate shock",
+      "start": "2022-01",
+      "end": "2022-12"
+    }
+  ]
+}

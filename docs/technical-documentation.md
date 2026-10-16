@@ -11,18 +11,18 @@ Aegis is a web application with two services and one database.
 ```mermaid
 flowchart TB
   subgraph Browser
-    UI["Next.js web app<br/>12 screens, shadcn/ui, Recharts"]
+    UI["Next.js web app<br/>12 screens + Control Room,<br/>shadcn/ui, Recharts"]
   end
   subgraph Web container
     Next["Next.js server<br/>/api/* rewrite"]
   end
   subgraph API container
-    Routers["FastAPI routers<br/>32 endpoints + streaming chat"]
-    Services["Services<br/>profiles, proposals, execution,<br/>records, logs, chat, sandbox"]
+    Routers["FastAPI routers<br/>32 endpoints + streaming chat<br/>+ 5 oversight endpoints"]
+    Services["Services<br/>profiles, proposals, execution,<br/>records, logs, chat, sandbox,<br/>controls, oversight"]
     Engines["Pure engines<br/>scoring, contradictions, replay, allocation,<br/>metrics, stress, fees, gate, quiz, chain"]
     Agent["Agent<br/>turn loop, permission broker,<br/>grounding check, fallback, prompts"]
     Data[("backend/data<br/>CSV + versioned JSON")]
-    DB[("SQLite<br/>16 tables")]
+    DB[("SQLite<br/>17 tables")]
   end
   Claude[("Claude API<br/>claude-opus-5-5")]
 
@@ -36,12 +36,12 @@ flowchart TB
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Web app | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query, Recharts | Screens S01 to S12, the shared design system, the chat drawer, client-side validation |
+| Web app | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query, Recharts | Screens S01 to S12 plus the AI Control Room, the shared design system, the chat drawer with cards, client-side validation |
 | API | Python 3.12, FastAPI, Pydantic 2 | The contract (Section 2.6): validation, roles, error envelope, OpenAPI |
 | Services | SQLAlchemy 2 | Transactions, ownership, the operation log, orchestration of engines |
 | Engines | Plain Python | Every number and every rule, as pure functions of versioned data files |
 | Agent | Anthropic Python SDK | A manual tool-use loop behind a permission broker |
-| Database | SQLite (WAL) | 16 tables (Section 3.5); append-only triggers on records and the log |
+| Database | SQLite (WAL) | The 16 tables of Section 3.5, plus `controls` for the compliance switches; append-only triggers on records and the log |
 
 **One origin.** The browser only talks to the web server; Next.js forwards `/api/*` to FastAPI
 (`API_BASE_URL`), so there is no CORS, and the session cookie stays httpOnly and same-site.
@@ -100,6 +100,14 @@ worked examples in Section 2.6.5 require (Python's `round()` would give S2 as �
 - Replay: V_t = V_{t−1}(1 + Σ_c w_c r_{c,t}) from CNY 100,000, using the tier's model portfolio over
   episode E1 (2007-11 to 2009-10), E2 (2020) or E3 (2022). It reports the series, maximum drawdown,
   lowest month and end value.
+- **Replay as a time machine** (addition). The client may start from their own amount
+  (`GET /api/replay/{id}?amount=`, CNY 10,000 to 10,000,000); the path scales with it, so the
+  drawdown is the same. The screen plays the episode month by month next to the real events of those
+  months (Lehman Brothers, the WHO pandemic declaration, the first Fed rate rise, ...; the events are
+  real, the portfolio path is illustrative). It stops by itself at the lowest month and asks *"Your
+  CNY 200,000 is now CNY 138,722. What do you do?"*, so the reaction is recorded at the worst moment,
+  not after the recovery. After the answer it plays on and shows what selling at the bottom would
+  have kept against holding to the end. With reduced motion, Play jumps to the end.
 
 Worked example (AT-03): answers C1 b, C2 d, C3 c, C4 b, C5 d, W1 c, W2 c, W3 d, W4 c, W5 b give capacity
 70, willingness 70, tier 4. "Sell everything" lowers it to 3.
@@ -177,6 +185,20 @@ Every rule returns a **detail**, its measured value against its limit (e.g. *"La
 is 25%; the limit is 40%."*), so a PASS shows its reasons as clearly as a REJECT. Thresholds are data
 (`backend/data/rules.json`).
 
+**Regulatory basis** (addition, `backend/data/regulations.json`). Every rule names the requirement it
+is designed to meet, shown as a chip on the gate panel, in the Console and in the chat's rule card:
+
+| Rule | Basis |
+| --- | --- |
+| R-01 | Aegis integrity control |
+| R-02 | China 2018 Guiding Opinions on asset management, Art. 23 (AI must follow the suitability rules); CSRC Suitability Measures (product-investor matching); MiFID II Art. 25(2) |
+| R-03 | Aegis diversification limit |
+| R-04, R-05, R-06 | Commission Delegated Regulation (EU) 2017/565, Art. 54(4) and 54(5): financial situation incl. liquid assets; holding period |
+| R-07 | MiFID II Art. 24(4): costs and charges disclosed in good time; Aegis 1.00% fee ceiling |
+| R-08, R-09 | MiFID II Art. 25(2): ability to bear losses; CSRC Suitability Measures: risk-tolerance assessment |
+
+The mapping was prepared by the team for this sandbox and is labelled as not legal advice.
+
 ### 3.5 Quiz, tokens, execution, records (`quiz.py`, `execution.py`, `chain.py`)
 
 - **Quiz.** Three questions built from the proposal: the worst stress loss, a statement about risk, and
@@ -235,7 +257,20 @@ There is no tool that confirms or executes.
 - Accepts a number when it is a correct rounding of a value in this turn's tool results or in the
   client's message. Small integers up to 10 and years from 2000 to 2030 are also allowed.
 - Blocks banned phrases.
-- Each matched number becomes a **citation**: tool, JSON path and value, shown under the reply.
+- Each matched number becomes a **citation**: tool, JSON path and value.
+- **Number sources** (addition): each figure's character span in the reply and its source (a tool
+  field, the client's message or the profile). In the chat every such figure is underlined; hovering
+  or focusing it shows where it came from, and a badge counts the figures traced. The check ran before
+  the client saw the reply; the chat only shows its result.
+
+**Chat cards** (addition, `app/agent/cards.py`). Each tool result behind a reply is drawn as a card
+beside the text: a fee comparison table, a proposal with its allocation bar and gate result (failed
+rules and their measured values, with an Open link), a rule with its regulatory basis, the risk
+profile, the product list, or a **blocked** card when the permission broker refused a call. Cards are
+built by code from the broker's own outcomes, never from the model's words, so they need no
+grounding: they are the tool results. The system prompt tells the model the client sees the cards,
+so its reply picks the figures that matter instead of reciting the table. In Scenario 4 the client
+sees the rejected version as a REJECT card naming R-02 and R-03.
 
 **Fallback answers** (`app/agent/fallback.py`):
 - The five intents of Section 2.5.8, plus answers to each red-team attack class. Execution requests
@@ -247,10 +282,39 @@ There is no tool that confirms or executes.
   model replies.
 
 **Streaming** (`POST /api/chat/stream`, P1): the same checked turn as server-sent events. `status` and
-`tool` events arrive while it runs, then one `reply`. Reply text is never streamed before it passes
-the grounding check.
+`tool` events arrive while it runs (each `tool` event carries its card, so results appear while the
+agent works), then one `reply`. Reply text is never streamed before it passes the grounding check.
 
-## 5. Security design
+**Every turn is logged** as one `agent_turn` entry (addition): mode, grounding outcome, each tool with
+its tier and the broker's decision, the proposals the agent made with the gate's verdict, and the
+number of figures traced. The Control Room's live feed reads these entries.
+
+## 5. Compliance oversight: the AI Control Room
+
+The theme is *AI as a Financial Participant*: an AI that takes part in advice must stay supervised.
+Art. 23 of China's 2018 Guiding Opinions on Regulating the Asset Management Business of Financial
+Institutions (PBOC, CBIRC, CSRC, SAFE) sets the requirements for AI in asset management. The
+compliance officer's **Control Room** (`/control-room`, the officer's landing page) implements them:
+
+| Requirement (Art. 23 unless noted) | Aegis control |
+| --- | --- |
+| Report the AI model's main parameters and asset-allocation logic to the regulator | **Model disclosure** (`GET /api/compliance/model-card`): provider, model, effort, limits, SHA-256 fingerprints of the system prompt and tool list, the 7 tools and 4 tiers, the grounding policy, the model portfolios, the 7 allocation steps, assumed returns, stress scenarios, the 9 rules with their basis, the switches' state and the data versions. The report carries its own SHA-256; each export is logged. |
+| Open a separate account for each investor's AI-managed investing | Each client's own sandbox account |
+| Make investors aware of the AI algorithm's inherent defects and risks | Disclosure **DISC-04**, "How the AI advisor works, and its limits", on the Confirm screen and in every advice record |
+| Follow the suitability and disclosure rules | The gate checks the AI's proposals exactly as a client's |
+| Do not exaggerate or mislead; no guaranteed principal or returns (Art. 19) | The grounding check and banned phrases on every reply |
+| Step in by hand: adjust or stop the AI business when the model fails | **Two switches**: *Suspend AI advisor* (no chat turn runs; the broker refuses any tool call still under way) and *Halt execution* (no token is issued and no order fills, even with a token issued before). Each needs a reason of 5 to 300 characters; each change is logged with it. Clients see the state, never the reason. |
+| Record events automatically (EU AI Act Art. 12, as good practice) | The append-only operation log |
+| Human oversight (EU AI Act Art. 14, as good practice) | Only the client's Confirm click places orders; compliance can stop the advisor |
+| Suitability statement before the transaction (MiFID II Art. 25(6)) | The hash-chained advice record |
+
+The page also shows, refreshed every 3 seconds: counts of AI turns (Claude, template, paused), tool
+calls allowed per tier, calls the broker blocked, the AI's proposals the gate rejected, figures
+traced, replies rewritten or replaced, and orders placed by the AI (always 0: no tool can) against
+orders placed by clients; and a live feed of each turn with its tools, tiers, decisions and gate
+results. The same checklist, with each control's live status, closes the page.
+
+## 6. Security design
 
 The permission tiers, controls, known-risk list and red-team results are in
 [security-self-assessment.md](security-self-assessment.md). In short:
@@ -263,23 +327,27 @@ The permission tiers, controls, known-risk list and red-team results are in
 - Grounded agent replies with citations.
 - An append-only, exportable operation log.
 - Tamper-evident advice records.
+- Manual intervention: compliance can suspend the advisor and halt execution at once, with a logged
+  reason.
 
-## 6. Quality and testing
+## 7. Quality and testing
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Backend tests | `docker compose run --rm api pytest -q` | 114 passed |
+| Backend tests | `docker compose run --rm api pytest -q` | 133 passed |
 | Red-team | `python scripts/redteam.py` | 30/30, criteria met |
 | Performance | `python scripts/perf.py` | Every deterministic endpoint p95 under 20 ms (target 2 s) |
-| Scenario evidence | `python scripts/evidence.py` | 26 steps, all as specified |
-| Frontend | `npm run lint`, `npm run typecheck`, `npm run build`, `npx tsx scripts/verify.ts` | Clean; 19 checks pass |
+| Scenario evidence | `python scripts/evidence.py` | 34 steps of Scenarios 1, 4, 5 and 3, all as specified |
+| Frontend | `npm run lint`, `npm run typecheck`, `npm run build`, `npx tsx scripts/verify.ts` | Clean; 28 checks pass, including the mock data against `backend/data` |
 | Lint | `ruff check`, `ruff format --check` | Clean |
 
 The backend tests include all 12 acceptance tests (AT-01 to AT-12), one file per engine (Section 2.9.2),
 the agent with a scripted model (grounding, regeneration, fallback, broker denials, round limit,
-refusals, timeouts) and an end-to-end Scenario 1.
+refusals, timeouts), an end-to-end Scenario 1, and the additions: chat cards and number sources, the
+column upgrade for older databases, both switches (including a suspension that lands mid-turn), the
+Control Room counts, the model disclosure's own fingerprint, the regulatory map and the replay amount.
 
-## 7. Deployment
+## 8. Deployment
 
 `docker compose up --build` starts two containers:
 - `api`: Python 3.12, Uvicorn, SQLite in a named volume, seeded on first start, health-checked.
@@ -288,8 +356,9 @@ refusals, timeouts) and an end-to-end Scenario 1.
 
 The web app is on port 3000, and the API documentation is at <http://localhost:8000/docs>.
 Configuration is environment-only (`.env.example`); the only secret is `ANTHROPIC_API_KEY`.
+A database from an earlier version gets the new chat columns on start-up (`add_missing_columns`).
 
-## 8. Decisions and deviations from the project documentation
+## 9. Decisions and deviations from the project documentation
 
 | Item | Decision |
 | --- | --- |
@@ -297,6 +366,8 @@ Configuration is environment-only (`.env.example`); the only secret is `ANTHROPI
 | Liquidity floor | Computed with exact fractions to avoid a float ceiling error. |
 | R-01 | Checks the items' weights, not the class weights. |
 | Grounding tolerance | Stricter than the documentation's \|x − round(y, d)\| ≤ 10^−d, which would let "10%" match 9. |
-| Additions to the contract | `ProposalItem.rationale`, `GateRule.detail`, `POST /api/chat/stream`; see [api-contract-changes.md](api-contract-changes.md). |
+| Additions to the contract | `ProposalItem.rationale`, `GateRule.detail`, `POST /api/chat/stream`, chat cards and number sources, `Rule.basis`, the replay amount and events, the controls and oversight endpoints; see [api-contract-changes.md](api-contract-changes.md). |
+| Compliance role | No longer read-only for the AI itself: it can suspend the advisor and halt execution (Art. 23 manual intervention). It still cannot change any client's data. |
+| Disclosures | DISC-04 added on the AI's limits (Art. 23); records now list four disclosures. |
 | FR-5.5 client-directed override (P1) | Not built: it would let a product above the client's tier pass, against the objective that no unsuitable product can pass. |
 | Replay history | Synthetic and labelled "Illustrative" until licensed series replace it (decision D-1). |

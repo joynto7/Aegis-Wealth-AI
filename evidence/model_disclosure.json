@@ -1,0 +1,510 @@
+{
+  "report": "Aegis Wealth AI: AI model and asset-allocation logic disclosure",
+  "generated_at": "2026-10-16T04:41:48Z",
+  "advisor": {
+    "provider": "Anthropic",
+    "model": "claude-opus-5-5",
+    "mode": "fallback",
+    "effort": "medium",
+    "max_tokens": 16000,
+    "timeout_seconds": 20.0,
+    "max_tool_rounds": 4,
+    "history_messages": 10,
+    "system_prompt_sha256": "7ae2b60b94c33fdc1b967fca2ea1b13934b2b70502f0740121bfc752830365b0",
+    "tools_sha256": "d163fe5a2ade7e12a93291ff18920de4dea6c525f1392023dc26fcab2df4beb6",
+    "data_sent": "Each turn: the client's tier, capacity and willingness scores, maximum acceptable loss, profile status, current proposal number and status, the last 10 chat messages, and the results of the tools it calls.",
+    "data_never_sent": "Names, email addresses, passwords, session or confirmation tokens, and other clients' data."
+  },
+  "tools": [
+    {
+      "name": "search_products",
+      "tier": "T0",
+      "description": "Search the shelf of 20 sample products. Returns code, name, type, risk level (1-5), annual fee %, liquidity days, lock-up months and whether each suits the client's tier. All filters are optional (null)."
+    },
+    {
+      "name": "compare_products",
+      "tier": "T0",
+      "description": "Compare 2 or 3 products for an amount (CNY 10,000-10,000,000) and a horizon (1-30 whole years): fee cost, end value after fees under an assumed gross return, liquidity, lock-up and suitability. Assumed returns are illustrations, not forecasts."
+    },
+    {
+      "name": "explain_rule",
+      "tier": "T0",
+      "description": "Return the text and threshold of one compliance-gate rule, R-01 to R-09, and the regulatory requirement it is designed to meet."
+    },
+    {
+      "name": "get_profile_summary",
+      "tier": "T1",
+      "description": "Return the client's own risk profile: tier, capacity and willingness scores, open contradictions and maximum acceptable loss."
+    },
+    {
+      "name": "get_proposal",
+      "tier": "T1",
+      "description": "Return one of the client's own proposals: items with the reason each was chosen, risk metrics, the three hypothetical stress results and the compliance-gate result with every rule."
+    },
+    {
+      "name": "create_proposal",
+      "tier": "T2",
+      "description": "Create a new proposal from an amount (CNY), a horizon in whole years and the amount needed within 2 years. The compliance gate always runs; nothing is executed. Requires a complete, current risk profile."
+    },
+    {
+      "name": "revise_proposal",
+      "tier": "T2",
+      "description": "Save a new version of one of the client's open proposals with new product weights (they must total 100). The compliance gate always runs on the new version; nothing is executed."
+    }
+  ],
+  "permission_tiers": [
+    {
+      "tier": "T0",
+      "scope": "Read the product shelf and the compliance rules."
+    },
+    {
+      "tier": "T1",
+      "scope": "Read the client's own profile and proposals; the session's user id limits every query."
+    },
+    {
+      "tier": "T2",
+      "scope": "Create or revise a proposal; needs a complete, contradiction-free profile under 365 days old, and the gate always runs."
+    },
+    {
+      "tier": "T3",
+      "scope": "Execute orders. No tool exists: only the client's own Confirm click creates the single-use token."
+    }
+  ],
+  "grounding": {
+    "allowed_numbers": "Every number in a reply must match a value in that turn's tool results or the client's message, rounded the same way; whole numbers up to 10 and years 2000-2030 need no source.",
+    "banned_phrases": [
+      "guaranteed",
+      "guarantee",
+      "risk-free",
+      "no risk",
+      "can't lose",
+      "cannot lose",
+      "sure profit",
+      "will definitely",
+      "promise"
+    ],
+    "on_failure": "The reply is rewritten once with a note naming the problem; if it fails again, a checked template answers."
+  },
+  "allocation": {
+    "tier_labels": {
+      "1": "Conservative",
+      "2": "Moderately conservative",
+      "3": "Balanced",
+      "4": "Growth",
+      "5": "Aggressive"
+    },
+    "model_portfolios_pct": {
+      "1": {
+        "cash": 100.0,
+        "bond": 0.0,
+        "gold": 0.0,
+        "equity": 0.0
+      },
+      "2": {
+        "cash": 30.0,
+        "bond": 70.0,
+        "gold": 0.0,
+        "equity": 0.0
+      },
+      "3": {
+        "cash": 15.0,
+        "bond": 50.0,
+        "gold": 10.0,
+        "equity": 25.0
+      },
+      "4": {
+        "cash": 10.0,
+        "bond": 30.0,
+        "gold": 10.0,
+        "equity": 50.0
+      },
+      "5": {
+        "cash": 5.0,
+        "bond": 15.0,
+        "gold": 10.0,
+        "equity": 70.0
+      }
+    },
+    "steps": [
+      "Start from the model portfolio for the client's tier (cash, bonds, gold, equities).",
+      "Under a 3-year horizon, cap equities plus gold at 20%, equities first, and move the excess to bonds (cash for tier 1).",
+      "Raise cash to cover the amount needed within 2 years (the liquidity floor), taking it pro rata from the other classes.",
+      "Round each class to a whole percent, half away from zero; a remainder goes to cash, and an excess comes off the largest non-cash class.",
+      "In each class, choose the lowest-fee eligible product, then the fastest to access: risk level at or below the tier, lock-up within the horizon, minimum investment within the slot, and only same- or next-day cash when money is needed soon.",
+      "Split a class above 40% between its two lowest-fee eligible products, so no product exceeds 40%.",
+      "If a class has no eligible product, move its weight to cash."
+    ],
+    "assumed_gross_return_pct": {
+      "cash": 1.5,
+      "bond": 3.0,
+      "gold": 4.0,
+      "equity": 6.0
+    },
+    "stress_scenarios": [
+      {
+        "id": "S1",
+        "name": "Equity crash",
+        "shocks_pct": {
+          "cash": 0.0,
+          "bond": 2.0,
+          "gold": 5.0,
+          "equity": -30.0
+        }
+      },
+      {
+        "id": "S2",
+        "name": "Rate rise of 2 points",
+        "shocks_pct": {
+          "cash": 0.5,
+          "bond": -8.0,
+          "gold": -3.0,
+          "equity": -10.0
+        }
+      },
+      {
+        "id": "S3",
+        "name": "Combined crisis",
+        "shocks_pct": {
+          "cash": 0.0,
+          "bond": -10.0,
+          "gold": 8.0,
+          "equity": -35.0
+        }
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "R-01",
+      "type": "hard",
+      "name": "Allocation total",
+      "description": "The weights add up to 100% within 0.01.",
+      "threshold": "sum(weights) = 100 ± 0.01",
+      "basis": [
+        {
+          "framework": "Aegis policy",
+          "title": "Internal control set by the Aegis team",
+          "ref": "Integrity control",
+          "requirement": "A proposal invests the whole amount exactly once, so every other check measures the real portfolio."
+        }
+      ]
+    },
+    {
+      "id": "R-02",
+      "type": "hard",
+      "name": "Suitability",
+      "description": "Every product's risk level is at or below the client's tier.",
+      "threshold": "risk_level ≤ tier",
+      "basis": [
+        {
+          "framework": "CN 2018 Guiding Opinions",
+          "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+          "ref": "Art. 23",
+          "requirement": "Asset management that uses AI must follow the general rules on investor suitability."
+        },
+        {
+          "framework": "CSRC Suitability Measures",
+          "title": "Measures for the Suitability Management of Securities and Futures Investors (CSRC, 2016)",
+          "ref": "Product-investor matching",
+          "requirement": "Match each product's risk level to the investor's risk tolerance, and do not recommend products above it."
+        },
+        {
+          "framework": "MiFID II",
+          "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+          "ref": "Art. 25(2)",
+          "requirement": "Recommend only investments that suit the client's risk tolerance and ability to bear losses."
+        }
+      ]
+    },
+    {
+      "id": "R-03",
+      "type": "hard",
+      "name": "Concentration",
+      "description": "Every non-cash product is at most 40% of the portfolio.",
+      "threshold": "weight_pct ≤ 40% per non-cash product",
+      "basis": [
+        {
+          "framework": "Aegis policy",
+          "title": "Internal control set by the Aegis team",
+          "ref": "Diversification limit",
+          "requirement": "No single non-cash product may exceed 40% of a portfolio, so one product cannot dominate the outcome."
+        }
+      ]
+    },
+    {
+      "id": "R-04",
+      "type": "hard",
+      "name": "Liquidity reserve",
+      "description": "The liquid share of the portfolio covers the near-term need.",
+      "threshold": "liquid_share × amount ≥ near_term_need",
+      "basis": [
+        {
+          "framework": "MiFID II Delegated Reg.",
+          "title": "Commission Delegated Regulation (EU) 2017/565",
+          "ref": "Art. 54(4)",
+          "requirement": "The suitability assessment covers the client's financial situation, including liquid assets and regular commitments."
+        }
+      ]
+    },
+    {
+      "id": "R-05",
+      "type": "hard",
+      "name": "Horizon",
+      "description": "Under a 3-year horizon, equity plus gold is at most 20%.",
+      "threshold": "equity% + gold% ≤ 20% when horizon < 3 years",
+      "basis": [
+        {
+          "framework": "MiFID II Delegated Reg.",
+          "title": "Commission Delegated Regulation (EU) 2017/565",
+          "ref": "Art. 54(5)",
+          "requirement": "The suitability assessment covers the client's objectives, including how long they want to hold the investment."
+        },
+        {
+          "framework": "Aegis policy",
+          "title": "Internal control set by the Aegis team",
+          "ref": "Short-horizon cap",
+          "requirement": "Under a 3-year horizon, equity and gold together stay at or below 20%."
+        }
+      ]
+    },
+    {
+      "id": "R-06",
+      "type": "hard",
+      "name": "Lock-up",
+      "description": "Every product's lock-up fits within the client's horizon.",
+      "threshold": "lockup_months ≤ horizon_years × 12",
+      "basis": [
+        {
+          "framework": "MiFID II Delegated Reg.",
+          "title": "Commission Delegated Regulation (EU) 2017/565",
+          "ref": "Art. 54(5)",
+          "requirement": "The suitability assessment covers how long the client wants to hold the investment, so no lock-up may outlast it."
+        }
+      ]
+    },
+    {
+      "id": "R-07",
+      "type": "soft",
+      "name": "Fee level",
+      "description": "The weighted annual fee should not exceed 1.00%.",
+      "threshold": "weighted_fee_pct ≤ 1.00%",
+      "basis": [
+        {
+          "framework": "MiFID II",
+          "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+          "ref": "Art. 24(4)",
+          "requirement": "Tell clients about all costs and related charges in good time."
+        },
+        {
+          "framework": "Aegis policy",
+          "title": "Internal control set by the Aegis team",
+          "ref": "Fee ceiling",
+          "requirement": "A weighted annual fee above 1.00% is flagged for the client to acknowledge."
+        }
+      ]
+    },
+    {
+      "id": "R-08",
+      "type": "soft",
+      "name": "Drawdown tolerance",
+      "description": "The historical maximum drawdown should not exceed the client's maximum acceptable loss.",
+      "threshold": "max_drawdown_pct ≤ max_acceptable_loss_pct",
+      "basis": [
+        {
+          "framework": "MiFID II",
+          "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+          "ref": "Art. 25(2)",
+          "requirement": "Take the client's ability to bear losses into account."
+        },
+        {
+          "framework": "CSRC Suitability Measures",
+          "title": "Measures for the Suitability Management of Securities and Futures Investors (CSRC, 2016)",
+          "ref": "Risk tolerance assessment",
+          "requirement": "Assess the investor's risk tolerance before recommending products."
+        }
+      ]
+    },
+    {
+      "id": "R-09",
+      "type": "soft",
+      "name": "Stress tolerance",
+      "description": "The worst stress-scenario loss should not exceed the client's maximum acceptable loss.",
+      "threshold": "worst stress loss_pct ≤ max_acceptable_loss_pct",
+      "basis": [
+        {
+          "framework": "MiFID II",
+          "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+          "ref": "Art. 25(2)",
+          "requirement": "Take the client's ability to bear losses into account."
+        },
+        {
+          "framework": "CSRC Suitability Measures",
+          "title": "Measures for the Suitability Management of Securities and Futures Investors (CSRC, 2016)",
+          "ref": "Risk tolerance assessment",
+          "requirement": "Assess the investor's risk tolerance before recommending products."
+        }
+      ]
+    }
+  ],
+  "controls": {
+    "advisor": {
+      "state": "active",
+      "changed_at": "2026-10-16T04:41:48Z",
+      "reason": "Evidence run finished",
+      "changed_by": "Amara (Compliance)"
+    },
+    "execution": {
+      "state": "open",
+      "changed_at": "2026-10-16T04:41:48Z",
+      "reason": "Evidence run finished",
+      "changed_by": "Amara (Compliance)"
+    }
+  },
+  "regulations": {
+    "version": "reg-2026-10",
+    "note": "Mapping prepared by the team for this sandbox. It shows which requirement each control is designed to meet; it is not legal advice.",
+    "frameworks": [
+      {
+        "id": "CN-AMGO",
+        "short": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "jurisdiction": "China"
+      },
+      {
+        "id": "CN-SUIT",
+        "short": "CSRC Suitability Measures",
+        "title": "Measures for the Suitability Management of Securities and Futures Investors (CSRC, 2016)",
+        "jurisdiction": "China"
+      },
+      {
+        "id": "EU-MIFID2",
+        "short": "MiFID II",
+        "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+        "jurisdiction": "EU"
+      },
+      {
+        "id": "EU-2017-565",
+        "short": "MiFID II Delegated Reg.",
+        "title": "Commission Delegated Regulation (EU) 2017/565",
+        "jurisdiction": "EU"
+      },
+      {
+        "id": "EU-AIACT",
+        "short": "EU AI Act",
+        "title": "Artificial Intelligence Act (Regulation (EU) 2024/1689)",
+        "jurisdiction": "EU"
+      },
+      {
+        "id": "AEGIS",
+        "short": "Aegis policy",
+        "title": "Internal control set by the Aegis team",
+        "jurisdiction": "Internal"
+      }
+    ],
+    "ai_controls": [
+      {
+        "id": "A23-REPORT",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23",
+        "requirement": "Report the AI model's main parameters and asset-allocation logic to the regulator.",
+        "control": "Model disclosure report (model, prompt fingerprint, tools, allocation logic and rules), exported from the Control Room.",
+        "check": "report",
+        "note": null
+      },
+      {
+        "id": "A23-ACCOUNT",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23",
+        "requirement": "Open a separate account for each investor's AI-managed investing.",
+        "control": "Each client has a separate sandbox account; executed orders touch nothing else.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "A23-DISCLOSE",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23",
+        "requirement": "Make investors fully aware of the AI algorithm's inherent defects and risks.",
+        "control": "Disclosure DISC-04 on the Confirm screen, read before every execution.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "A23-SUITABILITY",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23",
+        "requirement": "Follow the general rules on investor suitability and information disclosure.",
+        "control": "The compliance gate (R-02, R-08, R-09) checks every proposal, the AI's included.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "A23-NO-MISLEAD",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23 and Art. 19",
+        "requirement": "Do not use AI to exaggerate products or mislead investors; never promise principal or returns.",
+        "control": "Every AI reply passes the grounding check: unsupported numbers and promise words never reach the client.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "A23-INTERVENE",
+        "framework": "CN 2018 Guiding Opinions",
+        "title": "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+        "ref": "Art. 23",
+        "requirement": "When model defects or system faults cause herd behaviour that threatens market stability, step in by hand to adjust or stop the AI business.",
+        "control": "Suspend AI advisor and Halt execution switches, each with a logged reason.",
+        "check": "controls",
+        "note": null
+      },
+      {
+        "id": "AIA-12",
+        "framework": "EU AI Act",
+        "title": "Artificial Intelligence Act (Regulation (EU) 2024/1689)",
+        "ref": "Art. 12",
+        "requirement": "Record events automatically over the system's lifetime.",
+        "control": "Append-only operation log of every tool call, broker decision, gate result and order.",
+        "check": "built_in",
+        "note": "Applied as good practice: investment advice is not on the Act's high-risk list."
+      },
+      {
+        "id": "AIA-14",
+        "framework": "EU AI Act",
+        "title": "Artificial Intelligence Act (Regulation (EU) 2024/1689)",
+        "ref": "Art. 14",
+        "requirement": "Let people oversee the system and stop it.",
+        "control": "Only the client's own Confirm click places orders, and compliance can stop the advisor at any time.",
+        "check": "built_in",
+        "note": "Applied as good practice: investment advice is not on the Act's high-risk list."
+      },
+      {
+        "id": "MIFID-25-6",
+        "framework": "MiFID II",
+        "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
+        "ref": "Art. 25(6)",
+        "requirement": "Before the transaction, give a retail client a statement on how the advice suits them.",
+        "control": "A hash-chained advice record holds the proposal, the gate result, the disclosures and the quiz.",
+        "check": "built_in",
+        "note": null
+      }
+    ]
+  },
+  "data_versions": {
+    "questionnaire": "q-2026-10",
+    "model_portfolios": "mp-2026-10",
+    "scenarios": "sc-2026-10",
+    "assumptions": "as-2026-10",
+    "rules": "rules-2026-10",
+    "disclosures": "disc-2026-10",
+    "episodes": "ep-2026-10",
+    "regulations": "reg-2026-10",
+    "products_as_of": "2026-09-30",
+    "history": "Illustrative, as of 2026-09-30"
+  },
+  "content_sha256": "edcc3f751ca41e875909d15e4f4a7898c1eae1acff0b1b531b77591cb059185f"
+}

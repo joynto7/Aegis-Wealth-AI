@@ -190,7 +190,7 @@
       "notes": [],
       "data_label": "Sample data; stress results are hypothetical",
       "data_as_of": "2026-09-30",
-      "created_at": "2026-10-15T17:54:52Z"
+      "created_at": "2026-10-16T04:41:48Z"
     },
     "gate": {
       "decision": "PASS",
@@ -293,9 +293,13 @@
       {
         "id": "DISC-03",
         "version": "2026-01"
+      },
+      {
+        "id": "DISC-04",
+        "version": "2026-10"
       }
     ],
-    "consent_at": "2026-10-15T17:54:52Z",
+    "consent_at": "2026-10-16T04:41:48Z",
     "orders": [
       {
         "id": 1,
@@ -305,7 +309,7 @@
         "nav": 1.0,
         "cost": 30000.0,
         "status": "filled",
-        "created_at": "2026-10-15T17:54:52Z"
+        "created_at": "2026-10-16T04:41:48Z"
       },
       {
         "id": 2,
@@ -315,7 +319,7 @@
         "nav": 1.0832,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-15T17:54:52Z"
+        "created_at": "2026-10-16T04:41:48Z"
       },
       {
         "id": 3,
@@ -325,7 +329,7 @@
         "nav": 1.061,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-15T17:54:52Z"
+        "created_at": "2026-10-16T04:41:48Z"
       },
       {
         "id": 4,
@@ -335,7 +339,7 @@
         "nav": 2.314,
         "cost": 20000.0,
         "status": "filled",
-        "created_at": "2026-10-15T17:54:52Z"
+        "created_at": "2026-10-16T04:41:48Z"
       },
       {
         "id": 5,
@@ -345,11 +349,11 @@
         "nav": 3.452,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-15T17:54:52Z"
+        "created_at": "2026-10-16T04:41:48Z"
       }
     ]
   },
   "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "hash": "0027b3940d462b2926db5041877430938008ea28765caccdb1637aa69e73bc0e",
-  "created_at": "2026-10-15T17:54:52Z"
+  "hash": "778975ba77eb14deb7005a86d249b84805837aacae3f3f033f12135a2f57148a",
+  "created_at": "2026-10-16T04:41:48Z"
 }

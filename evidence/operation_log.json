@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "login",
@@ -12,7 +12,7 @@
   },
   {
     "id": 2,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "profile_submitted",
@@ -28,7 +28,7 @@
   },
   {
     "id": 3,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "proposal_created",
@@ -41,7 +41,7 @@
   },
   {
     "id": 4,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "profile_submitted",
@@ -57,7 +57,7 @@
   },
   {
     "id": 5,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "replay_reaction",
@@ -73,7 +73,7 @@
   },
   {
     "id": 6,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "proposal_created",
@@ -86,7 +86,7 @@
   },
   {
     "id": 7,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "system",
     "action": "gate_decided",
@@ -101,7 +101,7 @@
   },
   {
     "id": 8,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "proposal_revised",
@@ -115,7 +115,7 @@
   },
   {
     "id": 9,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "system",
     "action": "gate_decided",
@@ -134,7 +134,7 @@
   },
   {
     "id": 10,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "proposal_revised",
@@ -148,7 +148,7 @@
   },
   {
     "id": 11,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "system",
     "action": "gate_decided",
@@ -163,7 +163,7 @@
   },
   {
     "id": 12,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "agent",
     "action": "tool_call",
@@ -177,7 +177,34 @@
   },
   {
     "id": 13,
-    "ts": "2026-10-15T17:54:52Z",
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 2,
+    "actor": "agent",
+    "action": "agent_turn",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "message_id": 2,
+      "mode": "fallback",
+      "grounding": "fallback",
+      "tools": [
+        {
+          "tool": "get_proposal",
+          "tier": "T1",
+          "decision": "allowed"
+        }
+      ],
+      "proposals": [],
+      "figures_traced": 7,
+      "cards": [
+        "proposal"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "quiz_attempted",
@@ -190,8 +217,8 @@
     }
   },
   {
-    "id": 14,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 15,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "token_issued",
@@ -203,8 +230,8 @@
     }
   },
   {
-    "id": 15,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 16,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "client",
     "action": "orders_executed",
@@ -224,8 +251,8 @@
     }
   },
   {
-    "id": 16,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 17,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 2,
     "actor": "system",
     "action": "record_created",
@@ -234,12 +261,12 @@
     "decision": null,
     "detail": {
       "record_id": 1,
-      "hash": "0027b3940d462b2926db5041877430938008ea28765caccdb1637aa69e73bc0e"
+      "hash": "778975ba77eb14deb7005a86d249b84805837aacae3f3f033f12135a2f57148a"
     }
   },
   {
-    "id": 17,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 18,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "client",
     "action": "login",
@@ -249,8 +276,8 @@
     "detail": {}
   },
   {
-    "id": 18,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 19,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "client",
     "action": "profile_submitted",
@@ -265,8 +292,8 @@
     }
   },
   {
-    "id": 19,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 20,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "client",
     "action": "replay_reaction",
@@ -281,8 +308,8 @@
     }
   },
   {
-    "id": 20,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 21,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "client",
     "action": "proposal_created",
@@ -294,8 +321,8 @@
     }
   },
   {
-    "id": 21,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 22,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "system",
     "action": "gate_decided",
@@ -309,8 +336,8 @@
     }
   },
   {
-    "id": 22,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 23,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "agent",
     "action": "tool_call",
@@ -323,8 +350,8 @@
     }
   },
   {
-    "id": 23,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 24,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "agent",
     "action": "proposal_revised",
@@ -337,8 +364,8 @@
     }
   },
   {
-    "id": 24,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 25,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "system",
     "action": "gate_decided",
@@ -357,8 +384,8 @@
     }
   },
   {
-    "id": 25,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 26,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "agent",
     "action": "tool_call",
@@ -371,8 +398,47 @@
     }
   },
   {
-    "id": 26,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 27,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "agent_turn",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "message_id": 4,
+      "mode": "fallback",
+      "grounding": "fallback",
+      "tools": [
+        {
+          "tool": "get_proposal",
+          "tier": "T1",
+          "decision": "allowed"
+        },
+        {
+          "tool": "revise_proposal",
+          "tier": "T2",
+          "decision": "allowed"
+        }
+      ],
+      "proposals": [
+        {
+          "tool": "revise_proposal",
+          "proposal_id": 5,
+          "gate": "REJECT"
+        }
+      ],
+      "figures_traced": 0,
+      "cards": [
+        "proposal",
+        "proposal"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 3,
     "actor": "agent",
     "action": "permission_denied",
@@ -386,8 +452,35 @@
     }
   },
   {
-    "id": 27,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 29,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "agent_turn",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "message_id": 6,
+      "mode": "fallback",
+      "grounding": "fallback",
+      "tools": [
+        {
+          "tool": "get_proposal",
+          "tier": "T1",
+          "decision": "denied"
+        }
+      ],
+      "proposals": [],
+      "figures_traced": 0,
+      "cards": [
+        "blocked"
+      ]
+    }
+  },
+  {
+    "id": 30,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 1,
     "actor": "compliance",
     "action": "login",
@@ -397,8 +490,114 @@
     "detail": {}
   },
   {
-    "id": 28,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 31,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "advisor_suspended",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "control": "advisor",
+      "state": "suspended",
+      "reason": "Evidence run: replies under review"
+    }
+  },
+  {
+    "id": 32,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 3,
+    "actor": "agent",
+    "action": "agent_turn",
+    "tool": null,
+    "tier": null,
+    "decision": null,
+    "detail": {
+      "message_id": 8,
+      "mode": "suspended",
+      "grounding": "fallback",
+      "tools": [],
+      "proposals": [],
+      "figures_traced": 0,
+      "cards": []
+    }
+  },
+  {
+    "id": 33,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "execution_halted",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "control": "execution",
+      "state": "halted",
+      "reason": "Evidence run: market drill"
+    }
+  },
+  {
+    "id": 34,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 3,
+    "actor": "client",
+    "action": "token_issued",
+    "tool": null,
+    "tier": "T3",
+    "decision": "denied",
+    "detail": {
+      "proposal_id": 5,
+      "reason": "EXECUTION_HALTED"
+    }
+  },
+  {
+    "id": 35,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "advisor_resumed",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "control": "advisor",
+      "state": "active",
+      "reason": "Evidence run finished"
+    }
+  },
+  {
+    "id": 36,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "execution_resumed",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "control": "execution",
+      "state": "open",
+      "reason": "Evidence run finished"
+    }
+  },
+  {
+    "id": 37,
+    "ts": "2026-10-16T04:41:48Z",
+    "user_id": 1,
+    "actor": "compliance",
+    "action": "model_card_exported",
+    "tool": null,
+    "tier": null,
+    "decision": "allowed",
+    "detail": {
+      "content_sha256": "edcc3f751ca41e875909d15e4f4a7898c1eae1acff0b1b531b77591cb059185f"
+    }
+  },
+  {
+    "id": 38,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 1,
     "actor": "compliance",
     "action": "chain_verified",
@@ -413,8 +612,8 @@
     }
   },
   {
-    "id": 29,
-    "ts": "2026-10-15T17:54:52Z",
+    "id": 39,
+    "ts": "2026-10-16T04:41:48Z",
     "user_id": 1,
     "actor": "compliance",
     "action": "evidence_exported",

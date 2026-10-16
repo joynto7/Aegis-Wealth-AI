@@ -84,21 +84,33 @@ def main() -> None:
         ("GET", "/api/sandbox/account", {}),
         ("POST", "/api/records/verify", {"json": {"scope": "mine"}}),
         ("GET", "/api/logs?limit=50", {}),
+        # Additions: the replay from the client's own amount, the switches' state and the regulatory map.
+        ("GET", "/api/replay/E1?amount=200000", {}),
+        ("GET", "/api/controls", {}),
+        ("GET", "/api/compliance/regulations", {}),
     ]
     results = []
-    for method, path, kwargs in endpoints:
+
+    def measure(method: str, path: str, kwargs: dict) -> None:
         samples = [timed(c, method, path, **kwargs) for _ in range(20)]
         results.append(
             {
-                "endpoint": f"{method} {path.split('?')[0]}",
+                "endpoint": f"{method} {path if 'amount=' in path else path.split('?')[0]}",
                 "calls": 20,
                 "p95_ms": round(p95(samples) * 1000, 1),
                 "median_ms": round(statistics.median(samples) * 1000, 1),
                 "ok": p95(samples) < 2.0,
             }
         )
+
+    for method, path, kwargs in endpoints:
+        measure(method, path, kwargs)
     chat_samples = [timed(c, "POST", "/api/chat", json={"message": "What's my risk tier?"}) for _ in range(10)]
     chat_mode = c.request("GET", "/api/health").json()["llm"]
+    # The compliance Control Room's live view and the model disclosure, as the officer.
+    c.request("POST", "/api/auth/login", json={"email": "officer@example.com", "password": PASSWORD}).raise_for_status()
+    for path in ("/api/compliance/overview", "/api/compliance/model-card"):
+        measure("GET", path, {})
     report = {
         "run_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "target": "deterministic p95 < 2 s; chat < 10 s (NFR-1.1, NFR-1.2)",

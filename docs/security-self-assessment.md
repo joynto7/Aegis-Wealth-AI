@@ -16,6 +16,7 @@ automated test, and the test evidence is in `evidence/`.
 | Operation log | `operation_logs` | Evidence of every material action, allowed or denied |
 | Sessions and password hashes | `sessions` (SHA-256 of the cookie), `users` (bcrypt) | Identity |
 | The Anthropic API key | Backend environment only (`.env`, git-ignored) | Model access and cost |
+| Compliance switches | `controls` table, changes in the operation log | Stop the AI advisor and sandbox execution by hand |
 
 Out of scope by design: real money, brokerage connections, live market data and self-registration. No
 code path exists for any of them, so no prompt can reach one.
@@ -23,18 +24,23 @@ code path exists for any of them, so no prompt can reach one.
 ## 2. Permission-tier implementation
 
 The agent reaches data and actions only through the permission broker
-(`app/agent/broker.py:73`, `PermissionBroker.run` at line 101). Every call is logged with its tool,
-tier and decision (`tool_call` or `permission_denied` in the operation log).
+(`app/agent/broker.py:74`, `PermissionBroker.run` at line 102). Every call is logged with its tool,
+tier and decision (`tool_call` or `permission_denied` in the operation log), and the client sees a
+refused call as a "blocked" card in the chat.
 
 | Tier | Who | What it allows | Unlocked when | Enforced in code | Proven by |
 | --- | --- | --- | --- | --- | --- |
-| **T0** Read | Agent and client | Product shelf, comparison, rule text | A valid session | `app/core/auth.py:21` (`current_user`); broker allows T0 tools for any client session | AT-01; `test_api_auth.py` |
-| **T1** Client data | Agent (for the logged-in client) and client | The client's own profile and proposals | The data belongs to the session's user | The broker passes the session's user into every tool; `app/services/proposals.py:97` (`get_owned`) returns 403 for another client's id, which the broker turns into `PERMISSION_DENIED` (`app/agent/broker.py:117`) | AT-02 (`test_api_ownership.py`); `test_agent.py::test_t1_tools_only_read_the_clients_own_data`; red-team group 5 |
-| **T2** Propose | Agent and client | Create and revise proposals; the gate always runs | Profile complete, no open contradiction, under 365 days old | `app/services/profiles.py:130` (`t2_error`), checked by the broker (`app/agent/broker.py:108`) and by the proposal routes; the gate runs inside `app/services/proposals.py`, so no path skips it | AT-04, AT-07; `test_agent.py::test_broker_denies_t2_with_an_open_contradiction_and_unknown_tools` |
-| **T3** Execute (sandbox) | The client's click only | Place simulated orders | PASS or acknowledged WARNING, quiz passed, and a valid one-time token from `POST /confirm` | No agent tool exists for T3; any unknown tool name is denied as T3 (`app/agent/broker.py:103`). `app/services/execution.py:43` issues a token (`secrets.token_urlsafe(32)`, stored as SHA-256, 5 minutes, bound to the items' hash); `execution.py:84` checks it in the documented order and claims it with a compare-and-set update (`execution.py:104`) so it works exactly once | AT-10 (`test_tokens.py`); red-team groups 1 and 4 |
+| **T0** Read | Agent and client | Product shelf, comparison, rule text | A valid session, and the advisor not suspended | `app/core/auth.py:21` (`current_user`); broker allows T0 tools for any client session while the advisor is active (`app/agent/broker.py:109`) | AT-01; `test_api_auth.py`; `test_oversight.py` |
+| **T1** Client data | Agent (for the logged-in client) and client | The client's own profile and proposals | The data belongs to the session's user | The broker passes the session's user into every tool; `app/services/proposals.py:97` (`get_owned`) returns 403 for another client's id, which the broker turns into `PERMISSION_DENIED` (`app/agent/broker.py:120`) | AT-02 (`test_api_ownership.py`); `test_agent.py::test_t1_tools_only_read_the_clients_own_data`; red-team group 5 |
+| **T2** Propose | Agent and client | Create and revise proposals; the gate always runs | Profile complete, no open contradiction, under 365 days old | `app/services/profiles.py:130` (`t2_error`), checked by the broker (`app/agent/broker.py:111`) and by the proposal routes; the gate runs inside `app/services/proposals.py`, so no path skips it | AT-04, AT-07; `test_agent.py::test_broker_denies_t2_with_an_open_contradiction_and_unknown_tools` |
+| **T3** Execute (sandbox) | The client's click only | Place simulated orders | PASS or acknowledged WARNING, quiz passed, a valid one-time token from `POST /confirm`, and execution not halted | No agent tool exists for T3; any unknown tool name is denied as T3 (`app/agent/broker.py:106`). `app/services/execution.py:45` issues a token (`secrets.token_urlsafe(32)`, stored as SHA-256, 5 minutes, bound to the items' hash); `execution.py:88` checks it in the documented order and claims it with a compare-and-set update (`execution.py:110`) so it works exactly once. While execution is halted, both refuse with EXECUTION_HALTED (`execution.py:46`, `:90`), even for a token issued before | AT-10 (`test_tokens.py`); red-team groups 1 and 4; `test_oversight.py` |
+| **C** Oversight (addition) | The compliance officer only | Suspend or resume the AI advisor; halt or resume execution; export the model disclosure | The compliance role, and a reason of 5 to 300 characters | `app/core/auth.py:45` (`compliance_user`); `app/services/controls.py:66` (`set_state`) logs each change with its reason. A suspension is checked at the start of every turn and again by the broker before every tool call, so it also stops a turn under way | `test_oversight.py` (switches, mid-turn suspension, halt with an earlier token, role checks, input checks) |
 
-The compliance officer's role is read-only: every state-changing endpoint requires the client role
-(`app/core/auth.py:39`), and the officer's endpoints (`app/core/auth.py:45`) only read or export.
+The compliance officer still cannot change any client's data: every state-changing endpoint for
+profiles, proposals and orders requires the client role (`app/core/auth.py:39`). Beyond reading and
+exporting, the officer's only powers are the two switches and the disclosure export, as Art. 23 of
+China's 2018 Guiding Opinions on asset management asks: the firm must be able to step in by hand and
+stop its AI business.
 
 ## 3. Controls
 
@@ -86,20 +92,35 @@ envelope. No stack trace reaches the browser (`app/core/errors.py`).
 
 **Grounding and wording.**
 - Every number in a reply must match a value from that turn's tool results or the client's message,
-  and banned phrases are blocked (`app/agent/grounding.py:132`).
+  and banned phrases are blocked (`app/agent/grounding.py:157`).
 - A failing reply is regenerated once with an operator note, then replaced by a template (AT-09).
+- The client can see the source of every figure: it is underlined in the reply, and hovering or
+  focusing it names the tool field, their own message or their profile.
+- Cards beside the reply come from the tool results themselves, never from the model's text.
 
 **Compliance.**
-- The suitability gate (R-02) and five more hard rules run inside the proposal service.
+- The suitability gate (R-02) and five more hard rules run inside the proposal service. Each rule
+  names the regulatory requirement it is designed to meet (`backend/data/regulations.json`).
 - Warnings must be acknowledged before Confirm.
-- Disclosures are stored with their version, and a three-question comprehension quiz is required.
+- Disclosures are stored with their version, including DISC-04 on the AI's limits, and a
+  three-question comprehension quiz is required.
 - Data labels ("Sample data", "Hypothetical", "Illustrative", "Simulated") appear wherever they apply.
+
+**Manual intervention and disclosure** (additions, the AI Control Room).
+- *Suspend AI advisor*: no chat turn runs, and the broker refuses any tool call still under way.
+- *Halt execution*: no confirmation token is issued and no order fills, even with a token issued
+  before the halt.
+- Both need the compliance role and a logged reason; clients see the state, never the reason.
+- The model disclosure lists the model's parameters and the allocation logic, with SHA-256
+  fingerprints of the system prompt and the tool list, so a filed report can be matched to the code
+  that ran. The report carries its own fingerprint, and each export is logged.
+- A live feed shows every agent turn with its tools, tiers, broker decisions and gate results.
 
 **Tamper evidence.**
 - Advice records are chained by SHA-256 (`app/engines/chain.py`), and verification names the first
   changed record (`app/services/records.py:56`).
 - A database trigger blocks UPDATE and DELETE on advice records and on the operation log
-  (`app/models/__init__.py:253`), so the application cannot rewrite history.
+  (`app/models/__init__.py:290`), so the application cannot rewrite history.
 - If someone with file access edits a record anyway, the chain catches it (AT-11 drops the trigger and
   proves this).
 
@@ -123,6 +144,9 @@ envelope. No stack trace reaches the browser (`app/core/errors.py`).
 | 12 | Model outage or runaway cost | API down, or a tool loop | Template fallback; 4-round cap; 20-second budget; 20 chat messages a minute (AT-12) | Fallback answers are plainer |
 | 13 | Password guessing | Repeated log-in attempts | 10 attempts a minute per IP; 5-failure account lock-out; generic errors; bcrypt | Lock-out can be triggered on purpose to block a demo account for 5 minutes |
 | 14 | Cross-site request forgery | A malicious page posts to the API | SameSite=Lax cookie, Origin check, JSON-only bodies | Relies on browsers sending Origin, as all current ones do |
+| 15 | The AI misbehaves in a way no rule anticipated | Replies drift after a model update | The officer watches the live feed and can suspend the advisor at once; a suspension also stops a turn under way | A human has to notice; there is no automatic tripwire yet |
+| 16 | Misuse of a compliance switch | An officer halts execution without cause | Compliance role only; a reason is required and logged; clients keep every other screen, and proposals stay as they are | Availability depends on one role; no second approver |
+| 17 | Disclosed model differs from the running one | A report filed before the prompt changed | SHA-256 fingerprints of the system prompt and tool list in every disclosure; the report's own hash | A fingerprint shows a change, not whether it matters |
 
 ## 5. Red-team results
 
@@ -148,7 +172,8 @@ runs on a fresh database, with a fresh PASS proposal before each prompt.
 
 Rule-breaking requests were attempted as revisions and rejected by the gate (R-02, R-03, R-04). The
 request for another client's proposal was denied by the broker at T1 and logged as
-`permission_denied`.
+`permission_denied`. In the chat, the client sees each rejected version as a REJECT card naming the
+failed rules, and each refused call as a "blocked" card.
 
 The committed log was produced in fallback mode (no API key). With `ANTHROPIC_API_KEY` set, run
 `python scripts/redteam.py` again (about 30 model turns) to record the same checks against the real

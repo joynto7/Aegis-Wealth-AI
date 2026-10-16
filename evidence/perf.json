@@ -1,83 +1,118 @@
 {
-  "run_at": "2026-10-15T17:56:49Z",
+  "run_at": "2026-10-16T04:38:44Z",
   "target": "deterministic p95 < 2 s; chat < 10 s (NFR-1.1, NFR-1.2)",
   "endpoints": [
     {
       "endpoint": "GET /api/profile/current",
-      "calls": 20,
-      "p95_ms": 2.3,
-      "median_ms": 1.7,
-      "ok": true
-    },
-    {
-      "endpoint": "GET /api/replay/E1",
       "calls": 20,
       "p95_ms": 2.0,
       "median_ms": 1.7,
       "ok": true
     },
     {
+      "endpoint": "GET /api/replay/E1",
+      "calls": 20,
+      "p95_ms": 2.1,
+      "median_ms": 1.7,
+      "ok": true
+    },
+    {
       "endpoint": "GET /api/products",
       "calls": 20,
-      "p95_ms": 1.7,
-      "median_ms": 1.6,
+      "p95_ms": 1.8,
+      "median_ms": 1.5,
       "ok": true
     },
     {
       "endpoint": "POST /api/products/compare",
       "calls": 20,
-      "p95_ms": 1.8,
+      "p95_ms": 2.0,
       "median_ms": 1.7,
       "ok": true
     },
     {
       "endpoint": "POST /api/proposals",
       "calls": 20,
-      "p95_ms": 4.5,
+      "p95_ms": 4.6,
       "median_ms": 4.1,
       "ok": true
     },
     {
       "endpoint": "GET /api/proposals/1",
       "calls": 20,
-      "p95_ms": 3.0,
-      "median_ms": 2.2,
+      "p95_ms": 2.2,
+      "median_ms": 1.9,
       "ok": true
     },
     {
       "endpoint": "GET /api/proposals/1/quiz",
       "calls": 20,
-      "p95_ms": 2.5,
+      "p95_ms": 2.0,
       "median_ms": 1.8,
       "ok": true
     },
     {
       "endpoint": "GET /api/sandbox/account",
       "calls": 20,
-      "p95_ms": 1.7,
+      "p95_ms": 1.8,
       "median_ms": 1.5,
       "ok": true
     },
     {
       "endpoint": "POST /api/records/verify",
       "calls": 20,
-      "p95_ms": 2.3,
+      "p95_ms": 2.0,
       "median_ms": 1.8,
       "ok": true
     },
     {
       "endpoint": "GET /api/logs",
       "calls": 20,
-      "p95_ms": 3.1,
-      "median_ms": 2.2,
+      "p95_ms": 2.6,
+      "median_ms": 2.0,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/replay/E1?amount=200000",
+      "calls": 20,
+      "p95_ms": 1.8,
+      "median_ms": 1.7,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/controls",
+      "calls": 20,
+      "p95_ms": 1.6,
+      "median_ms": 1.4,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/compliance/regulations",
+      "calls": 20,
+      "p95_ms": 1.5,
+      "median_ms": 1.4,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/compliance/overview",
+      "calls": 20,
+      "p95_ms": 2.2,
+      "median_ms": 2.0,
+      "ok": true
+    },
+    {
+      "endpoint": "GET /api/compliance/model-card",
+      "calls": 20,
+      "p95_ms": 2.8,
+      "median_ms": 2.3,
       "ok": true
     }
   ],
   "chat": {
     "turns": 10,
     "mode": "fallback",
-    "max_ms": 8.6,
-    "median_ms": 3.2,
+    "max_ms": 5.0,
+    "median_ms": 3.1,
     "ok": true
   },
   "result": "PASS"

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth import client_user
 from app.core.database import get_db
 from app.core.errors import ApiError
-from app.engines.replay import run_replay
+from app.engines.replay import START_VALUE, run_replay
 from app.models import User
 from app.routers.common import ERRORS
 from app.schemas import Profile, ProfileSubmit, Questionnaire, ReplayEpisodes, ReplayReactionRequest, ReplayResult
@@ -46,6 +46,9 @@ def episodes(_user: User = Depends(client_user), ctx: AppContext = Depends(get_c
 @router.get("/replay/{episode_id}", response_model=ReplayResult)
 def replay(
     episode_id: str = Path(max_length=8),
+    amount: float = Query(
+        default=START_VALUE, ge=10_000, le=10_000_000, description="Addition: the starting value in CNY (default 100,000)."
+    ),
     user: User = Depends(client_user),
     db: Session = Depends(get_db),
     ctx: AppContext = Depends(get_ctx),
@@ -63,6 +66,8 @@ def replay(
         ctx.catalog.history,
         data_label=ctx.catalog.history_label,
         data_as_of=ctx.catalog.history_as_of,
+        start_value=amount,
+        events_label=ctx.catalog.events_label,
     )
 
 

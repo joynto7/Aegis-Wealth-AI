@@ -14,7 +14,8 @@ from app.core.config import Settings, get_settings
 from app.core.database import Base, make_engine, make_session_factory
 from app.core.errors import error_body, install_error_handlers
 from app.engines.catalog import load_catalog
-from app.routers import audit, auth, chat, products, profile, proposals
+from app.models import add_missing_columns
+from app.routers import audit, auth, chat, oversight, products, profile, proposals
 from app.seed import seed_if_empty
 from app.services.context import AppContext
 
@@ -35,6 +36,8 @@ def create_app(settings: Settings | None = None, llm: Any | None = None) -> Fast
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         Base.metadata.create_all(engine)
+        for column in add_missing_columns(engine):
+            logging.getLogger("aegis").info("Added column %s", column)
         if seed_if_empty(app.state.session_factory, settings, catalog):
             logging.getLogger("aegis").info("Seeded demo accounts and products")
         yield
@@ -73,7 +76,7 @@ def create_app(settings: Settings | None = None, llm: Any | None = None) -> Fast
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
-    for module in (auth, profile, products, proposals, chat, audit):
+    for module in (auth, profile, products, proposals, chat, audit, oversight):
         app.include_router(module.router, prefix="/api")
 
     @app.get("/", include_in_schema=False)

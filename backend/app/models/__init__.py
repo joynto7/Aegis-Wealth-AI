@@ -1,4 +1,7 @@
-"""The 16 tables of Section 3.5. Ids are integer keys; JSON columns hold structures from Section 2.6."""
+"""The 16 tables of Section 3.5, plus `controls` (an addition).
+
+Ids are integer keys; JSON columns hold structures from Section 2.6.
+"""
 
 from __future__ import annotations
 
@@ -227,6 +230,9 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     tool_calls: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     citations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    # Additions: the cards shown beside the reply and the source of each number in it.
+    cards: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    number_sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     grounding: Mapped[str | None] = mapped_column(String(12), nullable=True)
     mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -247,7 +253,38 @@ class OperationLog(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class Control(Base):
+    """Compliance switches (addition): one row per control; no row means the default (advisor active, execution open)."""
+
+    __tablename__ = "controls"
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # advisor | execution
+    state: Mapped[str] = mapped_column(String(12))  # active | suspended ; open | halted
+    reason: Mapped[str] = mapped_column(String(300))
+    updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 APPEND_ONLY_TABLES = ("advice_records", "operation_logs")
+
+# Columns added after the first release. create_all() creates missing tables but never alters existing ones,
+# so a database from an earlier version gets these columns on start-up.
+ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "chat_messages": {"cards": "JSON NOT NULL DEFAULT '[]'", "number_sources": "JSON NOT NULL DEFAULT '[]'"},
+}
+
+
+def add_missing_columns(engine) -> list[str]:  # noqa: ANN001
+    added = []
+    if engine.dialect.name != "sqlite":
+        return added
+    with engine.begin() as conn:
+        for table, columns in ADDED_COLUMNS.items():
+            existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            for name, ddl in columns.items():
+                if existing and name not in existing:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                    added.append(f"{table}.{name}")
+    return added
 
 
 def _append_only_triggers(target, connection, **_kw) -> None:  # noqa: ANN001

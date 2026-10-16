@@ -23,6 +23,8 @@ from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOL_DEFINITIONS
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+MAX_TOKENS = 16000
+EFFORT = "medium"
 
 
 class LLM(Protocol):
@@ -37,10 +39,10 @@ class ClaudeClient:
     def create(self, *, messages: list[dict[str, Any]], timeout: float) -> Any:
         return self._client.with_options(timeout=max(1.0, timeout)).beta.messages.create(
             model=self.model,
-            max_tokens=16000,
+            max_tokens=MAX_TOKENS,
             betas=[FALLBACK_BETA],
             fallbacks="default",
-            output_config={"effort": "medium"},
+            output_config={"effort": EFFORT},
             system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             tools=TOOL_DEFINITIONS,
             messages=messages,

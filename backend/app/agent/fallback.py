@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 from app.agent.broker import PermissionBroker
-from app.agent.grounding import check_reply
+from app.agent.grounding import GroundingResult, check_reply
 from app.engines.numbers import format_money
 
 # Ordered: the first matching pattern decides.
@@ -297,10 +297,17 @@ def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> s
         if not r:
             return OTHER
         a, b = r["items"][0], r["items"][1]
+        # Products in different asset classes use different assumed returns; say so instead of quoting one.
+        growth = (
+            f"{a['assumed_return_pct']:g}% a year"
+            if a["assumed_return_pct"] == b["assumed_return_pct"]
+            else f"{a['assumed_return_pct']:g}% and {b['assumed_return_pct']:g}% a year respectively"
+        )
+        cheapest = next((i["name"] for i in r["items"] if i["code"] == r["cheapest_code"]), a["name"])
         return (
             f"Over {r['horizon_years']} years on {format_money(r['amount'])}, fees would cost about "
             f"{format_money(a['fee_cost'])} for {a['name']} and {format_money(b['fee_cost'])} for {b['name']}, "
-            f"assuming {a['assumed_return_pct']:g}% a year before fees."
+            f"assuming growth of {growth} before fees. {cheapest} costs the least in fees."
         )
 
     if intent in ("explain_rejection", "explain_proposal", "next_step"):
@@ -324,6 +331,7 @@ def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> s
     return OTHER
 
 
-def citations_for(broker: PermissionBroker, reply: str, message: str) -> list[dict[str, Any]]:
+def grounding_for(broker: PermissionBroker, reply: str, message: str) -> GroundingResult:
+    """The template's citations and number sources: the same check a model reply gets."""
     results = [(o.tool, o.result) for o in broker.outcomes if o.result is not None]
-    return check_reply(reply, results, message).citations
+    return check_reply(reply, results, message)

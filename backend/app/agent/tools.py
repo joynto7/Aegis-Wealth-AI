@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
+from app.engines.catalog import thaw
 from app.engines.fees import compare_products
 from app.models import Profile, User
 from app.services import profiles, proposals
@@ -74,7 +75,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "explain_rule",
-        "description": "Return the text and threshold of one compliance-gate rule, R-01 to R-09.",
+        "description": (
+            "Return the text and threshold of one compliance-gate rule, R-01 to R-09, and the regulatory requirement "
+            "it is designed to meet."
+        ),
         "strict": True,
         "input_schema": _schema({"rule_id": {"type": "string", "enum": RULE_IDS}}),
     },
@@ -224,9 +228,9 @@ def compare(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def explain_rule(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
-    rule = next((r for r in tc.ctx.catalog.rules if r["id"] == args["rule_id"]), None)
+    rule = tc.ctx.catalog.rule(args["rule_id"])
     _require(rule is not None, "unknown rule id")
-    return dict(rule)
+    return thaw(rule)
 
 
 def get_profile_summary(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:

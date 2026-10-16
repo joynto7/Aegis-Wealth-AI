@@ -1,4 +1,9 @@
-"""Historical replay (Section 2.5.2): V_t = V_{t-1} (1 + sum_c w_c r_{c,t}), from CNY 100,000."""
+"""Historical replay (Section 2.5.2): V_t = V_{t-1} (1 + sum_c w_c r_{c,t}), from CNY 100,000.
+
+Addition: the client may start from their own amount (the path scales with it,
+so the drawdown is the same), and the result carries the episode's real-world
+events for the animated replay.
+"""
 
 from __future__ import annotations
 
@@ -19,9 +24,11 @@ def run_replay(
     *,
     data_label: str,
     data_as_of: str,
+    start_value: float = START_VALUE,
+    events_label: str = "",
 ) -> dict[str, Any]:
     rows = [r for r in history if episode.start <= r.month <= episode.end]
-    value = peak = lowest_value = START_VALUE
+    value = peak = lowest_value = start_value
     lowest_month = episode.start
     max_drawdown = 0.0
     series: list[dict[str, Any]] = []
@@ -37,11 +44,13 @@ def run_replay(
         "episode": {"id": episode.id, "name": episode.name, "start": episode.start, "end": episode.end},
         "tier": tier,
         "weights_pct": {c: weights_pct[c] for c in ASSET_CLASSES},
-        "start_value": START_VALUE,
+        "start_value": round2(start_value),
         "series": series,
         "max_drawdown_pct": round1(max_drawdown * 100),
         "lowest_month": lowest_month,
         "end_value": round2(value),
         "data_label": data_label,
         "data_as_of": data_as_of,
+        "events": [{"month": e["month"], "text": e["text"]} for e in episode.events],
+        "events_label": events_label,
     }

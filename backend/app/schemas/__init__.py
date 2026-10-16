@@ -7,7 +7,7 @@ Section 2.6 are marked and listed in docs/api-contract-changes.md.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,7 +30,7 @@ ProductType = Literal[
     "thematic_equity_fund",
 ]
 AssetClass = Literal["cash", "bond", "gold", "equity"]
-ChatMode = Literal["model", "fallback"]
+ChatMode = Literal["model", "fallback", "suspended"]  # "suspended" is an addition (compliance controls)
 ChatGrounding = Literal["passed", "regenerated", "fallback"]
 LogActor = Literal["client", "agent", "system", "compliance"]
 LogDecision = Literal["allowed", "denied"]
@@ -57,6 +57,7 @@ ErrorCode = Literal[
     "VALIDATION_ERROR",
     "RATE_LIMITED",
     "INTERNAL",
+    "EXECUTION_HALTED",  # addition: compliance halted sandbox execution
 ]
 
 
@@ -166,6 +167,11 @@ class ClassWeights(BaseModel):
     equity: float
 
 
+class ReplayEvent(BaseModel):
+    month: str
+    text: str
+
+
 class ReplayResult(BaseModel):
     episode: ReplayEpisodeSummary
     tier: int
@@ -177,6 +183,8 @@ class ReplayResult(BaseModel):
     end_value: float
     data_label: str
     data_as_of: str
+    events: list[ReplayEvent] = Field(description="Addition: what happened in the world during the episode.")
+    events_label: str = Field(description="Addition: says the events are real and the portfolio path illustrative.")
 
 
 class ReplayReactionRequest(RequestBody):
@@ -396,6 +404,104 @@ class Citation(BaseModel):
     value: float | str
 
 
+class NumberSource(BaseModel):
+    """Addition: where one figure in the reply came from, by its character span in the reply."""
+
+    start: int
+    end: int
+    text: str
+    kind: Literal["tool", "message", "context"]
+    tool: str | None
+    path: str | None
+    value: float
+
+
+# --- Chat cards (addition): tool results shown beside the reply ------------------------
+class RuleBasis(BaseModel):
+    framework: str
+    title: str
+    ref: str
+    requirement: str
+
+
+class ProductsCardItem(BaseModel):
+    code: str
+    name: str
+    type: ProductType
+    risk_level: int
+    annual_fee_pct: float
+    suitable: bool | None
+
+
+class ProductsCard(BaseModel):
+    type: Literal["products"]
+    items: list[ProductsCardItem]
+    total: int
+    data_label: str
+
+
+class ComparisonCard(BaseModel):
+    type: Literal["comparison"]
+    amount: float
+    horizon_years: int
+    items: list[CompareItem]
+    cheapest_code: str
+    data_label: str
+
+
+class FailedRule(BaseModel):
+    id: str
+    name: str
+    type: RuleType
+    detail: str
+
+
+class ProposalCard(BaseModel):
+    type: Literal["proposal"]
+    proposal_id: int
+    version: int
+    status: ProposalStatus
+    amount: float
+    horizon_years: int
+    tier: int
+    class_weights_pct: ClassWeights
+    gate_decision: GateDecision
+    failed_rules: list[FailedRule]
+    data_label: str
+
+
+class RuleCard(BaseModel):
+    type: Literal["rule"]
+    id: str
+    rule_type: RuleType
+    name: str
+    description: str
+    threshold: str
+    basis: list[RuleBasis]
+
+
+class ProfileCard(BaseModel):
+    type: Literal["profile"]
+    tier: int
+    tier_label: str
+    capacity_score: int
+    willingness_score: int
+    max_acceptable_loss_pct: int
+    status: ProfileStatus
+
+
+class BlockedCard(BaseModel):
+    type: Literal["blocked"]
+    tool: str
+    tier: LogTier
+    reason: str
+
+
+ChatCard = Annotated[
+    ProductsCard | ComparisonCard | ProposalCard | RuleCard | ProfileCard | BlockedCard, Field(discriminator="type")
+]
+
+
 class ChatRequest(RequestBody):
     message: str = Field(min_length=1, max_length=1000)
     proposal_id: int | None = None
@@ -408,6 +514,8 @@ class ChatReply(BaseModel):
     reply: str
     tool_calls: list[ToolCallSummary]
     citations: list[Citation]
+    cards: list[ChatCard] = Field(description="Addition: the tool results behind the reply, as cards.")
+    number_sources: list[NumberSource] = Field(description="Addition: the source of each figure in the reply.")
     created_at: str
 
 
@@ -419,6 +527,8 @@ class ChatMessage(BaseModel):
     grounding: ChatGrounding | None = None
     tool_calls: list[ToolCallSummary] | None = None
     citations: list[Citation] | None = None
+    cards: list[ChatCard] | None = None
+    number_sources: list[NumberSource] | None = None
     created_at: str
 
 
@@ -551,6 +661,7 @@ class Rule(BaseModel):
     name: str
     description: str
     threshold: str
+    basis: list[RuleBasis] = Field(description="Addition: the regulatory requirement each rule is designed to meet.")
 
 
 class RuleList(BaseModel):
@@ -562,3 +673,162 @@ class HealthStatus(BaseModel):
     db: Literal["ok"]
     llm: Literal["ok", "fallback"]
     data_as_of: str
+
+
+# --- Compliance controls and oversight (additions) ---------------------------------------
+ControlName = Literal["advisor", "execution"]
+ControlStateValue = Literal["active", "suspended", "open", "halted"]
+
+
+class ControlState(BaseModel):
+    state: ControlStateValue
+    changed_at: str | None
+    reason: str | None = Field(description="Shown to the compliance role only.")
+    changed_by: str | None = Field(description="Shown to the compliance role only.")
+
+
+class Controls(BaseModel):
+    advisor: ControlState
+    execution: ControlState
+
+
+class ControlChange(RequestBody):
+    control: ControlName
+    state: ControlStateValue
+    reason: str = Field(min_length=5, max_length=300)
+
+
+class TurnTool(BaseModel):
+    tool: str
+    tier: LogTier
+    decision: LogDecision
+
+
+class TurnProposal(BaseModel):
+    tool: str
+    proposal_id: int
+    gate: GateDecision
+
+
+class AgentTurn(BaseModel):
+    log_id: int
+    ts: str
+    user_id: int | None
+    mode: ChatMode
+    grounding: ChatGrounding
+    tools: list[TurnTool]
+    proposals: list[TurnProposal]
+    figures_traced: int
+
+
+class OversightKpis(BaseModel):
+    agent_turns: int
+    model_turns: int
+    template_turns: int
+    suspended_turns: int
+    tool_calls_t0: int
+    tool_calls_t1: int
+    tool_calls_t2: int
+    denied_tool_calls: int
+    agent_proposals: int
+    agent_proposals_rejected: int
+    grounding_rewrites: int
+    grounding_fallbacks: int
+    figures_traced: int
+    orders_by_agent: int
+    orders_by_clients: int
+
+
+class Oversight(BaseModel):
+    llm: Literal["ok", "fallback"]
+    model: str
+    system_prompt_sha256: str
+    controls: Controls
+    kpis: OversightKpis
+    turns: list[AgentTurn]
+
+
+class AiControl(BaseModel):
+    id: str
+    framework: str
+    title: str
+    ref: str
+    requirement: str
+    control: str
+    check: Literal["built_in", "controls", "report"]
+    note: str | None
+
+
+class Framework(BaseModel):
+    id: str
+    short: str
+    title: str
+    jurisdiction: str
+
+
+class Regulations(BaseModel):
+    version: str
+    note: str
+    frameworks: list[Framework]
+    ai_controls: list[AiControl]
+
+
+class ModelCardAdvisor(BaseModel):
+    provider: str
+    model: str
+    mode: Literal["model", "fallback"]
+    effort: str
+    max_tokens: int
+    timeout_seconds: float
+    max_tool_rounds: int
+    history_messages: int
+    system_prompt_sha256: str
+    tools_sha256: str
+    data_sent: str
+    data_never_sent: str
+
+
+class ModelCardTool(BaseModel):
+    name: str
+    tier: ToolTier
+    description: str
+
+
+class ModelCardTier(BaseModel):
+    tier: LogTier
+    scope: str
+
+
+class ModelCardGrounding(BaseModel):
+    allowed_numbers: str
+    banned_phrases: list[str]
+    on_failure: str
+
+
+class ModelCardScenario(BaseModel):
+    id: str
+    name: str
+    shocks_pct: ClassWeights
+
+
+class ModelCardAllocation(BaseModel):
+    tier_labels: dict[str, str]
+    model_portfolios_pct: dict[str, ClassWeights]
+    steps: list[str]
+    assumed_gross_return_pct: ClassWeights
+    stress_scenarios: list[ModelCardScenario]
+
+
+class ModelCard(BaseModel):
+    report: str
+    generated_at: str
+    advisor: ModelCardAdvisor
+    tools: list[ModelCardTool]
+    permission_tiers: list[ModelCardTier]
+    grounding: ModelCardGrounding
+    allocation: ModelCardAllocation
+    rules: list[Rule]
+    controls: Controls
+    regulations: Regulations
+    data_versions: dict[str, str]
+    content_sha256: str = Field(description="SHA-256 of this report without this field, for the record.")

@@ -11,7 +11,9 @@
 4. Scan for banned phrases, case-insensitive.
 
 Matched numbers become the reply's citations: the tool, the JSON path and
-the value each figure came from.
+the value each figure came from. They also become number sources (an
+addition): the character span of each figure in the reply and where it came
+from, so the chat can show the source of any number the client points at.
 """
 
 from __future__ import annotations
@@ -46,6 +48,14 @@ class ReplyNumber:
     value: float
     decimals: int
     percent: bool
+    start: int = 0
+    end: int = 0
+
+    @property
+    def exempt(self) -> bool:
+        """Small whole numbers and years need no source (step 2)."""
+        x = abs(self.value)
+        return not self.percent and self.decimals == 0 and (x <= 10 or 2000 <= x <= 2030)
 
 
 @dataclass(frozen=True)
@@ -59,6 +69,10 @@ class Source:
     def citable(self) -> bool:
         return self.tool not in ("user_message", "context") and self.rank == 0
 
+    @property
+    def kind(self) -> str:
+        return {"user_message": "message", "context": "context"}.get(self.tool, "tool")
+
 
 @dataclass
 class GroundingResult:
@@ -66,6 +80,7 @@ class GroundingResult:
     unsupported: list[str] = field(default_factory=list)
     banned: list[str] = field(default_factory=list)
     citations: list[dict[str, Any]] = field(default_factory=list)
+    number_sources: list[dict[str, Any]] = field(default_factory=list)
 
     def problem(self) -> str:
         parts = []
@@ -77,7 +92,8 @@ class GroundingResult:
 
 
 def extract_numbers(text: str) -> list[ReplyNumber]:
-    cleaned = IDENTIFIER.sub(" ", text)
+    # Identifiers are blanked with spaces of the same length, so offsets still point into the original text.
+    cleaned = IDENTIFIER.sub(lambda m: " " * len(m.group(0)), text)
     found = []
     for m in NUMBER.finditer(cleaned):
         sign, whole, frac, pct = m.groups()
@@ -85,7 +101,16 @@ def extract_numbers(text: str) -> list[ReplyNumber]:
         value = float(raw)
         if sign in ("-", "−"):
             value = -value
-        found.append(ReplyNumber(text=m.group(0).strip(), value=value, decimals=len(frac) - 1 if frac else 0, percent=bool(pct)))
+        found.append(
+            ReplyNumber(
+                text=m.group(0),
+                value=value,
+                decimals=len(frac) - 1 if frac else 0,
+                percent=bool(pct),
+                start=m.start(),
+                end=m.end(),
+            )
+        )
     return found
 
 
@@ -133,21 +158,40 @@ def check_reply(reply: str, tool_results: list[tuple[str, Any]], user_message: s
     sources = allowed_sources(tool_results, user_message)
     unsupported: list[str] = []
     citations: list[dict[str, Any]] = []
+    number_sources: list[dict[str, Any]] = []
     cited: set[tuple[str, str]] = set()
     for n in extract_numbers(reply):
-        x = abs(n.value)
         source = next((s for s in sources if _matches(n, s.value)), None)
         if source is not None:
             if source.citable and (source.tool, source.path) not in cited:
                 cited.add((source.tool, source.path))
                 citations.append({"tool": source.tool, "path": source.path, "value": source.value})
+            if not n.exempt:
+                # Small whole numbers match too many fields to point at one source, so only real figures get one.
+                number_sources.append(
+                    {
+                        "start": n.start,
+                        "end": n.end,
+                        "text": n.text,
+                        "kind": source.kind,
+                        "tool": source.tool if source.kind == "tool" else None,
+                        "path": source.path if source.kind != "message" else None,
+                        "value": source.value,
+                    }
+                )
             continue
-        if not n.percent and n.decimals == 0 and (x <= 10 or 2000 <= x <= 2030):
+        if n.exempt:
             continue
         unsupported.append(n.text)
     lowered = reply.lower()
     banned = [label for pattern, label in BANNED if re.search(pattern, lowered)]
-    return GroundingResult(passed=not unsupported and not banned, unsupported=unsupported, banned=banned, citations=citations)
+    return GroundingResult(
+        passed=not unsupported and not banned,
+        unsupported=unsupported,
+        banned=banned,
+        citations=citations,
+        number_sources=number_sources,
+    )
 
 
 def result_text(result: Any) -> str:

@@ -673,6 +673,20 @@
               "maxLength": 8,
               "title": "Episode Id"
             }
+          },
+          {
+            "name": "amount",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 10000000,
+              "minimum": 10000,
+              "description": "Addition: the starting value in CNY (default 100,000).",
+              "default": 100000.0,
+              "title": "Amount"
+            },
+            "description": "Addition: the starting value in CNY (default 100,000)."
           }
         ],
         "responses": {
@@ -3430,6 +3444,487 @@
           }
         }
       }
+    },
+    "/api/controls": {
+      "get": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Get Controls",
+        "operationId": "get_controls_api_controls_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Controls"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/controls": {
+      "post": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Change Control",
+        "description": "Suspend or resume the AI advisor, or halt or resume sandbox execution, with a reason (logged).",
+        "operationId": "change_control_api_compliance_controls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Controls"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/overview": {
+      "get": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Get Overview",
+        "operationId": "get_overview_api_compliance_overview_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Oversight"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/regulations": {
+      "get": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Get Regulations",
+        "operationId": "get_regulations_api_compliance_regulations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Regulations"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/model-card": {
+      "get": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Get Model Card",
+        "description": "The model and allocation-logic disclosure (2018 Guiding Opinions, Art. 23). Each export is logged.",
+        "operationId": "get_model_card_api_compliance_model_card_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelCard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3539,6 +4034,137 @@
         ],
         "title": "AdviceRecordContent"
       },
+      "AgentTurn": {
+        "properties": {
+          "log_id": {
+            "type": "integer",
+            "title": "Log Id"
+          },
+          "ts": {
+            "type": "string",
+            "title": "Ts"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "model",
+              "fallback",
+              "suspended"
+            ],
+            "title": "Mode"
+          },
+          "grounding": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "regenerated",
+              "fallback"
+            ],
+            "title": "Grounding"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/TurnTool"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/TurnProposal"
+            },
+            "type": "array",
+            "title": "Proposals"
+          },
+          "figures_traced": {
+            "type": "integer",
+            "title": "Figures Traced"
+          }
+        },
+        "type": "object",
+        "required": [
+          "log_id",
+          "ts",
+          "user_id",
+          "mode",
+          "grounding",
+          "tools",
+          "proposals",
+          "figures_traced"
+        ],
+        "title": "AgentTurn"
+      },
+      "AiControl": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "framework": {
+            "type": "string",
+            "title": "Framework"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "requirement": {
+            "type": "string",
+            "title": "Requirement"
+          },
+          "control": {
+            "type": "string",
+            "title": "Control"
+          },
+          "check": {
+            "type": "string",
+            "enum": [
+              "built_in",
+              "controls",
+              "report"
+            ],
+            "title": "Check"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "framework",
+          "title",
+          "ref",
+          "requirement",
+          "control",
+          "check",
+          "note"
+        ],
+        "title": "AiControl"
+      },
       "ApiErrorBody": {
         "properties": {
           "error": {
@@ -3572,7 +4198,8 @@
               "INSUFFICIENT_CASH",
               "VALIDATION_ERROR",
               "RATE_LIMITED",
-              "INTERNAL"
+              "INTERNAL",
+              "EXECUTION_HALTED"
             ],
             "title": "Code"
           },
@@ -3599,6 +4226,41 @@
           "message"
         ],
         "title": "ApiErrorDetail"
+      },
+      "BlockedCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "blocked",
+            "title": "Type"
+          },
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "T0",
+              "T1",
+              "T2",
+              "T3"
+            ],
+            "title": "Tier"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "tool",
+          "tier",
+          "reason"
+        ],
+        "title": "BlockedCard"
       },
       "ChatHistory": {
         "properties": {
@@ -3640,7 +4302,8 @@
                 "type": "string",
                 "enum": [
                   "model",
-                  "fallback"
+                  "fallback",
+                  "suspended"
                 ]
               },
               {
@@ -3693,6 +4356,64 @@
             ],
             "title": "Citations"
           },
+          "cards": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductsCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ComparisonCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProposalCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RuleCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProfileCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BlockedCard"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "type",
+                    "mapping": {
+                      "blocked": "#/components/schemas/BlockedCard",
+                      "comparison": "#/components/schemas/ComparisonCard",
+                      "products": "#/components/schemas/ProductsCard",
+                      "profile": "#/components/schemas/ProfileCard",
+                      "proposal": "#/components/schemas/ProposalCard",
+                      "rule": "#/components/schemas/RuleCard"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cards"
+          },
+          "number_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NumberSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Sources"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -3717,7 +4438,8 @@
             "type": "string",
             "enum": [
               "model",
-              "fallback"
+              "fallback",
+              "suspended"
             ],
             "title": "Mode"
           },
@@ -3748,6 +4470,52 @@
             "type": "array",
             "title": "Citations"
           },
+          "cards": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ProductsCard"
+                },
+                {
+                  "$ref": "#/components/schemas/ComparisonCard"
+                },
+                {
+                  "$ref": "#/components/schemas/ProposalCard"
+                },
+                {
+                  "$ref": "#/components/schemas/RuleCard"
+                },
+                {
+                  "$ref": "#/components/schemas/ProfileCard"
+                },
+                {
+                  "$ref": "#/components/schemas/BlockedCard"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "blocked": "#/components/schemas/BlockedCard",
+                  "comparison": "#/components/schemas/ComparisonCard",
+                  "products": "#/components/schemas/ProductsCard",
+                  "profile": "#/components/schemas/ProfileCard",
+                  "proposal": "#/components/schemas/ProposalCard",
+                  "rule": "#/components/schemas/RuleCard"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Cards",
+            "description": "Addition: the tool results behind the reply, as cards."
+          },
+          "number_sources": {
+            "items": {
+              "$ref": "#/components/schemas/NumberSource"
+            },
+            "type": "array",
+            "title": "Number Sources",
+            "description": "Addition: the source of each figure in the reply."
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -3761,6 +4529,8 @@
           "reply",
           "tool_calls",
           "citations",
+          "cards",
+          "number_sources",
           "created_at"
         ],
         "title": "ChatReply"
@@ -3984,6 +4754,48 @@
         ],
         "title": "CompareResult"
       },
+      "ComparisonCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "comparison",
+            "title": "Type"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "horizon_years": {
+            "type": "integer",
+            "title": "Horizon Years"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CompareItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "cheapest_code": {
+            "type": "string",
+            "title": "Cheapest Code"
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "amount",
+          "horizon_years",
+          "items",
+          "cheapest_code",
+          "data_label"
+        ],
+        "title": "ComparisonCard"
+      },
       "ConfirmTokenResponse": {
         "properties": {
           "confirm_token": {
@@ -4027,6 +4839,115 @@
           "question_ids"
         ],
         "title": "Contradiction"
+      },
+      "ControlChange": {
+        "properties": {
+          "control": {
+            "type": "string",
+            "enum": [
+              "advisor",
+              "execution"
+            ],
+            "title": "Control"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "open",
+              "halted"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 5,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "control",
+          "state",
+          "reason"
+        ],
+        "title": "ControlChange"
+      },
+      "ControlState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "open",
+              "halted"
+            ],
+            "title": "State"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Shown to the compliance role only."
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By",
+            "description": "Shown to the compliance role only."
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "changed_at",
+          "reason",
+          "changed_by"
+        ],
+        "title": "ControlState"
+      },
+      "Controls": {
+        "properties": {
+          "advisor": {
+            "$ref": "#/components/schemas/ControlState"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/ControlState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "advisor",
+          "execution"
+        ],
+        "title": "Controls"
       },
       "Disclosure": {
         "properties": {
@@ -4082,6 +5003,66 @@
           "record_id"
         ],
         "title": "ExecuteResponse"
+      },
+      "FailedRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "soft"
+            ],
+            "title": "Type"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "detail"
+        ],
+        "title": "FailedRule"
+      },
+      "Framework": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "short": {
+            "type": "string",
+            "title": "Short"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "title": "Jurisdiction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "short",
+          "title",
+          "jurisdiction"
+        ],
+        "title": "Framework"
       },
       "GateResult": {
         "properties": {
@@ -4342,6 +5323,361 @@
         ],
         "title": "LoginRequest"
       },
+      "ModelCard": {
+        "properties": {
+          "report": {
+            "type": "string",
+            "title": "Report"
+          },
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "advisor": {
+            "$ref": "#/components/schemas/ModelCardAdvisor"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCardTool"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "permission_tiers": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCardTier"
+            },
+            "type": "array",
+            "title": "Permission Tiers"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/ModelCardGrounding"
+          },
+          "allocation": {
+            "$ref": "#/components/schemas/ModelCardAllocation"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "type": "array",
+            "title": "Rules"
+          },
+          "controls": {
+            "$ref": "#/components/schemas/Controls"
+          },
+          "regulations": {
+            "$ref": "#/components/schemas/Regulations"
+          },
+          "data_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Data Versions"
+          },
+          "content_sha256": {
+            "type": "string",
+            "title": "Content Sha256",
+            "description": "SHA-256 of this report without this field, for the record."
+          }
+        },
+        "type": "object",
+        "required": [
+          "report",
+          "generated_at",
+          "advisor",
+          "tools",
+          "permission_tiers",
+          "grounding",
+          "allocation",
+          "rules",
+          "controls",
+          "regulations",
+          "data_versions",
+          "content_sha256"
+        ],
+        "title": "ModelCard"
+      },
+      "ModelCardAdvisor": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "model",
+              "fallback"
+            ],
+            "title": "Mode"
+          },
+          "effort": {
+            "type": "string",
+            "title": "Effort"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "title": "Max Tokens"
+          },
+          "timeout_seconds": {
+            "type": "number",
+            "title": "Timeout Seconds"
+          },
+          "max_tool_rounds": {
+            "type": "integer",
+            "title": "Max Tool Rounds"
+          },
+          "history_messages": {
+            "type": "integer",
+            "title": "History Messages"
+          },
+          "system_prompt_sha256": {
+            "type": "string",
+            "title": "System Prompt Sha256"
+          },
+          "tools_sha256": {
+            "type": "string",
+            "title": "Tools Sha256"
+          },
+          "data_sent": {
+            "type": "string",
+            "title": "Data Sent"
+          },
+          "data_never_sent": {
+            "type": "string",
+            "title": "Data Never Sent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "mode",
+          "effort",
+          "max_tokens",
+          "timeout_seconds",
+          "max_tool_rounds",
+          "history_messages",
+          "system_prompt_sha256",
+          "tools_sha256",
+          "data_sent",
+          "data_never_sent"
+        ],
+        "title": "ModelCardAdvisor"
+      },
+      "ModelCardAllocation": {
+        "properties": {
+          "tier_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tier Labels"
+          },
+          "model_portfolios_pct": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ClassWeights"
+            },
+            "type": "object",
+            "title": "Model Portfolios Pct"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "assumed_gross_return_pct": {
+            "$ref": "#/components/schemas/ClassWeights"
+          },
+          "stress_scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCardScenario"
+            },
+            "type": "array",
+            "title": "Stress Scenarios"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tier_labels",
+          "model_portfolios_pct",
+          "steps",
+          "assumed_gross_return_pct",
+          "stress_scenarios"
+        ],
+        "title": "ModelCardAllocation"
+      },
+      "ModelCardGrounding": {
+        "properties": {
+          "allowed_numbers": {
+            "type": "string",
+            "title": "Allowed Numbers"
+          },
+          "banned_phrases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Banned Phrases"
+          },
+          "on_failure": {
+            "type": "string",
+            "title": "On Failure"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed_numbers",
+          "banned_phrases",
+          "on_failure"
+        ],
+        "title": "ModelCardGrounding"
+      },
+      "ModelCardScenario": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "shocks_pct": {
+            "$ref": "#/components/schemas/ClassWeights"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "shocks_pct"
+        ],
+        "title": "ModelCardScenario"
+      },
+      "ModelCardTier": {
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "T0",
+              "T1",
+              "T2",
+              "T3"
+            ],
+            "title": "Tier"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tier",
+          "scope"
+        ],
+        "title": "ModelCardTier"
+      },
+      "ModelCardTool": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "T0",
+              "T1",
+              "T2"
+            ],
+            "title": "Tier"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "tier",
+          "description"
+        ],
+        "title": "ModelCardTool"
+      },
+      "NumberSource": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tool",
+              "message",
+              "context"
+            ],
+            "title": "Kind"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "text",
+          "kind",
+          "tool",
+          "path",
+          "value"
+        ],
+        "title": "NumberSource",
+        "description": "Addition: where one figure in the reply came from, by its character span in the reply."
+      },
       "Order": {
         "properties": {
           "id": {
@@ -4406,6 +5742,132 @@
           "items"
         ],
         "title": "OrderList"
+      },
+      "Oversight": {
+        "properties": {
+          "llm": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fallback"
+            ],
+            "title": "Llm"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "system_prompt_sha256": {
+            "type": "string",
+            "title": "System Prompt Sha256"
+          },
+          "controls": {
+            "$ref": "#/components/schemas/Controls"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/OversightKpis"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AgentTurn"
+            },
+            "type": "array",
+            "title": "Turns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "llm",
+          "model",
+          "system_prompt_sha256",
+          "controls",
+          "kpis",
+          "turns"
+        ],
+        "title": "Oversight"
+      },
+      "OversightKpis": {
+        "properties": {
+          "agent_turns": {
+            "type": "integer",
+            "title": "Agent Turns"
+          },
+          "model_turns": {
+            "type": "integer",
+            "title": "Model Turns"
+          },
+          "template_turns": {
+            "type": "integer",
+            "title": "Template Turns"
+          },
+          "suspended_turns": {
+            "type": "integer",
+            "title": "Suspended Turns"
+          },
+          "tool_calls_t0": {
+            "type": "integer",
+            "title": "Tool Calls T0"
+          },
+          "tool_calls_t1": {
+            "type": "integer",
+            "title": "Tool Calls T1"
+          },
+          "tool_calls_t2": {
+            "type": "integer",
+            "title": "Tool Calls T2"
+          },
+          "denied_tool_calls": {
+            "type": "integer",
+            "title": "Denied Tool Calls"
+          },
+          "agent_proposals": {
+            "type": "integer",
+            "title": "Agent Proposals"
+          },
+          "agent_proposals_rejected": {
+            "type": "integer",
+            "title": "Agent Proposals Rejected"
+          },
+          "grounding_rewrites": {
+            "type": "integer",
+            "title": "Grounding Rewrites"
+          },
+          "grounding_fallbacks": {
+            "type": "integer",
+            "title": "Grounding Fallbacks"
+          },
+          "figures_traced": {
+            "type": "integer",
+            "title": "Figures Traced"
+          },
+          "orders_by_agent": {
+            "type": "integer",
+            "title": "Orders By Agent"
+          },
+          "orders_by_clients": {
+            "type": "integer",
+            "title": "Orders By Clients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_turns",
+          "model_turns",
+          "template_turns",
+          "suspended_turns",
+          "tool_calls_t0",
+          "tool_calls_t1",
+          "tool_calls_t2",
+          "denied_tool_calls",
+          "agent_proposals",
+          "agent_proposals_rejected",
+          "grounding_rewrites",
+          "grounding_fallbacks",
+          "figures_traced",
+          "orders_by_agent",
+          "orders_by_clients"
+        ],
+        "title": "OversightKpis"
       },
       "Position": {
         "properties": {
@@ -4578,6 +6040,93 @@
         ],
         "title": "ProductList"
       },
+      "ProductsCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "products",
+            "title": "Type"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductsCardItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "items",
+          "total",
+          "data_label"
+        ],
+        "title": "ProductsCard"
+      },
+      "ProductsCardItem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "deposit",
+              "money_market_fund",
+              "short_term_bond_fund",
+              "bond_fund",
+              "gold_etf",
+              "index_etf",
+              "active_equity_fund",
+              "thematic_equity_fund"
+            ],
+            "title": "Type"
+          },
+          "risk_level": {
+            "type": "integer",
+            "title": "Risk Level"
+          },
+          "annual_fee_pct": {
+            "type": "number",
+            "title": "Annual Fee Pct"
+          },
+          "suitable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suitable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "risk_level",
+          "annual_fee_pct",
+          "suitable"
+        ],
+        "title": "ProductsCardItem"
+      },
       "Profile": {
         "properties": {
           "id": {
@@ -4668,6 +6217,54 @@
           "created_at"
         ],
         "title": "Profile"
+      },
+      "ProfileCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "profile",
+            "title": "Type"
+          },
+          "tier": {
+            "type": "integer",
+            "title": "Tier"
+          },
+          "tier_label": {
+            "type": "string",
+            "title": "Tier Label"
+          },
+          "capacity_score": {
+            "type": "integer",
+            "title": "Capacity Score"
+          },
+          "willingness_score": {
+            "type": "integer",
+            "title": "Willingness Score"
+          },
+          "max_acceptable_loss_pct": {
+            "type": "integer",
+            "title": "Max Acceptable Loss Pct"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "needs_review"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "tier",
+          "tier_label",
+          "capacity_score",
+          "willingness_score",
+          "max_acceptable_loss_pct",
+          "status"
+        ],
+        "title": "ProfileCard"
       },
       "ProfileReplay": {
         "properties": {
@@ -4829,6 +6426,85 @@
           "created_at"
         ],
         "title": "Proposal"
+      },
+      "ProposalCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "proposal",
+            "title": "Type"
+          },
+          "proposal_id": {
+            "type": "integer",
+            "title": "Proposal Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "rejected",
+              "warning",
+              "acknowledged",
+              "passed",
+              "executed",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "horizon_years": {
+            "type": "integer",
+            "title": "Horizon Years"
+          },
+          "tier": {
+            "type": "integer",
+            "title": "Tier"
+          },
+          "class_weights_pct": {
+            "$ref": "#/components/schemas/ClassWeights"
+          },
+          "gate_decision": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "WARNING",
+              "REJECT"
+            ],
+            "title": "Gate Decision"
+          },
+          "failed_rules": {
+            "items": {
+              "$ref": "#/components/schemas/FailedRule"
+            },
+            "type": "array",
+            "title": "Failed Rules"
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "proposal_id",
+          "version",
+          "status",
+          "amount",
+          "horizon_years",
+          "tier",
+          "class_weights_pct",
+          "gate_decision",
+          "failed_rules",
+          "data_label"
+        ],
+        "title": "ProposalCard"
       },
       "ProposalCreate": {
         "properties": {
@@ -5308,6 +6984,40 @@
         ],
         "title": "RecordSummary"
       },
+      "Regulations": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "frameworks": {
+            "items": {
+              "$ref": "#/components/schemas/Framework"
+            },
+            "type": "array",
+            "title": "Frameworks"
+          },
+          "ai_controls": {
+            "items": {
+              "$ref": "#/components/schemas/AiControl"
+            },
+            "type": "array",
+            "title": "Ai Controls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "note",
+          "frameworks",
+          "ai_controls"
+        ],
+        "title": "Regulations"
+      },
       "ReplayEpisodeSummary": {
         "properties": {
           "id": {
@@ -5351,6 +7061,24 @@
           "episodes"
         ],
         "title": "ReplayEpisodes"
+      },
+      "ReplayEvent": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "text"
+        ],
+        "title": "ReplayEvent"
       },
       "ReplayPoint": {
         "properties": {
@@ -5439,6 +7167,19 @@
           "data_as_of": {
             "type": "string",
             "title": "Data As Of"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayEvent"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Addition: what happened in the world during the episode."
+          },
+          "events_label": {
+            "type": "string",
+            "title": "Events Label",
+            "description": "Addition: says the events are real and the portfolio path illustrative."
           }
         },
         "type": "object",
@@ -5452,7 +7193,9 @@
           "lowest_month",
           "end_value",
           "data_label",
-          "data_as_of"
+          "data_as_of",
+          "events",
+          "events_label"
         ],
         "title": "ReplayResult"
       },
@@ -5523,6 +7266,14 @@
           "threshold": {
             "type": "string",
             "title": "Threshold"
+          },
+          "basis": {
+            "items": {
+              "$ref": "#/components/schemas/RuleBasis"
+            },
+            "type": "array",
+            "title": "Basis",
+            "description": "Addition: the regulatory requirement each rule is designed to meet."
           }
         },
         "type": "object",
@@ -5531,9 +7282,89 @@
           "type",
           "name",
           "description",
-          "threshold"
+          "threshold",
+          "basis"
         ],
         "title": "Rule"
+      },
+      "RuleBasis": {
+        "properties": {
+          "framework": {
+            "type": "string",
+            "title": "Framework"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "requirement": {
+            "type": "string",
+            "title": "Requirement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "framework",
+          "title",
+          "ref",
+          "requirement"
+        ],
+        "title": "RuleBasis"
+      },
+      "RuleCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "rule",
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "rule_type": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "soft"
+            ],
+            "title": "Rule Type"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "threshold": {
+            "type": "string",
+            "title": "Threshold"
+          },
+          "basis": {
+            "items": {
+              "$ref": "#/components/schemas/RuleBasis"
+            },
+            "type": "array",
+            "title": "Basis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "rule_type",
+          "name",
+          "description",
+          "threshold",
+          "basis"
+        ],
+        "title": "RuleCard"
       },
       "RuleList": {
         "properties": {
@@ -5683,6 +7514,67 @@
           "summary"
         ],
         "title": "ToolCallSummary"
+      },
+      "TurnProposal": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "proposal_id": {
+            "type": "integer",
+            "title": "Proposal Id"
+          },
+          "gate": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "WARNING",
+              "REJECT"
+            ],
+            "title": "Gate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "proposal_id",
+          "gate"
+        ],
+        "title": "TurnProposal"
+      },
+      "TurnTool": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "T0",
+              "T1",
+              "T2",
+              "T3"
+            ],
+            "title": "Tier"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "allowed",
+              "denied"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "tier",
+          "decision"
+        ],
+        "title": "TurnTool"
       },
       "User": {
         "properties": {

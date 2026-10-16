@@ -7,6 +7,7 @@ T2 create or revise proposals - only with a complete, contradiction-free
    profile under 365 days old; the gate runs inside the proposal service.
 T3 execute - no tool exists. Only the client's click can create the token.
 
+While compliance has the advisor suspended, every call is denied (addition).
 Every call is logged with its tier and decision.
 """
 
@@ -17,7 +18,7 @@ from typing import Any
 
 from app.agent.tools import RUNNERS, TOOL_TIERS, ToolContext, ToolInputError
 from app.core.errors import ApiError
-from app.services import logs, profiles
+from app.services import controls, logs, profiles
 
 
 @dataclass
@@ -105,6 +106,8 @@ class PermissionBroker:
             return self._deny(tool, "T3", "no such tool; orders are placed only by the client's Confirm click", f"Blocked {tool}")
         if self.tc.user.role != "client":
             return self._deny(tool, tier, "the agent serves clients only", f"Blocked {tool}")
+        if controls.advisor_suspended(self.tc.db):
+            return self._deny(tool, tier, "the AI advisor is suspended by compliance", f"Blocked {tool}: advisor suspended")
         if tier == "T2":
             problem = profiles.t2_error(self.tc.profile, self.tc.ctx)
             if problem is not None:

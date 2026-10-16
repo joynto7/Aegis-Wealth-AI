@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import client_user, compliance_user, current_user
 from app.core.database import get_db
+from app.engines.catalog import thaw
 from app.models import User
 from app.routers.common import ERRORS
 from app.schemas import (
@@ -96,7 +97,7 @@ def export_logs(
 # --- Rules and health ----------------------------------------------------------
 @router.get("/compliance/rules", response_model=RuleList, tags=["compliance"])
 def rules(_user: User = Depends(current_user), ctx: AppContext = Depends(get_ctx)) -> dict:
-    return {"items": [dict(r) for r in ctx.catalog.rules]}
+    return {"items": [thaw(r) for r in ctx.catalog.rules]}
 
 
 @router.get("/health", response_model=HealthStatus, tags=["health"])

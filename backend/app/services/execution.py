@@ -2,7 +2,8 @@
 
 The agent has no route here: no tool issues or uses a confirmation token.
 Execute claims the token with a compare-and-set update, so two concurrent
-calls with the same token cannot both place orders.
+calls with the same token cannot both place orders. While compliance has
+execution halted (addition), neither a token nor an order goes through.
 """
 
 from __future__ import annotations
@@ -21,10 +22,11 @@ from app.engines.chain import GENESIS_HASH, items_hash, next_hash
 from app.engines.gate import failed_rule_ids
 from app.engines.numbers import round2, round4
 from app.models import AdviceRecord, ConfirmToken, Order, Position, Proposal, QuizAttempt, SandboxAccount, User
-from app.services import logs, profiles, proposals
+from app.services import controls, logs, profiles, proposals
 from app.services.context import AppContext
 
 TOKEN_TTL = timedelta(minutes=5)
+HALTED = "Order execution is paused by the compliance team. Your proposal is saved; try again later."
 
 
 def _deny(db: Session, user: User, proposal: Proposal, action: str, code: str, status: int, message: str) -> ApiError:
@@ -41,6 +43,8 @@ def _deny(db: Session, user: User, proposal: Proposal, action: str, code: str, s
 
 
 def confirm(db: Session, ctx: AppContext, user: User, proposal: Proposal) -> dict[str, str]:
+    if controls.execution_halted(db):
+        raise _deny(db, user, proposal, "token_issued", "EXECUTION_HALTED", 409, HALTED)
     if proposal.status == "rejected":
         err = _deny(
             db, user, proposal, "token_issued", "GATE_REJECTED", 409, "This proposal was rejected by the compliance gate."
@@ -83,6 +87,8 @@ def _units(amount: float, nav: float) -> float:
 
 def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token: str | None) -> dict[str, Any]:
     action = "orders_executed"
+    if controls.execution_halted(db):
+        raise _deny(db, user, proposal, action, "EXECUTION_HALTED", 409, HALTED)
     if not token:
         raise _deny(db, user, proposal, action, "TOKEN_INVALID", 403, "No confirmation token was supplied.")
     row = db.scalars(select(ConfirmToken).where(ConfirmToken.token_hash == sha256_hex(token))).first()

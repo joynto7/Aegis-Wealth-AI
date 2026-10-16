@@ -84,7 +84,8 @@ def test_scenario_1_end_to_end(rina):
     assert account["cash"] == 300000 and len(account["positions"]) == 5 and account["data_label"] == "Simulated"
     record = rina.get(f"/api/records/{result['record_id']}").json()
     assert record["prev_hash"] == "0" * 64 and record["content"]["proposal"]["status"] == "executed"
-    assert record["content"]["quiz"]["passed"] is True and len(record["content"]["disclosures"]) == 3
+    # DISC-01 to DISC-03, plus DISC-04 on the AI's limits (2018 Guiding Opinions, Art. 23).
+    assert record["content"]["quiz"]["passed"] is True and len(record["content"]["disclosures"]) == 4
     assert rina.post("/api/records/verify", json={"scope": "mine"}).json() == {
         "valid": True,
         "checked": 1,

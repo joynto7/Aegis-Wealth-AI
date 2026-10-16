@@ -12,6 +12,10 @@
 5. On refusal, max_tokens, a timeout or an API error: fall back to templates.
 6. Save the turn and log every tool call with its tier and decision.
 
+Additions: while compliance has the advisor suspended, no turn runs at all
+(the broker refuses every call too). Each turn returns cards built from the
+broker's outcomes and the source of every number in the reply.
+
 The history stays append-only within a turn: assistant content (thinking
 blocks included) is echoed back unchanged, and the regeneration note is a
 mid-conversation system message after the last user turn, not an edit.
@@ -30,12 +34,13 @@ from sqlalchemy.orm import Session
 
 from app.agent import fallback
 from app.agent.broker import PermissionBroker
+from app.agent.cards import card_for, cards_for
 from app.agent.grounding import check_reply
 from app.agent.llm import MODEL_ERRORS
 from app.agent.prompts import REGENERATE_NOTE, context_block
 from app.agent.tools import ToolContext
 from app.models import ChatMessage, Proposal, User
-from app.services import logs, profiles, proposals
+from app.services import controls, logs, profiles, proposals
 from app.services.context import AppContext
 
 log = logging.getLogger("aegis.agent")
@@ -44,16 +49,33 @@ MAX_TOOL_ROUNDS = 4
 TURN_BUDGET_SECONDS = 20.0
 HISTORY_MESSAGES = 10
 
+SUSPENDED_REPLY = (
+    "The AI advisor is paused by the compliance team. Your profile and proposals are unchanged and every screen "
+    "still works. Orders still need your own Confirm click."
+)
+
 Event = Callable[[dict[str, Any]], None]
 
 
 @dataclass
 class TurnResult:
     reply: str
-    mode: str  # model | fallback
+    mode: str  # model | fallback | suspended
     grounding: str  # passed | regenerated | fallback
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     citations: list[dict[str, Any]] = field(default_factory=list)
+    cards: list[dict[str, Any]] = field(default_factory=list)
+    number_sources: list[dict[str, Any]] = field(default_factory=list)
+    proposals_made: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _proposals_made(broker: PermissionBroker) -> list[dict[str, Any]]:
+    """Proposals the agent created or revised this turn, with the gate's decision on each."""
+    return [
+        {"tool": o.tool, "proposal_id": o.result["id"], "gate": o.result["gate"]["decision"]}
+        for o in broker.outcomes
+        if o.tool in ("create_proposal", "revise_proposal") and o.result is not None
+    ]
 
 
 def _block_type(block: Any) -> str:
@@ -139,6 +161,9 @@ class AgentOrchestrator:
         self, db: Session, user: User, message: str, proposal_id: int | None, on_event: Event | None = None
     ) -> TurnResult:
         emit = on_event or (lambda _e: None)
+        if controls.advisor_suspended(db):
+            emit({"type": "status", "text": "The advisor is paused by compliance"})
+            return TurnResult(reply=SUSPENDED_REPLY, mode="suspended", grounding="fallback")
         broker = PermissionBroker(ToolContext(db=db, ctx=self.ctx, user=user))
         context = self._context(db, user, proposal_id)
         if self.ctx.llm is None:
@@ -186,7 +211,7 @@ class AgentOrchestrator:
                 results = []
                 for tool_use_id, name, args in _tool_uses(content):
                     outcome = broker.run(name, args)
-                    emit({"type": "tool", "call": outcome.public()})
+                    emit({"type": "tool", "call": outcome.public(), "card": card_for(outcome, self.ctx.catalog)})
                     block: dict[str, Any] = {"type": "tool_result", "tool_use_id": tool_use_id, "content": outcome.for_model()}
                     if outcome.is_error:
                         block["is_error"] = True
@@ -206,6 +231,9 @@ class AgentOrchestrator:
                         grounding="regenerated" if regenerated else "passed",
                         tool_calls=[o.public() for o in broker.outcomes],
                         citations=[c for c in check.citations if c["tool"] != "context"],
+                        cards=cards_for(broker.outcomes, self.ctx.catalog),
+                        number_sources=check.number_sources,
+                        proposals_made=_proposals_made(broker),
                     )
                 if regenerated or not draft:
                     logs.add_now(
@@ -248,13 +276,16 @@ class AgentOrchestrator:
         before = len(broker.outcomes)
         reply = fallback.answer(broker, message, proposal_id)
         for outcome in broker.outcomes[before:]:
-            emit({"type": "tool", "call": outcome.public()})
-        citations = fallback.citations_for(broker, reply, message)
+            emit({"type": "tool", "call": outcome.public(), "card": card_for(outcome, self.ctx.catalog)})
+        check = fallback.grounding_for(broker, reply, message)
         log.info("Fallback answer (%s)", reason)
         return TurnResult(
             reply=reply,
             mode="fallback",
             grounding="fallback",
             tool_calls=[o.public() for o in broker.outcomes],
-            citations=citations,
+            citations=check.citations,
+            cards=cards_for(broker.outcomes, self.ctx.catalog),
+            number_sources=check.number_sources,
+            proposals_made=_proposals_made(broker),
         )

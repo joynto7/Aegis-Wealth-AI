@@ -51,6 +51,10 @@ flowchart TB
 (`frontend/src/lib/api-types.ts`, NFR-5.2), so a backend change that breaks a screen fails the
 frontend type check.
 
+**Design system.** The interface follows a researched design language (docs/ui-redesign.md): an
+ink-navy shell, an indigo action colour, a violet gradient reserved for the AI, colour-blind-safe
+chart colours, and status colours kept for PASS, WARNING and REJECT.
+
 **Mock-first frontend.** With `NEXT_PUBLIC_API_MOCK=1`, the same screens run on an in-browser mock API
 (MSW) whose engines are ports of the backend's. `scripts/verify.ts` checks the ports against the same
 worked examples.

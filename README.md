@@ -23,6 +23,10 @@ What makes it different:
   firms that use AI.
 - **Every rule names its regulation.** Each of the nine compliance rules shows the requirement it
   implements (China's 2018 Guiding Opinions and CSRC suitability measures, MiFID II).
+- **A product-grade interface.** A design system researched against wealth and fintech products
+  ([docs/ui-redesign.md](docs/ui-redesign.md)): an ink-navy shell with an indigo accent and a violet
+  gradient reserved for the AI, a riskometer gauge, a "next best step" journey card, an activity
+  timeline, a compare tray, a ⌘K command palette and a privacy mode that hides every amount.
 
 > All products, prices and market data are sample or hypothetical. No real money, brokerage connection
 > or live market data is involved.

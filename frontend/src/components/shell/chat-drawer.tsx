@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, ChevronDown, Send, User as UserIcon } from "lucide-react";
+import { Bot, ChevronDown, PauseCircle, Send, ShieldCheck, User as UserIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { useChatHistory } from "@/lib/queries";
+import { useChatHistory, useControls } from "@/lib/queries";
 import { ApiError, streamChat } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
-import type { ChatMessage, ToolCallSummary } from "@/lib/types";
+import { ChatCards } from "@/components/chat/chat-cards";
+import { ReplyText, sourceLabel } from "@/components/chat/reply-text";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { ChatCard, ChatMessage, ToolCallSummary } from "@/lib/types";
 
 const SUGGESTED = ["Why this proposal?", "What's my risk tier?", "Which product costs me least?"];
 
@@ -40,7 +43,7 @@ export function ChatDrawer({
   );
 }
 
-const CHAT_DESCRIPTION = "Grounded in your own data — every figure comes from a tool result.";
+const CHAT_DESCRIPTION = "Every figure is traced to a tool result. Tap one to see where it came from.";
 
 /**
  * The advisor chat docked open beside the Proposal Workspace on screens
@@ -67,11 +70,21 @@ export function DockedChat({ proposalId, className }: { proposalId?: number; cla
   );
 }
 
+interface LiveTurn {
+  status: string;
+  tools: ToolCallSummary[];
+  cards: ChatCard[];
+}
+
+const IDLE: LiveTurn = { status: "", tools: [], cards: [] };
+
 function ChatConversation({ proposalId }: { proposalId?: number }) {
   const history = useChatHistory();
+  const controls = useControls();
+  const paused = controls.data?.advisor.state === "suspended";
   const qc = useQueryClient();
   const [pending, setPending] = useState(false);
-  const [live, setLive] = useState<{ status: string; tools: ToolCallSummary[] }>({ status: "", tools: [] });
+  const [live, setLive] = useState<LiveTurn>(IDLE);
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,14 +94,14 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, pending, live.tools.length]);
+  }, [messages.length, pending, live.tools.length, live.cards.length]);
 
   async function submit(text: string) {
     const trimmed = text.trim();
     if (!trimmed || pending) return;
     setDraft("");
     setPending(true);
-    setLive({ status: "Thinking", tools: [] });
+    setLive({ ...IDLE, status: "Thinking" });
     const optimisticUser: ChatMessage = {
       message_id: nextLocalId.current--,
       role: "user",
@@ -97,12 +110,15 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
     };
     setLocalMessages((prev) => [...prev, optimisticUser]);
     try {
-      // Progress events show each tool call and the broker's decision as it happens.
+      // Progress events show each tool call, the broker's decision and the tool's card as it happens.
       await streamChat({ message: trimmed, proposal_id: proposalId }, (event) =>
         setLive((prev) =>
-          event.type === "status" ? { ...prev, status: event.text } : { ...prev, tools: [...prev.tools, event.call] }
+          event.type === "status"
+            ? { ...prev, status: event.text }
+            : { ...prev, tools: [...prev.tools, event.call], cards: event.card ? [...prev.cards, event.card] : prev.cards }
         )
       );
+      qc.invalidateQueries({ queryKey: ["controls"] });
       // The saved history already holds this turn, so the optimistic copy goes once it is back.
       await qc.invalidateQueries({ queryKey: ["chat", "history"] });
       setLocalMessages([]);
@@ -132,13 +148,22 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
       ]);
     } finally {
       setPending(false);
-      setLive({ status: "", tools: [] });
+      setLive(IDLE);
     }
   }
 
   return (
     <>
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
+        {paused ? (
+          <div className="flex items-start gap-2 rounded-lg border border-(--border) bg-(--muted) p-3 text-caption text-(--text)">
+            <PauseCircle className="mt-0.5 size-4 shrink-0 text-(--text-muted)" aria-hidden />
+            <p>
+              <span className="font-semibold">The AI advisor is paused by the compliance team.</span> Every screen still
+              works, and orders still need your own Confirm click.
+            </p>
+          </div>
+        ) : null}
         {history.isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-16 w-3/4" />
@@ -160,7 +185,7 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
         ) : (
           messages.map((m) => <ChatBubble key={m.message_id} message={m} />)
         )}
-        {pending ? <LiveProgress status={live.status} tools={live.tools} /> : null}
+        {pending ? <LiveProgress live={live} /> : null}
       </div>
 
       <form
@@ -192,8 +217,9 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
   );
 }
 
-/** The agent at work: what it is doing now, and every tool call with its tier and the broker's decision. */
-function LiveProgress({ status, tools }: { status: string; tools: ToolCallSummary[] }) {
+/** The agent at work: what it is doing now, every tool call with its tier and the broker's decision, and each result's card. */
+function LiveProgress({ live }: { live: LiveTurn }) {
+  const { status, tools, cards } = live;
   return (
     <div className="space-y-1.5" role="status" aria-label={`Aegis is working: ${status}`}>
       <div className="flex items-center gap-2 text-caption text-(--text-muted)">
@@ -216,9 +242,16 @@ function LiveProgress({ status, tools }: { status: string; tools: ToolCallSummar
           ))}
         </ul>
       ) : null}
+      <ChatCards cards={cards} className="pl-9" />
     </div>
   );
 }
+
+const MODE_LABEL = {
+  model: "Claude · checked",
+  fallback: "Template answer",
+  suspended: "Paused by compliance",
+} as const;
 
 function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -240,8 +273,9 @@ function ChatBubble({ message }: { message: ChatMessage }) {
             isUser ? "bg-(--primary) text-(--primary-foreground)" : "bg-(--muted) text-(--text)"
           )}
         >
-          {message.content}
+          {isUser ? message.content : <ReplyText text={message.content} sources={message.number_sources} />}
         </div>
+        {!isUser ? <ChatCards cards={message.cards} /> : null}
         {!isUser && (message.tool_calls?.length || message.mode) ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {message.tool_calls?.map((t, i) => (
@@ -257,31 +291,55 @@ function ChatBubble({ message }: { message: ChatMessage }) {
                 className={cn(
                   "rounded-full px-2 py-0.5 text-caption font-medium",
                   // Neutral on purpose: green/amber/red are reserved for gate decisions (Section 2.7.1).
-                  message.grounding === "passed" ? "bg-(--primary-soft) text-(--primary)" : "bg-(--surface) text-(--text-muted) ring-1 ring-(--border)"
+                  message.mode === "model" ? "bg-(--primary-soft) text-(--primary)" : "bg-(--surface) text-(--text-muted) ring-1 ring-(--border)"
                 )}
               >
-                {message.mode === "model" && message.grounding === "passed" ? "Checked" : "Template answer"}
+                {MODE_LABEL[message.mode]}
+                {message.grounding === "regenerated" ? " · rewritten once" : ""}
               </span>
+            ) : null}
+            {message.number_sources?.length ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full bg-(--primary-soft) px-2 py-0.5 text-caption font-medium text-(--primary)"
+                  >
+                    <ShieldCheck className="size-3" aria-hidden />
+                    {message.number_sources.length} figure{message.number_sources.length === 1 ? "" : "s"} traced
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-64">
+                  Before you saw this reply, code matched each figure to a tool result or your own message.
+                </TooltipContent>
+              </Tooltip>
             ) : null}
           </div>
         ) : null}
-        {!isUser && message.citations?.length ? (
+        {!isUser && (message.number_sources?.length || message.citations?.length) ? (
           <div>
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
               className="flex items-center gap-1 text-caption text-(--primary) hover:underline"
+              aria-expanded={expanded}
             >
               <ChevronDown className={cn("size-3 transition-transform", expanded && "rotate-180")} />
-              {expanded ? "Hide citations" : "Show citations"}
+              {expanded ? "Hide sources" : "Show sources"}
             </button>
             {expanded ? (
               <ul className="mt-1 space-y-0.5 text-caption text-(--text-muted)">
-                {message.citations.map((c, i) => (
-                  <li key={i}>
-                    {c.tool} → {c.path}: {String(c.value)}
-                  </li>
-                ))}
+                {message.number_sources?.length
+                  ? message.number_sources.map((s, i) => (
+                      <li key={i}>
+                        <span className="font-medium text-(--text)">{s.text}</span> ← {sourceLabel(s)}
+                      </li>
+                    ))
+                  : message.citations?.map((c, i) => (
+                      <li key={i}>
+                        {c.tool} → {c.path}: {String(c.value)}
+                      </li>
+                    ))}
               </ul>
             ) : null}
           </div>

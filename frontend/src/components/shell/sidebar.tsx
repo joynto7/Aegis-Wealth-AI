@@ -11,6 +11,7 @@ import {
   Archive,
   ShieldCheck,
   ShieldAlert,
+  Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
@@ -25,6 +26,7 @@ const CLIENT_NAV = [
 ];
 
 const COMPLIANCE_NAV = [
+  { href: "/control-room", label: "Control Room", icon: Radar },
   { href: "/console", label: "Console", icon: ShieldCheck },
   { href: "/records", label: "Records", icon: Archive },
 ];

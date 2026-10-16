@@ -29,4 +29,11 @@ export const DISCLOSURES: Disclosure[] = [
     title: "This proposal passed a suitability check",
     text: "The compliance gate checked this proposal against your risk tier and the rules in force. A PASS or an acknowledged WARNING means no hard rule was broken — it does not remove the risk of loss.",
   },
+  {
+    // Addition: Art. 23 of the 2018 Guiding Opinions asks firms to tell investors about the AI's inherent defects and risks.
+    id: "DISC-04",
+    version: "2026-10",
+    title: "How the AI advisor works, and its limits",
+    text: "The advisor uses a language model to answer questions and explain proposals. It can misunderstand you or explain something imperfectly. It does not pick your portfolio: fixed, tested rules for your risk tier do, and a compliance gate checks every proposal. It cannot place orders; only your own Confirm click can. Rules built on past data can still be wrong, and the compliance team can pause the advisor at any time.",
+  },
 ];

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, PartyPopper } from "lucide-react";
+import { CheckCircle2, PartyPopper, PauseCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
 import { ErrorState } from "@/components/shared/error-state";
@@ -21,6 +21,7 @@ import { usePageTitle } from "@/components/shell/page-title";
 import {
   useAcknowledgeWarnings,
   useConfirmProposal,
+  useControls,
   useExecuteProposal,
   useProposal,
   useQuiz,
@@ -90,6 +91,8 @@ function ConfirmContent({ id }: { id: number }) {
   const submitQuiz = useSubmitQuiz(id);
   const confirm = useConfirmProposal(id);
   const execute = useExecuteProposal(id);
+  const controls = useControls();
+  const halted = controls.data?.execution.state === "halted";
 
   const [ackChecked, setAckChecked] = useState<Set<string>>(new Set());
   const [disclosuresRead, setDisclosuresRead] = useState(false);
@@ -196,6 +199,16 @@ function ConfirmContent({ id }: { id: number }) {
     <div className="space-y-6">
       <Stepper current="Confirm" />
       <PageHeader title="Confirm and Execute" description="Four quick steps, then your sandbox orders fill." />
+
+      {halted ? (
+        <Alert>
+          <PauseCircle />
+          <AlertTitle>Order execution is paused by the compliance team</AlertTitle>
+          <AlertDescription>
+            You can still read the disclosures and take the quiz. Confirm works again as soon as compliance resumes execution.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 px-6 py-5">

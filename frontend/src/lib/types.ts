@@ -53,6 +53,7 @@ export type Profile = Schemas["Profile"];
 export type ReplayEpisodeSummary = Schemas["ReplayEpisodeSummary"];
 export type ReplayPoint = Schemas["ReplayPoint"];
 export type ReplayResult = Schemas["ReplayResult"];
+export type ReplayEvent = Schemas["ReplayEvent"];
 export type Product = Schemas["Product"];
 export type CompareItem = Schemas["CompareItem"];
 export type CompareResult = Schemas["CompareResult"];
@@ -68,6 +69,15 @@ export type QuizQuestion = Schemas["QuizQuestion"];
 export type QuizResult = Schemas["QuizResult"];
 export type ToolCallSummary = Schemas["ToolCallSummary"];
 export type Citation = Schemas["Citation"];
+export type NumberSource = Schemas["NumberSource"];
+export type RuleBasis = Schemas["RuleBasis"];
+export type ProductsCard = Schemas["ProductsCard"];
+export type ComparisonCard = Schemas["ComparisonCard"];
+export type ProposalCard = Schemas["ProposalCard"];
+export type RuleCard = Schemas["RuleCard"];
+export type ProfileCard = Schemas["ProfileCard"];
+export type BlockedCard = Schemas["BlockedCard"];
+export type ChatCard = NonNullable<Schemas["ChatReply"]["cards"]>[number];
 export type ChatMessage = Schemas["ChatMessage"];
 export type ChatReply = Schemas["ChatReply"];
 export type Order = Schemas["Order"];
@@ -81,3 +91,19 @@ export type VerifyResult = Schemas["VerifyResult"];
 export type LogEntry = Schemas["LogEntry"];
 export type Rule = Schemas["Rule"];
 export type HealthStatus = Schemas["HealthStatus"];
+
+// ---------------------------------------------------------------------------
+// Additions: compliance controls, oversight, regulations, model disclosure
+// ---------------------------------------------------------------------------
+
+export type ControlName = Schemas["ControlChange"]["control"];
+export type ControlStateValue = Schemas["ControlState"]["state"];
+export type ControlState = Schemas["ControlState"];
+export type Controls = Schemas["Controls"];
+export type AgentTurn = Schemas["AgentTurn"];
+export type OversightKpis = Schemas["OversightKpis"];
+export type Oversight = Schemas["Oversight"];
+export type AiControl = Schemas["AiControl"];
+export type Framework = Schemas["Framework"];
+export type Regulations = Schemas["Regulations"];
+export type ModelCard = Schemas["ModelCard"];

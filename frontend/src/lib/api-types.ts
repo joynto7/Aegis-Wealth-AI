@@ -540,6 +540,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Controls */
+        get: operations["get_controls_api_controls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Control
+         * @description Suspend or resume the AI advisor, or halt or resume sandbox execution, with a reason (logged).
+         */
+        post: operations["change_control_api_compliance_controls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview */
+        get: operations["get_overview_api_compliance_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/regulations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Regulations */
+        get: operations["get_regulations_api_compliance_regulations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/model-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Card
+         * @description The model and allocation-logic disclosure (2018 Guiding Opinions, Art. 23). Each export is logged.
+         */
+        get: operations["get_model_card_api_compliance_model_card_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -578,6 +669,53 @@ export interface components {
             /** Orders */
             orders: components["schemas"]["Order"][];
         };
+        /** AgentTurn */
+        AgentTurn: {
+            /** Log Id */
+            log_id: number;
+            /** Ts */
+            ts: string;
+            /** User Id */
+            user_id: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "model" | "fallback" | "suspended";
+            /**
+             * Grounding
+             * @enum {string}
+             */
+            grounding: "passed" | "regenerated" | "fallback";
+            /** Tools */
+            tools: components["schemas"]["TurnTool"][];
+            /** Proposals */
+            proposals: components["schemas"]["TurnProposal"][];
+            /** Figures Traced */
+            figures_traced: number;
+        };
+        /** AiControl */
+        AiControl: {
+            /** Id */
+            id: string;
+            /** Framework */
+            framework: string;
+            /** Title */
+            title: string;
+            /** Ref */
+            ref: string;
+            /** Requirement */
+            requirement: string;
+            /** Control */
+            control: string;
+            /**
+             * Check
+             * @enum {string}
+             */
+            check: "built_in" | "controls" | "report";
+            /** Note */
+            note: string | null;
+        };
         /** ApiErrorBody */
         ApiErrorBody: {
             error: components["schemas"]["ApiErrorDetail"];
@@ -588,13 +726,30 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "FORBIDDEN" | "TOKEN_INVALID" | "TOKEN_EXPIRED" | "NOT_FOUND" | "PROFILE_REQUIRED" | "CONTRADICTIONS_OPEN" | "GATE_REJECTED" | "WARNINGS_NOT_ACKNOWLEDGED" | "QUIZ_REQUIRED" | "TOKEN_USED" | "STATE_CONFLICT" | "INSUFFICIENT_CASH" | "VALIDATION_ERROR" | "RATE_LIMITED" | "INTERNAL";
+            code: "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "FORBIDDEN" | "TOKEN_INVALID" | "TOKEN_EXPIRED" | "NOT_FOUND" | "PROFILE_REQUIRED" | "CONTRADICTIONS_OPEN" | "GATE_REJECTED" | "WARNINGS_NOT_ACKNOWLEDGED" | "QUIZ_REQUIRED" | "TOKEN_USED" | "STATE_CONFLICT" | "INSUFFICIENT_CASH" | "VALIDATION_ERROR" | "RATE_LIMITED" | "INTERNAL" | "EXECUTION_HALTED";
             /** Message */
             message: string;
             /** Details */
             details?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** BlockedCard */
+        BlockedCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "blocked";
+            /** Tool */
+            tool: string;
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "T0" | "T1" | "T2" | "T3";
+            /** Reason */
+            reason: string;
         };
         /** ChatHistory */
         ChatHistory: {
@@ -613,13 +768,17 @@ export interface components {
             /** Content */
             content: string;
             /** Mode */
-            mode?: ("model" | "fallback") | null;
+            mode?: ("model" | "fallback" | "suspended") | null;
             /** Grounding */
             grounding?: ("passed" | "regenerated" | "fallback") | null;
             /** Tool Calls */
             tool_calls?: components["schemas"]["ToolCallSummary"][] | null;
             /** Citations */
             citations?: components["schemas"]["Citation"][] | null;
+            /** Cards */
+            cards?: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"])[] | null;
+            /** Number Sources */
+            number_sources?: components["schemas"]["NumberSource"][] | null;
             /** Created At */
             created_at: string;
         };
@@ -631,7 +790,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "model" | "fallback";
+            mode: "model" | "fallback" | "suspended";
             /**
              * Grounding
              * @enum {string}
@@ -643,6 +802,16 @@ export interface components {
             tool_calls: components["schemas"]["ToolCallSummary"][];
             /** Citations */
             citations: components["schemas"]["Citation"][];
+            /**
+             * Cards
+             * @description Addition: the tool results behind the reply, as cards.
+             */
+            cards: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"])[];
+            /**
+             * Number Sources
+             * @description Addition: the source of each figure in the reply.
+             */
+            number_sources: components["schemas"]["NumberSource"][];
             /** Created At */
             created_at: string;
         };
@@ -718,6 +887,24 @@ export interface components {
             /** Data Label */
             data_label: string;
         };
+        /** ComparisonCard */
+        ComparisonCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "comparison";
+            /** Amount */
+            amount: number;
+            /** Horizon Years */
+            horizon_years: number;
+            /** Items */
+            items: components["schemas"]["CompareItem"][];
+            /** Cheapest Code */
+            cheapest_code: string;
+            /** Data Label */
+            data_label: string;
+        };
         /** ConfirmTokenResponse */
         ConfirmTokenResponse: {
             /** Confirm Token */
@@ -733,6 +920,46 @@ export interface components {
             message: string;
             /** Question Ids */
             question_ids: string[];
+        };
+        /** ControlChange */
+        ControlChange: {
+            /**
+             * Control
+             * @enum {string}
+             */
+            control: "advisor" | "execution";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "suspended" | "open" | "halted";
+            /** Reason */
+            reason: string;
+        };
+        /** ControlState */
+        ControlState: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "suspended" | "open" | "halted";
+            /** Changed At */
+            changed_at: string | null;
+            /**
+             * Reason
+             * @description Shown to the compliance role only.
+             */
+            reason: string | null;
+            /**
+             * Changed By
+             * @description Shown to the compliance role only.
+             */
+            changed_by: string | null;
+        };
+        /** Controls */
+        Controls: {
+            advisor: components["schemas"]["ControlState"];
+            execution: components["schemas"]["ControlState"];
         };
         /** Disclosure */
         Disclosure: {
@@ -756,6 +983,31 @@ export interface components {
             cash_after: number;
             /** Record Id */
             record_id: number;
+        };
+        /** FailedRule */
+        FailedRule: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft";
+            /** Detail */
+            detail: string;
+        };
+        /** Framework */
+        Framework: {
+            /** Id */
+            id: string;
+            /** Short */
+            short: string;
+            /** Title */
+            title: string;
+            /** Jurisdiction */
+            jurisdiction: string;
         };
         /** GateResult */
         GateResult: {
@@ -851,6 +1103,141 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ModelCard */
+        ModelCard: {
+            /** Report */
+            report: string;
+            /** Generated At */
+            generated_at: string;
+            advisor: components["schemas"]["ModelCardAdvisor"];
+            /** Tools */
+            tools: components["schemas"]["ModelCardTool"][];
+            /** Permission Tiers */
+            permission_tiers: components["schemas"]["ModelCardTier"][];
+            grounding: components["schemas"]["ModelCardGrounding"];
+            allocation: components["schemas"]["ModelCardAllocation"];
+            /** Rules */
+            rules: components["schemas"]["Rule"][];
+            controls: components["schemas"]["Controls"];
+            regulations: components["schemas"]["Regulations"];
+            /** Data Versions */
+            data_versions: {
+                [key: string]: string;
+            };
+            /**
+             * Content Sha256
+             * @description SHA-256 of this report without this field, for the record.
+             */
+            content_sha256: string;
+        };
+        /** ModelCardAdvisor */
+        ModelCardAdvisor: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "model" | "fallback";
+            /** Effort */
+            effort: string;
+            /** Max Tokens */
+            max_tokens: number;
+            /** Timeout Seconds */
+            timeout_seconds: number;
+            /** Max Tool Rounds */
+            max_tool_rounds: number;
+            /** History Messages */
+            history_messages: number;
+            /** System Prompt Sha256 */
+            system_prompt_sha256: string;
+            /** Tools Sha256 */
+            tools_sha256: string;
+            /** Data Sent */
+            data_sent: string;
+            /** Data Never Sent */
+            data_never_sent: string;
+        };
+        /** ModelCardAllocation */
+        ModelCardAllocation: {
+            /** Tier Labels */
+            tier_labels: {
+                [key: string]: string;
+            };
+            /** Model Portfolios Pct */
+            model_portfolios_pct: {
+                [key: string]: components["schemas"]["ClassWeights"];
+            };
+            /** Steps */
+            steps: string[];
+            assumed_gross_return_pct: components["schemas"]["ClassWeights"];
+            /** Stress Scenarios */
+            stress_scenarios: components["schemas"]["ModelCardScenario"][];
+        };
+        /** ModelCardGrounding */
+        ModelCardGrounding: {
+            /** Allowed Numbers */
+            allowed_numbers: string;
+            /** Banned Phrases */
+            banned_phrases: string[];
+            /** On Failure */
+            on_failure: string;
+        };
+        /** ModelCardScenario */
+        ModelCardScenario: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            shocks_pct: components["schemas"]["ClassWeights"];
+        };
+        /** ModelCardTier */
+        ModelCardTier: {
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "T0" | "T1" | "T2" | "T3";
+            /** Scope */
+            scope: string;
+        };
+        /** ModelCardTool */
+        ModelCardTool: {
+            /** Name */
+            name: string;
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "T0" | "T1" | "T2";
+            /** Description */
+            description: string;
+        };
+        /**
+         * NumberSource
+         * @description Addition: where one figure in the reply came from, by its character span in the reply.
+         */
+        NumberSource: {
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+            /** Text */
+            text: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tool" | "message" | "context";
+            /** Tool */
+            tool: string | null;
+            /** Path */
+            path: string | null;
+            /** Value */
+            value: number;
+        };
         /** Order */
         Order: {
             /** Id */
@@ -877,6 +1264,55 @@ export interface components {
         OrderList: {
             /** Items */
             items: components["schemas"]["Order"][];
+        };
+        /** Oversight */
+        Oversight: {
+            /**
+             * Llm
+             * @enum {string}
+             */
+            llm: "ok" | "fallback";
+            /** Model */
+            model: string;
+            /** System Prompt Sha256 */
+            system_prompt_sha256: string;
+            controls: components["schemas"]["Controls"];
+            kpis: components["schemas"]["OversightKpis"];
+            /** Turns */
+            turns: components["schemas"]["AgentTurn"][];
+        };
+        /** OversightKpis */
+        OversightKpis: {
+            /** Agent Turns */
+            agent_turns: number;
+            /** Model Turns */
+            model_turns: number;
+            /** Template Turns */
+            template_turns: number;
+            /** Suspended Turns */
+            suspended_turns: number;
+            /** Tool Calls T0 */
+            tool_calls_t0: number;
+            /** Tool Calls T1 */
+            tool_calls_t1: number;
+            /** Tool Calls T2 */
+            tool_calls_t2: number;
+            /** Denied Tool Calls */
+            denied_tool_calls: number;
+            /** Agent Proposals */
+            agent_proposals: number;
+            /** Agent Proposals Rejected */
+            agent_proposals_rejected: number;
+            /** Grounding Rewrites */
+            grounding_rewrites: number;
+            /** Grounding Fallbacks */
+            grounding_fallbacks: number;
+            /** Figures Traced */
+            figures_traced: number;
+            /** Orders By Agent */
+            orders_by_agent: number;
+            /** Orders By Clients */
+            orders_by_clients: number;
         };
         /** Position */
         Position: {
@@ -942,6 +1378,38 @@ export interface components {
             /** Items */
             items: components["schemas"]["Product"][];
         };
+        /** ProductsCard */
+        ProductsCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "products";
+            /** Items */
+            items: components["schemas"]["ProductsCardItem"][];
+            /** Total */
+            total: number;
+            /** Data Label */
+            data_label: string;
+        };
+        /** ProductsCardItem */
+        ProductsCardItem: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "deposit" | "money_market_fund" | "short_term_bond_fund" | "bond_fund" | "gold_etf" | "index_etf" | "active_equity_fund" | "thematic_equity_fund";
+            /** Risk Level */
+            risk_level: number;
+            /** Annual Fee Pct */
+            annual_fee_pct: number;
+            /** Suitable */
+            suitable: boolean | null;
+        };
         /** Profile */
         Profile: {
             /** Id */
@@ -974,6 +1442,29 @@ export interface components {
             replay: components["schemas"]["ProfileReplay"] | null;
             /** Created At */
             created_at: string;
+        };
+        /** ProfileCard */
+        ProfileCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "profile";
+            /** Tier */
+            tier: number;
+            /** Tier Label */
+            tier_label: string;
+            /** Capacity Score */
+            capacity_score: number;
+            /** Willingness Score */
+            willingness_score: number;
+            /** Max Acceptable Loss Pct */
+            max_acceptable_loss_pct: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "needs_review";
         };
         /** ProfileReplay */
         ProfileReplay: {
@@ -1030,6 +1521,39 @@ export interface components {
             data_as_of: string;
             /** Created At */
             created_at: string;
+        };
+        /** ProposalCard */
+        ProposalCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "proposal";
+            /** Proposal Id */
+            proposal_id: number;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "rejected" | "warning" | "acknowledged" | "passed" | "executed" | "superseded";
+            /** Amount */
+            amount: number;
+            /** Horizon Years */
+            horizon_years: number;
+            /** Tier */
+            tier: number;
+            class_weights_pct: components["schemas"]["ClassWeights"];
+            /**
+             * Gate Decision
+             * @enum {string}
+             */
+            gate_decision: "PASS" | "WARNING" | "REJECT";
+            /** Failed Rules */
+            failed_rules: components["schemas"]["FailedRule"][];
+            /** Data Label */
+            data_label: string;
         };
         /** ProposalCreate */
         ProposalCreate: {
@@ -1215,6 +1739,17 @@ export interface components {
             /** Short Hash */
             short_hash: string;
         };
+        /** Regulations */
+        Regulations: {
+            /** Version */
+            version: string;
+            /** Note */
+            note: string;
+            /** Frameworks */
+            frameworks: components["schemas"]["Framework"][];
+            /** Ai Controls */
+            ai_controls: components["schemas"]["AiControl"][];
+        };
         /** ReplayEpisodeSummary */
         ReplayEpisodeSummary: {
             /** Id */
@@ -1230,6 +1765,13 @@ export interface components {
         ReplayEpisodes: {
             /** Episodes */
             episodes: components["schemas"]["ReplayEpisodeSummary"][];
+        };
+        /** ReplayEvent */
+        ReplayEvent: {
+            /** Month */
+            month: string;
+            /** Text */
+            text: string;
         };
         /** ReplayPoint */
         ReplayPoint: {
@@ -1268,6 +1810,16 @@ export interface components {
             data_label: string;
             /** Data As Of */
             data_as_of: string;
+            /**
+             * Events
+             * @description Addition: what happened in the world during the episode.
+             */
+            events: components["schemas"]["ReplayEvent"][];
+            /**
+             * Events Label
+             * @description Addition: says the events are real and the portfolio path illustrative.
+             */
+            events_label: string;
         };
         /** ReviseItem */
         ReviseItem: {
@@ -1296,6 +1848,45 @@ export interface components {
             description: string;
             /** Threshold */
             threshold: string;
+            /**
+             * Basis
+             * @description Addition: the regulatory requirement each rule is designed to meet.
+             */
+            basis: components["schemas"]["RuleBasis"][];
+        };
+        /** RuleBasis */
+        RuleBasis: {
+            /** Framework */
+            framework: string;
+            /** Title */
+            title: string;
+            /** Ref */
+            ref: string;
+            /** Requirement */
+            requirement: string;
+        };
+        /** RuleCard */
+        RuleCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rule";
+            /** Id */
+            id: string;
+            /**
+             * Rule Type
+             * @enum {string}
+             */
+            rule_type: "hard" | "soft";
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Threshold */
+            threshold: string;
+            /** Basis */
+            basis: components["schemas"]["RuleBasis"][];
         };
         /** RuleList */
         RuleList: {
@@ -1355,6 +1946,33 @@ export interface components {
             decision: "allowed" | "denied";
             /** Summary */
             summary: string;
+        };
+        /** TurnProposal */
+        TurnProposal: {
+            /** Tool */
+            tool: string;
+            /** Proposal Id */
+            proposal_id: number;
+            /**
+             * Gate
+             * @enum {string}
+             */
+            gate: "PASS" | "WARNING" | "REJECT";
+        };
+        /** TurnTool */
+        TurnTool: {
+            /** Tool */
+            tool: string;
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "T0" | "T1" | "T2" | "T3";
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "allowed" | "denied";
         };
         /** User */
         User: {
@@ -1990,7 +2608,10 @@ export interface operations {
     };
     replay_api_replay__episode_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Addition: the starting value in CNY (default 100,000). */
+                amount?: number;
+            };
             header?: never;
             path: {
                 episode_id: string;
@@ -4152,6 +4773,427 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthStatus"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_controls_api_controls_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Controls"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    change_control_api_compliance_controls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Controls"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_overview_api_compliance_overview_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Oversight"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_regulations_api_compliance_regulations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Regulations"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_model_card_api_compliance_model_card_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelCard"];
                 };
             };
             /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */

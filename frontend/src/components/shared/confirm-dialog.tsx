@@ -21,6 +21,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive = false,
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   children,
 }: {
@@ -32,6 +33,8 @@ export function ConfirmDialog({
   cancelLabel?: string;
   destructive?: boolean;
   loading?: boolean;
+  /** Keeps Confirm disabled until the dialog's own input is valid. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   children?: ReactNode;
 }) {
@@ -47,7 +50,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading}>
+          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading || confirmDisabled}>
             {loading ? "Working…" : confirmLabel}
           </Button>
         </DialogFooter>

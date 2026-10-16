@@ -8,6 +8,12 @@ import { compareProducts } from "../src/mocks/engines/fees";
 import { runReplay } from "../src/mocks/engines/replay";
 import { nextHash, GENESIS_HASH, canonicalStringify } from "../src/mocks/engines/chain";
 import { buildQuiz, checkQuiz } from "../src/mocks/engines/quiz";
+import { numberSources } from "../src/mocks/engines/grounding";
+import { FRAMEWORKS, REGULATIONS_VERSION, AI_CONTROL_LIST, ruleBasis } from "../src/mocks/data/regulations";
+import { EPISODE_EVENTS, EVENTS_LABEL } from "../src/mocks/data/replayEpisodes";
+import { DISCLOSURES } from "../src/lib/disclosures";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Proposal } from "../src/lib/types";
 
 function section(name: string) {
@@ -162,6 +168,40 @@ async function main() {
   console.log("correct combo:", correctAnswers, "passes all:", checkQuiz(fakeProposal, correctAnswers).passed);
 
   check("quiz passes with all correct answers", checkQuiz(fakeProposal, correctAnswers).passed, true);
+
+  section("Additions: number sources");
+  const reply = "SBF-01 under R-03 charges 0.30% a year: about CNY 1,461 over 8 years for your CNY 50,000.";
+  const sources = numberSources(reply, [["compare_products", { items: [{ annual_fee_pct: 0.3, fee_cost: 1460.89 }] }]], "I have CNY 50,000");
+  check(
+    "each figure points at its span and source (8 needs none; R-03 is a label)",
+    sources.map((x) => [reply.slice(x.start, x.end), x.kind, x.path]),
+    [
+      ["0.30%", "tool", "items[0].annual_fee_pct"],
+      ["1,461", "tool", "items[0].fee_cost"],
+      ["50,000", "message", null],
+    ]
+  );
+
+  section("Additions: replay amount");
+  const base = runReplay("E1", 4);
+  const doubled = runReplay("E1", 4, 200000);
+  check("the path scales with the amount; the fall in percent is the same", [doubled.start_value, doubled.max_drawdown_pct, doubled.lowest_month], [200000, base.max_drawdown_pct, base.lowest_month]);
+
+  section("Additions: mock data matches backend/data");
+  const backend = (file: string) => JSON.parse(readFileSync(join(__dirname, "..", "..", "backend", "data", file), "utf8"));
+  const regs = backend("regulations.json");
+  check("regulations version", REGULATIONS_VERSION, regs.version);
+  check("frameworks", FRAMEWORKS, regs.frameworks);
+  check("AI controls", AI_CONTROL_LIST.map((c) => [c.id, c.ref, c.requirement, c.control, c.check]), regs.ai_controls.map((c: Record<string, string>) => [c.id, c.ref, c.requirement, c.control, c.check]));
+  check(
+    "rule basis",
+    Object.keys(regs.rule_basis).map((id) => ruleBasis(id).map((b) => [b.ref, b.requirement])),
+    Object.values(regs.rule_basis).map((list) => (list as Record<string, string>[]).map((b) => [b.ref, b.requirement]))
+  );
+  const episodes = backend("episodes.json");
+  check("episode events", EPISODE_EVENTS, Object.fromEntries(episodes.episodes.map((e: { id: string; events: unknown }) => [e.id, e.events])));
+  check("events label", EVENTS_LABEL, episodes.events_label);
+  check("disclosures", DISCLOSURES.map((d) => [d.id, d.version, d.title, d.text]), backend("disclosures.json").disclosures.map((d: Record<string, string>) => [d.id, d.version, d.title, d.text]));
 
   if (failures.length) {
     console.error(`\n${failures.length} CHECK(S) FAILED:\n- ${failures.join("\n- ")}`);

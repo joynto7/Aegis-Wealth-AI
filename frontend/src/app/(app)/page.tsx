@@ -33,7 +33,7 @@ export default function DashboardPage() {
   const { data: sandbox, isLoading: sandboxLoading } = useSandboxAccount();
 
   useEffect(() => {
-    if (user?.role === "compliance") router.replace("/console");
+    if (user?.role === "compliance") router.replace("/control-room");
   }, [user, router]);
 
   const latestProposal = proposalsData?.items?.[0];

@@ -15,11 +15,27 @@ import { compareProducts } from "@/mocks/engines/fees";
 import { createProposal, reviseProposal, toSummary } from "@/mocks/services/proposals";
 import { buildQuiz, checkQuiz } from "@/mocks/engines/quiz";
 import { DISCLOSURES } from "@/lib/disclosures";
-import { RULES } from "@/mocks/data/rules";
+import { BANNED_PHRASES, RULES } from "@/mocks/data/rules";
 import { respondToChat } from "@/mocks/services/chat";
+import { AI_CONTROL_LIST, FRAMEWORKS, REGULATIONS_NOTE, REGULATIONS_VERSION } from "@/mocks/data/regulations";
+import { MODEL_PORTFOLIOS } from "@/mocks/data/modelPortfolios";
 import { verifyChain } from "@/mocks/services/chain";
-import { DATA_AS_OF } from "@/mocks/data/scenarios";
-import type { AdviceRecord, ChatReply, LogEntry, Order, Profile, Proposal, ReplayReaction } from "@/lib/types";
+import { ASSUMPTIONS, DATA_AS_OF, SCENARIOS } from "@/mocks/data/scenarios";
+import type {
+  AdviceRecord,
+  AgentTurn,
+  ChatCard,
+  ChatReply,
+  ControlName,
+  ControlStateValue,
+  LogEntry,
+  ModelCard,
+  Order,
+  Oversight,
+  Profile,
+  Proposal,
+  ReplayReaction,
+} from "@/lib/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -57,6 +73,142 @@ function rejectedProposalError(proposal: Proposal): Response | null {
   return errorResponse(409, "GATE_REJECTED", "This proposal was rejected by the compliance gate.", {
     rule_ids: proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "hard").map((r) => r.id),
   });
+}
+
+/** Addition: while compliance has execution halted, no token is issued and no order is placed. */
+function haltedError(userId: number, proposalId: number, action: string): Response | null {
+  if (db.controlState("execution") !== "halted") return null;
+  logAction({ userId, actor: "client", action, tier: "T3", decision: "denied", detail: { proposal_id: proposalId, reason: "EXECUTION_HALTED" } });
+  return errorResponse(409, "EXECUTION_HALTED", "Order execution is paused by the compliance team. Your proposal is saved; try again later.");
+}
+
+const CONTROL_STATES: Record<ControlName, [ControlStateValue, ControlStateValue]> = {
+  advisor: ["active", "suspended"],
+  execution: ["open", "halted"],
+};
+
+const CONTROL_ACTIONS: Record<string, string> = {
+  "advisor:suspended": "advisor_suspended",
+  "advisor:active": "advisor_resumed",
+  "execution:halted": "execution_halted",
+  "execution:open": "execution_resumed",
+};
+
+function regulationsBody() {
+  return { version: REGULATIONS_VERSION, note: REGULATIONS_NOTE, frameworks: FRAMEWORKS, ai_controls: AI_CONTROL_LIST };
+}
+
+/** The Control Room's counts and feed, from the mock operation log (port of backend services/oversight.py). */
+function oversightBody(): Oversight {
+  const count = (pred: (l: LogEntry) => boolean) => db.logs.filter(pred).length;
+  const turns = db.logs.filter((l) => l.action === "agent_turn").reverse();
+  const detail = (l: LogEntry) => l.detail as Record<string, unknown>;
+  const made = turns.flatMap((t) => (detail(t).proposals as AgentTurn["proposals"]) ?? []);
+  const mode = (m: string) => turns.filter((t) => detail(t).mode === m).length;
+  return {
+    llm: "fallback",
+    model: "claude-opus-5-5",
+    system_prompt_sha256: MOCK_PROMPT_SHA256,
+    controls: db.controlsSnapshot(true),
+    kpis: {
+      agent_turns: turns.length,
+      model_turns: mode("model"),
+      template_turns: mode("fallback"),
+      suspended_turns: mode("suspended"),
+      tool_calls_t0: count((l) => l.actor === "agent" && l.action === "tool_call" && l.tier === "T0"),
+      tool_calls_t1: count((l) => l.actor === "agent" && l.action === "tool_call" && l.tier === "T1"),
+      tool_calls_t2: count((l) => l.actor === "agent" && l.action === "tool_call" && l.tier === "T2"),
+      denied_tool_calls: count((l) => l.actor === "agent" && l.action === "permission_denied"),
+      agent_proposals: made.length,
+      agent_proposals_rejected: made.filter((p) => p.gate === "REJECT").length,
+      grounding_rewrites: count((l) => l.action === "grounding_regenerated"),
+      grounding_fallbacks: count((l) => l.action === "grounding_fallback"),
+      figures_traced: turns.reduce((s, t) => s + Number(detail(t).figures_traced ?? 0), 0),
+      orders_by_agent: count((l) => l.actor === "agent" && l.action === "orders_executed" && l.decision === "allowed"),
+      orders_by_clients: count((l) => l.actor === "client" && l.action === "orders_executed" && l.decision === "allowed"),
+    },
+    turns: turns.slice(0, 30).map((t) => ({
+      log_id: t.id,
+      ts: t.ts,
+      user_id: t.user_id,
+      mode: (detail(t).mode as AgentTurn["mode"]) ?? "fallback",
+      grounding: (detail(t).grounding as AgentTurn["grounding"]) ?? "fallback",
+      tools: (detail(t).tools as AgentTurn["tools"]) ?? [],
+      proposals: (detail(t).proposals as AgentTurn["proposals"]) ?? [],
+      figures_traced: Number(detail(t).figures_traced ?? 0),
+    })),
+  };
+}
+
+// The mock has no model and no system prompt; a fixed placeholder stands in for the backend's fingerprint.
+const MOCK_PROMPT_SHA256 = "0".repeat(64);
+
+async function modelCardBody(): Promise<ModelCard> {
+  const weights = (w: Record<string, number>) => ({ cash: w.cash, bond: w.bond, gold: w.gold, equity: w.equity });
+  const body: Omit<ModelCard, "content_sha256"> = {
+    report: "Aegis Wealth AI: AI model and asset-allocation logic disclosure",
+    generated_at: new Date().toISOString(),
+    advisor: {
+      provider: "Anthropic",
+      model: "claude-opus-5-5",
+      mode: "fallback",
+      effort: "medium",
+      max_tokens: 16000,
+      timeout_seconds: 20,
+      max_tool_rounds: 4,
+      history_messages: 10,
+      system_prompt_sha256: MOCK_PROMPT_SHA256,
+      tools_sha256: MOCK_PROMPT_SHA256,
+      data_sent:
+        "Each turn: the client's tier, capacity and willingness scores, maximum acceptable loss, profile status, current proposal number and status, the last 10 chat messages, and the results of the tools it calls.",
+      data_never_sent: "Names, email addresses, passwords, session or confirmation tokens, and other clients' data.",
+    },
+    tools: [
+      { name: "search_products", tier: "T0", description: "Search the shelf of sample products." },
+      { name: "compare_products", tier: "T0", description: "Compare 2 or 3 products' fees and end values." },
+      { name: "explain_rule", tier: "T0", description: "Return one compliance rule and its regulatory basis." },
+      { name: "get_profile_summary", tier: "T1", description: "Return the client's own risk profile." },
+      { name: "get_proposal", tier: "T1", description: "Return one of the client's own proposals." },
+      { name: "create_proposal", tier: "T2", description: "Create a proposal; the gate always runs." },
+      { name: "revise_proposal", tier: "T2", description: "Save a new version; the gate always runs." },
+    ],
+    permission_tiers: [
+      { tier: "T0", scope: "Read the product shelf and the compliance rules." },
+      { tier: "T1", scope: "Read the client's own profile and proposals; the session's user id limits every query." },
+      { tier: "T2", scope: "Create or revise a proposal; needs a complete, contradiction-free profile under 365 days old, and the gate always runs." },
+      { tier: "T3", scope: "Execute orders. No tool exists: only the client's own Confirm click creates the single-use token." },
+    ],
+    grounding: {
+      allowed_numbers:
+        "Every number in a reply must match a value in that turn's tool results or the client's message, rounded the same way; whole numbers up to 10 and years 2000-2030 need no source.",
+      banned_phrases: BANNED_PHRASES,
+      on_failure: "The reply is rewritten once with a note naming the problem; if it fails again, a checked template answers.",
+    },
+    allocation: {
+      tier_labels: Object.fromEntries([1, 2, 3, 4, 5].map((t) => [String(t), tierLabel(t)])),
+      model_portfolios_pct: Object.fromEntries(Object.entries(MODEL_PORTFOLIOS).map(([t, w]) => [t, weights(w)])),
+      steps: [
+        "Start from the model portfolio for the client's tier (cash, bonds, gold, equities).",
+        "Under a 3-year horizon, cap equities plus gold at 20%, equities first, and move the excess to bonds (cash for tier 1).",
+        "Raise cash to cover the amount needed within 2 years (the liquidity floor), taking it pro rata from the other classes.",
+        "Round each class to a whole percent, half away from zero; a remainder goes to cash, and an excess comes off the largest non-cash class.",
+        "In each class, choose the lowest-fee eligible product, then the fastest to access.",
+        "Split a class above 40% between its two lowest-fee eligible products, so no product exceeds 40%.",
+        "If a class has no eligible product, move its weight to cash.",
+      ],
+      assumed_gross_return_pct: weights(Object.fromEntries(Object.entries(ASSUMPTIONS).map(([c, g]) => [c, Math.round(g * 10000) / 100]))),
+      stress_scenarios: SCENARIOS.map((s) => ({
+        id: s.id,
+        name: s.name,
+        shocks_pct: weights(Object.fromEntries(Object.entries(s.shocks).map(([c, v]) => [c, Math.round(v * 10000) / 100]))),
+      })),
+    },
+    rules: RULES,
+    controls: db.controlsSnapshot(true),
+    regulations: regulationsBody(),
+    data_versions: { rules: "rules-2026-10", regulations: REGULATIONS_VERSION, products_as_of: DATA_AS_OF, history: "Illustrative" },
+  };
+  return { ...body, content_sha256: await sha256Hex(canonicalStringify(body)) };
 }
 
 function csvCell(value: unknown): string {
@@ -175,8 +327,16 @@ export const handlers = [
     if (!isAuthResult(auth)) return auth;
     const profile = db.currentProfile(auth.user.id);
     if (!profile) return errorResponse(409, "PROFILE_REQUIRED", "Complete your risk profile first.");
+    // Addition: the replay can start from the client's own amount (CNY 10,000 to 10,000,000).
+    const amountParam = new URL(request.url).searchParams.get("amount");
+    const amount = amountParam === null ? 100000 : Number(amountParam);
+    if (!Number.isFinite(amount) || amount < 10000 || amount > 10000000) {
+      return errorResponse(422, "VALIDATION_ERROR", "The amount must be CNY 10,000 to 10,000,000.", {
+        fields: [{ field: "amount", problem: "out of range" }],
+      });
+    }
     try {
-      const result = runReplay(String(params.episodeId), profile.tier);
+      const result = runReplay(String(params.episodeId), profile.tier, amount);
       return HttpResponse.json(result);
     } catch {
       return errorResponse(404, "NOT_FOUND", "Unknown episode.");
@@ -399,6 +559,8 @@ export const handlers = [
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
+    const halted = haltedError(auth.user.id, proposal.id, "token_issued");
+    if (halted) return halted;
     const rejected = rejectedProposalError(proposal);
     if (rejected) return rejected;
     if (proposal.status === "warning") return errorResponse(409, "WARNINGS_NOT_ACKNOWLEDGED", "Tick every warning before confirming.");
@@ -421,6 +583,8 @@ export const handlers = [
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
+    const halted = haltedError(auth.user.id, proposal.id, "orders_executed");
+    if (halted) return halted;
     const token = request.headers.get("X-Confirm-Token");
     if (!token) return errorResponse(403, "TOKEN_INVALID", "No confirmation token was supplied.");
     const tokenHash = await hashToken(token);
@@ -508,19 +672,28 @@ export const handlers = [
   // ----------------------------------------------------------------- chat
   http.post("/api/chat", async ({ request }) => {
     const turn = await chatTurn(request);
-    return turn instanceof Response ? turn : HttpResponse.json(turn);
+    if (turn instanceof Response) return turn;
+    const reply: Partial<typeof turn> = { ...turn };
+    delete reply.toolCards; // stream-only
+    return HttpResponse.json(reply);
   }),
 
   // P1 streaming chat: the same turn as server-sent events (status, each tool call, then the reply).
   http.post("/api/chat/stream", async ({ request }) => {
-    const turn = await chatTurn(request);
-    if (turn instanceof Response) return turn;
-    const frames: [string, unknown][] = [
-      ["status", { type: "status", text: "Thinking" }],
-      ...turn.tool_calls.map((call): [string, unknown] => ["tool", { type: "tool", call }]),
-      ["status", { type: "status", text: "Answering from a checked template" }],
-      ["reply", turn],
-    ];
+    const result = await chatTurn(request);
+    if (result instanceof Response) return result;
+    const { toolCards, ...turn } = result;
+    // Each tool call travels with its card, so the drawer can show results while the turn runs.
+    const toolFrames = turn.tool_calls.map((call, i): [string, unknown] => ["tool", { type: "tool", call, card: toolCards[i] ?? null }]);
+    const frames: [string, unknown][] =
+      turn.mode === "suspended"
+        ? [["status", { type: "status", text: "The advisor is paused by compliance" }], ["reply", turn]]
+        : [
+            ["status", { type: "status", text: "Thinking" }],
+            ...toolFrames,
+            ["status", { type: "status", text: "Answering from a checked template" }],
+            ["reply", turn],
+          ];
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -649,13 +822,71 @@ export const handlers = [
     return HttpResponse.json({ items: RULES });
   }),
 
+  // ------------------------------------------------- compliance controls (additions)
+  http.get("/api/controls", ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(db.controlsSnapshot(auth.user.role === "compliance"));
+  }),
+
+  http.post("/api/compliance/controls", async ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    const body = (await request.json().catch(() => ({}))) as { control?: ControlName; state?: ControlStateValue; reason?: string };
+    const states = body.control ? CONTROL_STATES[body.control] : undefined;
+    const reason = (body.reason ?? "").trim();
+    if (!states || !body.state || !states.includes(body.state)) {
+      return errorResponse(422, "VALIDATION_ERROR", "Choose a valid state for this switch.", { fields: [{ field: "state", problem: "not a state of this control" }] });
+    }
+    if (reason.length < 5 || reason.length > 300) {
+      return errorResponse(422, "VALIDATION_ERROR", "Give a reason of 5 to 300 characters.", { fields: [{ field: "reason", problem: "length" }] });
+    }
+    if (db.controlState(body.control!) !== body.state) {
+      db.setControl(body.control!, { state: body.state, reason, changedBy: auth.user.display_name, changedAt: new Date().toISOString() });
+      logAction({
+        userId: auth.user.id,
+        actor: "compliance",
+        action: CONTROL_ACTIONS[`${body.control}:${body.state}`],
+        decision: "allowed",
+        detail: { control: body.control, state: body.state, reason },
+      });
+    }
+    return HttpResponse.json(db.controlsSnapshot(true));
+  }),
+
+  http.get("/api/compliance/overview", ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    return HttpResponse.json(oversightBody());
+  }),
+
+  http.get("/api/compliance/regulations", ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(regulationsBody());
+  }),
+
+  http.get("/api/compliance/model-card", async ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    const card = await modelCardBody();
+    logAction({ userId: auth.user.id, actor: "compliance", action: "model_card_exported", decision: "allowed", detail: { content_sha256: card.content_sha256 } });
+    return HttpResponse.json(card);
+  }),
+
   http.get("/api/health", () => {
     return HttpResponse.json({ status: "ok", db: "ok", llm: "fallback", data_as_of: DATA_AS_OF });
   }),
 ];
 
 /** One chat turn for both chat endpoints: checks, saves both messages, returns the reply or an error response. */
-async function chatTurn(request: Request): Promise<ChatReply | Response> {
+async function chatTurn(request: Request): Promise<(ChatReply & { toolCards: (ChatCard | null)[] }) | Response> {
   const auth = authenticateAs(request, "client");
   if (!isAuthResult(auth)) return auth;
   if (db.chatRateLimited(auth.user.id)) {
@@ -669,7 +900,7 @@ async function chatTurn(request: Request): Promise<ChatReply | Response> {
   db.recordChatMessage(auth.user.id);
   db.addChatMessage(auth.user.id, { message_id: db.nextId("message"), role: "user", content: message, created_at: new Date().toISOString() });
   await delay(350);
-  const reply = respondToChat(auth.user.id, message, body.proposal_id);
+  const { reply, proposalsMade, toolCards } = respondToChat(auth.user.id, message, body.proposal_id);
   db.addChatMessage(auth.user.id, {
     message_id: reply.message_id,
     role: "assistant",
@@ -678,7 +909,24 @@ async function chatTurn(request: Request): Promise<ChatReply | Response> {
     grounding: reply.grounding,
     tool_calls: reply.tool_calls,
     citations: reply.citations,
+    cards: reply.cards,
+    number_sources: reply.number_sources,
     created_at: reply.created_at,
   });
-  return reply;
+  // Addition: one entry per turn for the compliance Control Room.
+  logAction({
+    userId: auth.user.id,
+    actor: "agent",
+    action: "agent_turn",
+    detail: {
+      message_id: reply.message_id,
+      mode: reply.mode,
+      grounding: reply.grounding,
+      tools: reply.tool_calls.map((t) => ({ tool: t.tool, tier: t.tier, decision: t.decision })),
+      proposals: proposalsMade,
+      figures_traced: reply.number_sources.length,
+      cards: reply.cards.map((c) => c.type),
+    },
+  });
+  return { ...reply, toolCards };
 }

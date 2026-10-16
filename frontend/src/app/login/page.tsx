@@ -40,10 +40,11 @@ function LoginForm() {
       // the link can't send someone to another site after they log in.
       const raw = params.get("next");
       const next = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : null;
-      if (next && ((user.role === "client" && !next.startsWith("/console")) || (user.role === "compliance" && next.startsWith("/console")))) {
+      const complianceOnly = !!next && (next.startsWith("/console") || next.startsWith("/control-room"));
+      if (next && ((user.role === "client" && !complianceOnly) || (user.role === "compliance" && complianceOnly))) {
         router.replace(next);
       } else {
-        router.replace(user.role === "compliance" ? "/console" : "/");
+        router.replace(user.role === "compliance" ? "/control-room" : "/");
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === "RATE_LIMITED") {

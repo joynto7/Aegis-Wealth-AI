@@ -1,5 +1,8 @@
 import type {
   AdviceRecord,
+  ControlName,
+  Controls,
+  ControlStateValue,
   LogActor,
   LogDecision,
   LogEntry,
@@ -47,6 +50,16 @@ interface ConfirmTokenState {
   usedAt: number | null;
 }
 
+/** A compliance switch that was flipped (addition); an absent switch is in its default state. */
+interface ControlRow {
+  state: ControlStateValue;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
+}
+
+const CONTROL_DEFAULTS: Record<ControlName, ControlStateValue> = { advisor: "active", execution: "open" };
+
 interface QuizAttemptState {
   proposalId: number;
   answers: Record<string, string>;
@@ -70,6 +83,7 @@ class MockDb {
   /** episode ids already answered, per profile id ("unique per profile and episode", Section 3.5). */
   replayReactions = new Map<number, Set<string>>();
   chatTimestamps = new Map<number, number[]>();
+  controls = new Map<ControlName, ControlRow>();
 
   private ids = { proposal: 100, log: 1, message: 1, order: 1, record: 1, session: 1, profile: 1 };
 
@@ -94,6 +108,7 @@ class MockDb {
         confirmTokens: [...this.confirmTokens],
         quizAttempts: [...this.quizAttempts],
         replayReactions: [...this.replayReactions].map(([id, episodes]) => [id, [...episodes]]),
+        controls: [...this.controls],
       };
       window.sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
     } catch {
@@ -125,6 +140,7 @@ class MockDb {
       this.replayReactions = new Map(
         (s.replayReactions as [number, string[]][]).map(([id, episodes]) => [id, new Set(episodes)])
       );
+      this.controls = new Map(s.controls ?? []);
     } catch {
       // A snapshot from an older build or a corrupt one: start fresh.
       window.sessionStorage.removeItem(SNAPSHOT_KEY);
@@ -285,6 +301,29 @@ class MockDb {
     const list = this.records.get(userId) ?? [];
     list.push(record);
     this.records.set(userId, list);
+  }
+
+  // --- compliance controls (addition) --------------------------------------
+  controlState(name: ControlName): ControlStateValue {
+    return this.controls.get(name)?.state ?? CONTROL_DEFAULTS[name];
+  }
+
+  setControl(name: ControlName, row: ControlRow) {
+    this.controls.set(name, row);
+  }
+
+  /** Clients see the state only; the reason and who changed it are for compliance. */
+  controlsSnapshot(forCompliance: boolean): Controls {
+    const entry = (name: ControlName) => {
+      const row = this.controls.get(name);
+      return {
+        state: row?.state ?? CONTROL_DEFAULTS[name],
+        changed_at: row?.changedAt ?? null,
+        reason: forCompliance ? (row?.reason ?? null) : null,
+        changed_by: forCompliance ? (row?.changedBy ?? null) : null,
+      };
+    };
+    return { advisor: entry("advisor"), execution: entry("execution") };
   }
 
   // --- logs -------------------------------------------------------------

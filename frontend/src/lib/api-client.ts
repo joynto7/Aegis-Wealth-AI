@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ChatReply, ErrorCode, ToolCallSummary } from "./types";
+import type { ApiErrorBody, ChatCard, ChatReply, ErrorCode, ToolCallSummary } from "./types";
 import { getSessionToken } from "./session-token";
 import { API_MOCK } from "./api-mode";
 
@@ -82,7 +82,9 @@ async function request<T>(
   return json as T;
 }
 
-export type ChatStreamEvent = { type: "status"; text: string } | { type: "tool"; call: ToolCallSummary };
+export type ChatStreamEvent =
+  | { type: "status"; text: string }
+  | { type: "tool"; call: ToolCallSummary; card?: ChatCard | null };
 
 /**
  * POST /api/chat/stream (P1 streaming chat): progress events while the agent

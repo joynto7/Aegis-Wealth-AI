@@ -23,15 +23,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePageTitle } from "@/components/shell/page-title";
 import { DockedChat } from "@/components/shell/chat-drawer";
 import { Stepper } from "@/components/shared/stepper";
+import { RegulationChips } from "@/components/shared/regulation-chips";
 import { useComplianceRules, useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
 
-/** The gate decision with every rule's reason: its name, its verdict and the measured value against its limit. */
+/**
+ * The gate decision with every rule's reason: its name, its verdict, the measured value against its limit and
+ * (addition) the regulatory requirement the rule is designed to meet.
+ */
 function GatePanel({ gate }: { gate: Proposal["gate"] }) {
   const rules = useComplianceRules();
-  const names = new Map((rules.data?.items ?? []).map((r) => [r.id, r.name]));
+  const byId = new Map((rules.data?.items ?? []).map((r) => [r.id, r]));
   return (
     <Card>
       <CardContent className="space-y-3 px-6 py-5">
@@ -52,12 +56,13 @@ function GatePanel({ gate }: { gate: Proposal["gate"] }) {
               )}
               <span className="min-w-0">
                 <span className={r.result === "fail" ? "font-medium text-(--text)" : "text-(--text)"}>
-                  <span className="font-mono text-caption">{r.id}</span> {names.get(r.id) ?? ""}
+                  <span className="font-mono text-caption">{r.id}</span> {byId.get(r.id)?.name ?? ""}
                   <span className="sr-only">{r.result === "pass" ? " passed" : r.type === "hard" ? " failed" : " warning"}</span>
                   {r.result === "fail" ? <span className="text-caption text-(--text-muted)"> · {r.type === "hard" ? "hard rule" : "warning"}</span> : null}
                 </span>
                 {r.message ? <span className="block text-(--text)">{r.message}</span> : null}
                 <span className="block text-caption text-(--text-muted)">{r.detail}</span>
+                <RegulationChips basis={byId.get(r.id)?.basis} className="mt-1" />
               </span>
             </li>
           ))}

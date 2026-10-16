@@ -37,8 +37,13 @@ import from `src/mocks`, so switching modes needs no screen change.
 - Against the real backend, the advisor uses Claude when the API has `ANTHROPIC_API_KEY`, and checked
   templates otherwise.
 - In mock mode it always answers from templates.
-- Either way, the drawer streams the agent's progress: each tool call appears with its tier and the
-  broker's decision while the turn runs. The reply arrives only after the grounding check.
+- Either way, the drawer streams the agent's progress: each tool call appears with its tier, the
+  broker's decision and its result card while the turn runs. The reply arrives only after the
+  grounding check.
+- Each reply shows its cards (fee comparison, proposal with the gate's verdict, rule with its
+  regulatory basis, profile, products, or a call the broker blocked), and every figure in it is
+  underlined: hover or focus it to see the tool field, message or profile value it came from.
+- When compliance suspends the advisor, the drawer says so and the reply is a fixed notice.
 
 ### Demo accounts
 
@@ -57,7 +62,7 @@ npm run start            # serve the production build
 npm run lint             # ESLint
 npm run typecheck        # tsc --noEmit
 npm run gen:types        # regenerate src/lib/api-types.ts from ../backend/openapi.json
-npx tsx scripts/verify.ts  # mock engines against the documentation's worked examples (exits 1 on a mismatch)
+npx tsx scripts/verify.ts  # mock engines against the worked examples, mock data against ../backend/data (exits 1 on a mismatch)
 ```
 
 ## API types are generated (NFR-5.2)
@@ -76,12 +81,14 @@ A contract change that breaks a screen or the mock then fails the type check.
 
 ```
 src/
-  app/                 Next.js App Router routes: one folder per screen (S01-S12)
+  app/                 Next.js App Router routes: one folder per screen (S01-S12), plus control-room/
+                       (the compliance officer's AI Control Room)
   components/
     ui/                shadcn/ui primitives (Button, Card, Dialog, Sheet, ...)
     shared/            StatusBadge, TierBadge, SuitabilityBadge, DecisionLabel, DataLabel, Money,
-                       Percent, PageHeader, Stepper, ...
-    charts/            AllocationDonut, ReplayLine, StressBars (stacked by asset class), FeeBars
+                       Percent, PageHeader, Stepper, RegulationChips, ...
+    chat/              ChatCards (tool results as cards) and ReplyText (figures linked to their sources)
+    charts/            AllocationDonut, ReplayLine, ReplayPlayer (the month-by-month replay), StressBars, FeeBars
     shell/             Sidebar, TopBar (with the light/dark toggle), ChatDrawer and DockedChat
   lib/                 api-types.ts (generated), types.ts, api-client.ts (incl. streamChat),
                        queries.ts (TanStack Query hooks), labels.ts, disclosures.ts, format.ts

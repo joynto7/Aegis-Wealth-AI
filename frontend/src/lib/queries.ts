@@ -10,6 +10,12 @@ import type {
   ChatMessage,
   CompareResult,
   ConfirmTokenResponse,
+  ControlName,
+  Controls,
+  ControlStateValue,
+  ModelCard,
+  Oversight,
+  Regulations,
   ExecuteResponse,
   GateResult,
   HealthStatus,
@@ -115,11 +121,12 @@ export function useReplayEpisodes() {
   });
 }
 
-export function useReplay(episodeId: string | null) {
+export function useReplay(episodeId: string | null, amount = 100000) {
   return useQuery<ReplayResult>({
-    queryKey: ["replay", episodeId],
-    queryFn: () => api.get<ReplayResult>(`/replay/${episodeId}`),
+    queryKey: ["replay", episodeId, amount],
+    queryFn: () => api.get<ReplayResult>(`/replay/${episodeId}${amount === 100000 ? "" : `?amount=${amount}`}`),
     enabled: !!episodeId,
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -337,6 +344,71 @@ export function useComplianceRules() {
     queryKey: ["compliance", "rules"],
     queryFn: () => api.get("/compliance/rules"),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Compliance controls and oversight (additions)
+// ---------------------------------------------------------------------------
+
+/** The two compliance switches. Clients see their state, not the reason; checked every 15 s. */
+export function useControls(enabled = true) {
+  return useQuery<Controls>({
+    queryKey: ["controls"],
+    queryFn: () => api.get<Controls>("/controls"),
+    refetchInterval: 15_000,
+    enabled,
+  });
+}
+
+export function useSetControl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { control: ControlName; state: ControlStateValue; reason: string }) =>
+      api.post<Controls>("/compliance/controls", body),
+    onSuccess: (controls, body) => {
+      qc.setQueryData(["controls"], controls);
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      qc.invalidateQueries({ queryKey: ["logs"] });
+      const verb: Record<ControlStateValue, string> = {
+        suspended: "AI advisor suspended",
+        active: "AI advisor resumed",
+        halted: "Order execution halted",
+        open: "Order execution resumed",
+      };
+      toast.success(`${verb[body.state]}. The change is in the operation log.`);
+    },
+  });
+}
+
+/** The Control Room's live view: counts and the latest agent turns, refreshed every 3 s. */
+export function useOversight() {
+  return useQuery<Oversight>({
+    queryKey: ["oversight"],
+    queryFn: () => api.get<Oversight>("/compliance/overview"),
+    refetchInterval: 3_000,
+  });
+}
+
+export function useRegulations() {
+  return useQuery<Regulations>({
+    queryKey: ["regulations"],
+    queryFn: () => api.get<Regulations>("/compliance/regulations"),
+    staleTime: Infinity,
+  });
+}
+
+/** Fetches the model disclosure (logged by the server) and saves it as a JSON file. */
+export async function downloadModelCard(): Promise<ModelCard> {
+  const card = await api.get<ModelCard>("/compliance/model-card");
+  const blob = new Blob([JSON.stringify(card, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `aegis_model_disclosure_${card.generated_at.slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success("Model disclosure downloaded. The export is in the operation log.");
+  return card;
 }
 
 export function useHealth() {

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { DecisionLabel } from "@/components/shared/decision-label";
 import { Money } from "@/components/shared/money";
+import { RegulationChips } from "@/components/shared/regulation-chips";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -93,6 +94,14 @@ function OperationLogTab() {
               "permission_denied",
               "chain_verified",
               "evidence_exported",
+              "agent_turn",
+              "grounding_regenerated",
+              "grounding_fallback",
+              "advisor_suspended",
+              "advisor_resumed",
+              "execution_halted",
+              "execution_resumed",
+              "model_card_exported",
             ].map((a) => (
               <SelectItem key={a} value={a}>
                 {a.replace(/_/g, " ")}
@@ -290,6 +299,7 @@ function RulesTab() {
             <p className="font-semibold text-(--text)">{r.name}</p>
             <p className="text-body text-(--text-muted)">{r.description}</p>
             <p className="font-mono text-caption text-(--text-muted)">{r.threshold}</p>
+            <RegulationChips basis={r.basis} className="pt-1" />
           </CardContent>
         </Card>
       ))}

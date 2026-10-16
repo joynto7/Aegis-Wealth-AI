@@ -6,7 +6,8 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { SuitabilityBadge } from "@/components/shared/suitability-badge";
 import { TierBadge } from "@/components/shared/tier-badge";
 import { RegulationChips } from "@/components/shared/regulation-chips";
-import { ASSET_COLORS, ASSET_ORDER } from "@/lib/asset-colors";
+import { ASSET_ORDER } from "@/lib/asset-colors";
+import { AllocationBar } from "@/components/shared/allocation-bar";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { formatFeePercent, formatMoney, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -94,11 +95,7 @@ function ProposalCardView({ card }: { card: ProposalCard }) {
       title={`Proposal #${card.proposal_id} · v${card.version}`}
       aside={<StatusBadge decision={card.gate_decision} className="px-2 py-0.5 text-caption [&_svg]:size-3.5" />}
     >
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-(--muted)" aria-hidden>
-        {ASSET_ORDER.filter((c) => weights[c] > 0).map((c) => (
-          <span key={c} style={{ width: `${weights[c]}%`, backgroundColor: ASSET_COLORS[c] }} />
-        ))}
-      </div>
+      <AllocationBar weights={weights} legend={false} />
       <p className="mt-1.5 text-(--text-muted)">
         {ASSET_ORDER.filter((c) => weights[c] > 0)
           .map((c) => `${ASSET_CLASS_LABEL[c]} ${formatPercent(weights[c], 0)}`)

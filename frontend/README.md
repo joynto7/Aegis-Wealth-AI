@@ -97,7 +97,20 @@ src/
 
 ## Design system
 
-Tokens (colours, type scale, spacing, radius) live in `src/app/globals.css` as CSS variables, per
-Section 2.7.2, with a dark set under `.dark` (P1); every pair meets WCAG 2.2 AA. No screen uses a
-raw colour value. Green, amber and red mean PASS, WARNING and REJECT only, always with an icon and a
-word. Components are built on shadcn/ui (Radix primitives) and Tailwind CSS v4.
+The research, the design language and a prompt for every screen are in
+[../docs/ui-redesign.md](../docs/ui-redesign.md).
+
+- **Tokens** (colours, type scale, spacing, radius, shadows) live in `src/app/globals.css` as CSS
+  variables, with a dark set under `.dark`; text pairs meet WCAG 2.2 AA. No screen uses a raw colour
+  value. The palette is ink navy for trust surfaces (sidebar, heroes), indigo for action, and a
+  violet gradient for the AI only.
+- **Status colours.** Green, amber and red mean PASS, WARNING and REJECT only, always with an icon and
+  a word.
+- **Type.** Plus Jakarta Sans for titles and hero figures, Inter for everything else.
+- **Charts.** Asset-class colours were validated all-pairs for colour-blind separation in both modes
+  (`src/lib/asset-colors.ts`), and the riskometer uses a validated one-hue ramp.
+- **`cn`** (`src/lib/utils.ts`) knows the custom type scale, so `text-caption` and a colour such as
+  `text-(--text)` no longer cancel each other.
+- **Shell features:** the ⌘K command palette (`components/shell/command-palette.tsx`) and privacy mode
+  (`lib/privacy.tsx`; every `<Money>` hides while it is on).
+- **Components** are built on shadcn/ui (Radix primitives) and Tailwind CSS v4.

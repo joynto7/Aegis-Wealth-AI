@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, ChevronDown, PauseCircle, Send, ShieldCheck, User as UserIcon } from "lucide-react";
+import { ChevronDown, PauseCircle, Send, ShieldCheck, Sparkles, User as UserIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,28 +22,50 @@ export function ChatDrawer({
   open,
   onOpenChange,
   proposalId,
+  pendingQuestion,
+  onQuestionSent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   proposalId?: number;
+  /** A question asked from elsewhere (the dashboard's suggestions); sent once the drawer opens. */
+  pendingQuestion?: string | null;
+  onQuestionSent?: () => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[400px]">
-        <SheetHeader className="border-b border-(--border)">
-          <SheetTitle className="flex items-center gap-2">
-            <Bot className="size-5 text-(--primary)" aria-hidden />
-            Ask Aegis
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[420px]">
+        <SheetHeader className="bg-ink border-b border-(--ink-border) px-5 py-4">
+          <SheetTitle className="flex items-center gap-3 text-white">
+            <AiAvatar />
+            <span className="flex flex-col">
+              <span className="font-display text-[17px] font-bold">Ask Aegis</span>
+              <span className="text-caption font-normal text-(--ink-muted)">Your AI advisor · checked by code</span>
+            </span>
           </SheetTitle>
-          <SheetDescription>{CHAT_DESCRIPTION}</SheetDescription>
+          <SheetDescription className="text-(--ink-muted)">{CHAT_DESCRIPTION}</SheetDescription>
         </SheetHeader>
-        <ChatConversation proposalId={proposalId} />
+        <ChatConversation proposalId={proposalId} pendingQuestion={pendingQuestion} onQuestionSent={onQuestionSent} />
       </SheetContent>
     </Sheet>
   );
 }
 
 const CHAT_DESCRIPTION = "Every figure is traced to a tool result. Tap one to see where it came from.";
+
+function AiAvatar({ size = "md" }: { size?: "sm" | "md" }) {
+  return (
+    <span
+      className={cn(
+        "bg-ai flex shrink-0 items-center justify-center rounded-full shadow-glow",
+        size === "md" ? "size-10" : "size-7"
+      )}
+      aria-hidden
+    >
+      <Sparkles className={size === "md" ? "size-5" : "size-3.5"} />
+    </span>
+  );
+}
 
 /**
  * The advisor chat docked open beside the Proposal Workspace on screens
@@ -54,16 +76,16 @@ export function DockedChat({ proposalId, className }: { proposalId?: number; cla
     <aside
       aria-label="Ask Aegis"
       className={cn(
-        "sticky top-0 flex h-[calc(100vh-8rem)] w-[400px] shrink-0 flex-col rounded-xl border border-(--border) bg-(--surface)",
+        "sticky top-0 flex h-[calc(100vh-9rem)] w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl border border-(--border) bg-(--surface) shadow-card",
         className
       )}
     >
-      <div className="border-b border-(--border) px-4 py-3">
-        <p className="flex items-center gap-2 text-form font-semibold text-(--text)">
-          <Bot className="size-5 text-(--primary)" aria-hidden />
-          Ask Aegis
-        </p>
-        <p className="text-caption text-(--text-muted)">{CHAT_DESCRIPTION}</p>
+      <div className="bg-ink flex items-center gap-3 px-4 py-3.5">
+        <AiAvatar />
+        <div>
+          <p className="font-display text-form font-bold text-white">Ask Aegis</p>
+          <p className="text-caption text-(--ink-muted)">{CHAT_DESCRIPTION}</p>
+        </div>
       </div>
       <ChatConversation proposalId={proposalId} />
     </aside>
@@ -78,7 +100,15 @@ interface LiveTurn {
 
 const IDLE: LiveTurn = { status: "", tools: [], cards: [] };
 
-function ChatConversation({ proposalId }: { proposalId?: number }) {
+function ChatConversation({
+  proposalId,
+  pendingQuestion,
+  onQuestionSent,
+}: {
+  proposalId?: number;
+  pendingQuestion?: string | null;
+  onQuestionSent?: () => void;
+}) {
   const history = useChatHistory();
   const controls = useControls();
   const paused = controls.data?.advisor.state === "suspended";
@@ -95,6 +125,16 @@ function ChatConversation({ proposalId }: { proposalId?: number }) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, pending, live.tools.length, live.cards.length]);
+
+  // A question asked from another screen is sent once, as soon as the conversation is open.
+  const sentQuestion = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingQuestion || sentQuestion.current === pendingQuestion) return;
+    sentQuestion.current = pendingQuestion;
+    onQuestionSent?.();
+    void submit(pendingQuestion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion]);
 
   async function submit(text: string) {
     const trimmed = text.trim();
@@ -261,10 +301,10 @@ function ChatBubble({ message }: { message: ChatMessage }) {
       <div
         className={cn(
           "flex size-7 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-(--primary)" : "bg-(--muted)"
+          isUser ? "bg-(--primary)" : "bg-ai"
         )}
       >
-        {isUser ? <UserIcon className="size-3.5 text-(--primary-foreground)" /> : <Bot className="size-3.5 text-(--text-muted)" />}
+        {isUser ? <UserIcon className="size-3.5 text-(--primary-foreground)" /> : <Sparkles className="size-3.5 text-white" />}
       </div>
       <div className={cn("max-w-[85%] space-y-1.5", isUser && "items-end text-right")}>
         <div

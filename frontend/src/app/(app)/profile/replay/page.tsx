@@ -207,7 +207,7 @@ function ReplayContent() {
     return (
       <div className="space-y-6">
         <Stepper current="Replay" />
-        <PageHeader title="Historical Replay" />
+        <PageHeader eyebrow="Step 2 of 5 · Crisis replay" title="Live through a crash" />
         <EmptyState
           title="Complete your risk profile first"
           description="The replay plays your tier's model portfolio, so it needs your tier."
@@ -242,8 +242,9 @@ function ReplayContent() {
     <div className="space-y-6">
       <Stepper current="Replay" />
       <PageHeader
-        title="Historical Replay"
-        description="Live through a real market fall with your tier's model portfolio, month by month, then say what you would actually do."
+        eyebrow="Step 2 of 5 · Crisis replay"
+        title="Live through a crash"
+        description="Your tier's model portfolio, played month by month through a real market fall. When it hits bottom, we ask what you would actually do."
         action={<TierBadge tier={profile.tier} />}
       />
 
@@ -276,10 +277,10 @@ function ReplayContent() {
             </TabsList>
           </Tabs>
         )}
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Amount to start with">
-          <span className="text-caption text-(--text-muted)">Start with</span>
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-(--border) bg-(--surface) p-1.5 shadow-card" role="group" aria-label="Amount to start with">
+          <span className="px-2 text-caption font-medium text-(--text-muted)">Start with</span>
           {AMOUNTS.map((a) => (
-            <Button key={a} size="sm" variant={a === amount ? "default" : "outline"} aria-pressed={a === amount} onClick={() => setAmount(a)}>
+            <Button key={a} size="sm" variant={a === amount ? "default" : "ghost"} aria-pressed={a === amount} onClick={() => setAmount(a)}>
               {formatMoney(a)}
             </Button>
           ))}

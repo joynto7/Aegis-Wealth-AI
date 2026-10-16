@@ -3,15 +3,29 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
+import {
+  Activity,
+  ArrowRight,
+  CheckCircle2,
+  Droplets,
+  Layers,
+  PencilLine,
+  PieChart,
+  Receipt,
+  Scale,
+  TrendingDown,
+  Waves,
+  XCircle,
+} from "lucide-react";
 import { RoleGate } from "@/components/shared/role-gate";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TierBadge } from "@/components/shared/tier-badge";
 import { Money } from "@/components/shared/money";
 import { Percent } from "@/components/shared/percent";
 import { ErrorState } from "@/components/shared/error-state";
-import { ChartCard } from "@/components/shared/chart-card";
+import { Panel } from "@/components/shared/panel";
+import { KpiTile } from "@/components/shared/kpi-tile";
+import { RiskMeter } from "@/components/shared/risk-meter";
 import { AllocationDonut, AllocationLegend } from "@/components/charts/allocation-donut";
 import { StressBars } from "@/components/charts/stress-bars";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +40,8 @@ import { Stepper } from "@/components/shared/stepper";
 import { RegulationChips } from "@/components/shared/regulation-chips";
 import { useComplianceRules, useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
+import { useAssetColors } from "@/lib/asset-colors";
+import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
 
@@ -36,39 +52,54 @@ import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
 function GatePanel({ gate }: { gate: Proposal["gate"] }) {
   const rules = useComplianceRules();
   const byId = new Map((rules.data?.items ?? []).map((r) => [r.id, r]));
+  const failedHard = gate.rules.filter((r) => r.result === "fail" && r.type === "hard").length;
+  const warnings = gate.rules.filter((r) => r.result === "fail" && r.type === "soft").length;
+  const passed = gate.rules.length - failedHard - warnings;
   return (
-    <Card>
-      <CardContent className="space-y-3 px-6 py-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-form font-semibold text-(--text)">Compliance gate</h3>
-          <StatusBadge decision={gate.decision} />
-        </div>
-        <ul className="space-y-2">
-          {gate.rules.map((r: GateRule) => (
-            <li key={r.id} className="flex items-start gap-2 text-body">
-              {r.result === "pass" ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-(--pass)" aria-hidden />
-              ) : (
-                <XCircle
-                  className={cn("mt-0.5 size-4 shrink-0", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")}
-                  aria-hidden
-                />
+    <Panel
+      icon={Scale}
+      title="Compliance verdict"
+      description={`${gate.rules.length} rules checked in code: ${passed} passed${failedHard ? `, ${failedHard} failed` : ""}${warnings ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : ""}.`}
+      action={<StatusBadge decision={gate.decision} />}
+    >
+      <ul className="space-y-2">
+        {gate.rules.map((r: GateRule) => {
+          const fail = r.result === "fail";
+          return (
+            <li
+              key={r.id}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border px-3.5 py-3 text-body",
+                !fail && "border-(--border)",
+                fail && r.type === "hard" && "border-(--reject)/40 bg-(--reject-bg)",
+                fail && r.type === "soft" && "border-(--warning)/40 bg-(--warning-bg)"
               )}
-              <span className="min-w-0">
-                <span className={r.result === "fail" ? "font-medium text-(--text)" : "text-(--text)"}>
-                  <span className="font-mono text-caption">{r.id}</span> {byId.get(r.id)?.name ?? ""}
-                  <span className="sr-only">{r.result === "pass" ? " passed" : r.type === "hard" ? " failed" : " warning"}</span>
-                  {r.result === "fail" ? <span className="text-caption text-(--text-muted)"> · {r.type === "hard" ? "hard rule" : "warning"}</span> : null}
+            >
+              {fail ? (
+                <XCircle className={cn("mt-0.5 size-[18px] shrink-0", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")} aria-hidden />
+              ) : (
+                <CheckCircle2 className="mt-0.5 size-[18px] shrink-0 text-(--pass)" aria-hidden />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2">
+                  <span className="font-mono text-caption text-(--text-muted)">{r.id}</span>
+                  <span className="font-semibold text-(--text)">{byId.get(r.id)?.name ?? ""}</span>
+                  <span className="sr-only">{fail ? (r.type === "hard" ? " failed" : " warning") : " passed"}</span>
+                  {fail ? (
+                    <span className={cn("text-caption font-medium", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")}>
+                      {r.type === "hard" ? "Hard rule failed" : "Warning"}
+                    </span>
+                  ) : null}
                 </span>
-                {r.message ? <span className="block text-(--text)">{r.message}</span> : null}
-                <span className="block text-caption text-(--text-muted)">{r.detail}</span>
-                <RegulationChips basis={byId.get(r.id)?.basis} className="mt-1" />
+                {r.message ? <span className="mt-0.5 block text-(--text)">{r.message}</span> : null}
+                <span className="mt-0.5 block text-caption text-(--text-muted)">{r.detail}</span>
+                <RegulationChips basis={byId.get(r.id)?.basis} className="mt-2" />
               </span>
             </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+          );
+        })}
+      </ul>
+    </Panel>
   );
 }
 
@@ -162,23 +193,60 @@ function VersionCompare({ current, parentId }: { current: Proposal; parentId: nu
 function MetricCards({ proposal }: { proposal: Proposal }) {
   const m = proposal.metrics;
   // NFR-4.3: every number has a unit and a one-line meaning.
-  const cards = [
-    { label: "Annual volatility", value: <Percent value={m.volatility_pct} />, hint: "How much this mix's value has typically swung in a year." },
-    { label: "Historical max drawdown", value: <Percent value={m.max_drawdown_pct} />, hint: "The biggest fall from a peak in the history data." },
-    { label: "Weighted annual fee", value: <Percent value={m.weighted_fee_pct} decimals={2} />, hint: "What the products charge per year, on average." },
-    { label: "Available within 1 day", value: <Percent value={m.liquid_share_pct} />, hint: "The share you could withdraw by tomorrow." },
-    { label: "Largest single product", value: <Percent value={m.largest_weight_pct} />, hint: "No product other than cash may exceed 40%." },
-  ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {cards.map((c) => (
-        <div key={c.label} className="rounded-xl border border-(--border) bg-(--surface) p-4">
-          <p className="text-caption text-(--text-muted)">{c.label}</p>
-          <p className="text-form font-semibold text-(--text)">{c.value}</p>
-          <p className="mt-1 text-caption text-(--text-muted)">{c.hint}</p>
-        </div>
-      ))}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-5">
+      <KpiTile icon={Waves} label="Annual volatility" value={<Percent value={m.volatility_pct} />} hint="How much this mix's value has typically swung in a year." />
+      <KpiTile icon={TrendingDown} label="Historical max drawdown" value={<Percent value={m.max_drawdown_pct} />} hint="The biggest fall from a peak in the history data." />
+      <KpiTile icon={Receipt} label="Weighted annual fee" value={<Percent value={m.weighted_fee_pct} decimals={2} />} hint="What the products charge per year, on average." />
+      <KpiTile icon={Droplets} label="Available within 1 day" value={<Percent value={m.liquid_share_pct} />} hint="The share you could withdraw by tomorrow." />
+      <KpiTile icon={Layers} label="Largest single product" value={<Percent value={m.largest_weight_pct} />} hint="No product other than cash may exceed 40%." />
     </div>
+  );
+}
+
+function Holdings({ items, dataLabel }: { items: ProposalItem[]; dataLabel: string }) {
+  const colors = useAssetColors();
+  return (
+    <Panel icon={PieChart} title="Holdings" description={`Each product with the engine's reason for choosing it. ${dataLabel}.`}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-body">
+          <thead className="text-caption text-(--text-muted)">
+            <tr className="border-b border-(--border)">
+              <th className="py-2.5 pr-4 font-medium">Product and why it was chosen</th>
+              <th className="whitespace-nowrap px-3 py-2.5 font-medium">Risk</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Weight</th>
+              <th className="whitespace-nowrap py-2.5 pl-3 text-right font-medium">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.product_code} className="border-b border-(--border) align-top last:border-0">
+                <td className="max-w-lg py-3.5 pr-4">
+                  <span className="flex items-center gap-2">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[item.asset_class] }} aria-hidden />
+                    <span className="font-semibold text-(--text)">{item.name}</span>
+                    <span className="text-caption text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</span>
+                  </span>
+                  <span className="mt-1 block pl-[18px] text-caption leading-relaxed text-(--text-muted)">
+                    <span className="sr-only">Why: </span>
+                    {item.rationale}
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-3.5">
+                  <RiskMeter level={item.risk_level} showWords={false} />
+                </td>
+                <td className="whitespace-nowrap px-3 py-3.5 text-right font-display font-bold text-(--text)">
+                  <Percent value={item.weight_pct} />
+                </td>
+                <td className="whitespace-nowrap py-3.5 pl-3 text-right text-(--text)">
+                  <Money value={item.amount} withCents />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 
@@ -202,10 +270,12 @@ function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () =
   }
 
   return (
-    <Card>
+    <Card className="ring-2 ring-(--primary)/25">
       <CardContent className="space-y-4 px-6 py-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-form font-semibold text-(--text)">Revise allocation</h3>
+          <h3 className="flex items-center gap-2 font-display text-form font-bold text-(--text)">
+            <PencilLine className="size-4 text-(--primary)" aria-hidden /> Revise allocation
+          </h3>
           <span className="text-body font-semibold tabular-nums text-(--text)" aria-live="polite">
             {total.toFixed(0)}% of 100%
             {Math.abs(total - 100) > 0.01 ? (
@@ -286,30 +356,51 @@ function ProposalDetail({ id }: { id: number }) {
     <div className="flex items-start gap-6">
       <div className="min-w-0 flex-1 space-y-6">
         <Stepper current={proposal.status === "executed" ? "Done" : "Proposal"} />
-        <PageHeader
-          title={`Proposal #${proposal.id} · v${proposal.version}`}
-          description={`CNY ${proposal.amount.toLocaleString()} over ${proposal.horizon_years} years for tier ${proposal.tier}.`}
-          action={
-            <div className="flex items-center gap-2">
-              <TierBadge tier={proposal.tier} />
-              <StatusBadge decision={proposal.gate.decision} />
+        <section className="bg-ink relative overflow-hidden rounded-2xl p-6 shadow-raised md:p-7">
+          <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
+          <div className="relative flex flex-wrap items-start justify-between gap-6">
+            <div className="min-w-0">
+              <p className="text-eyebrow text-[#c7d2fe]">
+                Proposal #{proposal.id} · version {proposal.version}
+                {proposal.parent_id ? (
+                  <>
+                    {" "}· revised from{" "}
+                    <Link href={`/proposals/${proposal.parent_id}`} className="underline underline-offset-2 hover:text-white">
+                      #{proposal.parent_id}
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+              <h1 className="mt-2 text-hero-figure text-white">
+                <Money value={proposal.amount} />
+              </h1>
+              <p className="mt-1 text-body text-(--ink-muted)">
+                Over {proposal.horizon_years} years
+                {proposal.near_term_need > 0 ? `, with ${formatMoney(proposal.near_term_need)} needed within 2 years` : ""} · built for tier {proposal.tier}
+              </p>
             </div>
-          }
-        />
-
-        <p className="text-caption text-(--text-muted)">
-          Version {proposal.version}
-          {proposal.parent_id ? (
-            <>
-              {" "}· revised from{" "}
-              <Link href={`/proposals/${proposal.parent_id}`} className="text-(--primary) hover:underline">
-                #{proposal.parent_id}
-              </Link>
-            </>
-          ) : (
-            " · first version"
-          )}
-        </p>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              <div className="flex flex-wrap items-center gap-2">
+                <TierBadge tier={proposal.tier} className="bg-white/10 text-white" />
+                <StatusBadge decision={proposal.gate.decision} />
+              </div>
+              {!revising ? (
+                <div className="flex flex-wrap gap-2">
+                  {proposal.status !== "executed" && proposal.status !== "superseded" ? (
+                    <Button variant="outline" onClick={() => setRevising(true)} className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white">
+                      <PencilLine className="size-4" /> Revise
+                    </Button>
+                  ) : null}
+                  {canContinue ? (
+                    <Button onClick={() => router.push(`/proposals/${proposal.id}/confirm`)} className="bg-white text-(--ink) hover:bg-white/90">
+                      Continue to confirm <ArrowRight className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
 
         {proposal.parent_id ? <VersionCompare current={proposal} parentId={proposal.parent_id} /> : null}
 
@@ -337,63 +428,24 @@ function ProposalDetail({ id }: { id: number }) {
           </Alert>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ChartCard title="Allocation" summary="Allocation by asset class." dataLabel={proposal.data_label}>
-            <AllocationDonut weights={classWeights} />
-            <AllocationLegend weights={classWeights} />
-          </ChartCard>
+        <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <Panel icon={PieChart} title="Allocation" description="By asset class. The colours are the same in every chart.">
+            <p className="sr-only">Allocation by asset class.</p>
+            <AllocationDonut weights={classWeights} height={220} centerValue={`${proposal.items.length}`} centerLabel="products" />
+            <div className="mt-4">
+              <AllocationLegend weights={classWeights} columns />
+            </div>
+          </Panel>
           <GatePanel gate={proposal.gate} />
         </div>
 
         <MetricCards proposal={proposal} />
 
-        <Card>
-          <CardContent className="px-6 py-5">
-            <h3 className="mb-3 text-form font-semibold text-(--text)">Holdings</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-body">
-                <thead className="border-b border-(--border) text-caption text-(--text-muted)">
-                  <tr>
-                    <th className="py-2">Product and why it was chosen</th>
-                    <th className="whitespace-nowrap px-3 py-2">Asset class</th>
-                    <th className="whitespace-nowrap px-3 py-2 text-right">Risk</th>
-                    <th className="whitespace-nowrap px-3 py-2 text-right">Weight</th>
-                    <th className="whitespace-nowrap py-2 pl-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proposal.items.map((item: ProposalItem) => (
-                    <tr key={item.product_code} className="border-b border-(--border) align-top last:border-0">
-                      <td className="max-w-md py-2 pr-4">
-                        <span className="font-medium text-(--text)">{item.name}</span>
-                        <span className="block text-caption text-(--text-muted)">
-                          <span className="sr-only">Why: </span>
-                          {item.rationale}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-(--text-muted)">{ASSET_CLASS_LABEL[item.asset_class]}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right">R{item.risk_level}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right">
-                        <Percent value={item.weight_pct} />
-                      </td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right">
-                        <Money value={item.amount} withCents />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <Holdings items={proposal.items} dataLabel={proposal.data_label} />
 
-        <ChartCard
-          title="Stress tests"
-          summary="Hypothetical instant shocks and the resulting loss."
-          dataLabel="Hypothetical"
-        >
+        <Panel icon={Activity} title="Stress tests" description="Hypothetical instant shocks, and what each asset class would contribute to the loss.">
           <StressBars stress={proposal.stress} />
-        </ChartCard>
+        </Panel>
 
         {revising ? (
           <ReviseForm proposal={proposal} onCancel={() => setRevising(false)} />

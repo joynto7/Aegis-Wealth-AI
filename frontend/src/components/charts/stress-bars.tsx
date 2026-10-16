@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { StressResult } from "@/lib/types";
 import { formatMoney, formatPercent } from "@/lib/format";
-import { ASSET_COLORS, ASSET_ORDER } from "@/lib/asset-colors";
+import { ASSET_ORDER, useAssetColors } from "@/lib/asset-colors";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 
 /**
@@ -12,6 +12,7 @@ import { ASSET_CLASS_LABEL } from "@/lib/labels";
  * which Section 2.7.1 reserves for REJECT.
  */
 export function StressBars({ stress }: { stress: StressResult[] }) {
+  const colors = useAssetColors();
   const data = stress.map((s) => ({ name: s.scenario, label: s.name, ...s.contributions }));
   return (
     <div className="w-full space-y-3">
@@ -28,7 +29,7 @@ export function StressBars({ stress }: { stress: StressResult[] }) {
               contentStyle={{ borderRadius: 8, borderColor: "var(--border)", fontSize: 13 }}
             />
             {ASSET_ORDER.map((cls) => (
-              <Bar key={cls} dataKey={cls} stackId="contribution" fill={ASSET_COLORS[cls]} />
+              <Bar key={cls} dataKey={cls} stackId="contribution" fill={colors[cls]} maxBarSize={56} />
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -56,7 +57,7 @@ export function StressBars({ stress }: { stress: StressResult[] }) {
       <div className="flex flex-wrap gap-3 text-caption text-(--text-muted)" aria-hidden>
         {ASSET_ORDER.map((cls) => (
           <span key={cls} className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm" style={{ background: ASSET_COLORS[cls] }} />
+            <span className="size-2.5 rounded-sm" style={{ background: colors[cls] }} />
             {ASSET_CLASS_LABEL[cls]}
           </span>
         ))}

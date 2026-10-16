@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import dynamicImport from "next/dynamic";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PrivacyProvider } from "@/lib/privacy";
 import { ApiError } from "@/lib/api-client";
 import { API_MOCK } from "@/lib/api-mode";
 
@@ -70,7 +71,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          {API_MOCK ? <MockGate>{children}</MockGate> : children}
+          <PrivacyProvider>{API_MOCK ? <MockGate>{children}</MockGate> : children}</PrivacyProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

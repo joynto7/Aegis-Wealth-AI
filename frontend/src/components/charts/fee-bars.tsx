@@ -4,9 +4,9 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import type { CompareItem } from "@/lib/types";
 import { formatMoney } from "@/lib/format";
 
-// One neutral colour: these bars are products, not asset classes, so they
-// must not borrow the asset-class palette (Section 2.7.2).
-const BAR_COLOR = "#475569";
+// One series colour (the brand indigo): these bars are products, not asset
+// classes, so they must not borrow the asset-class palette (Section 2.7.2).
+const BAR_COLOR = "#6366f1";
 
 export function FeeBars({ items }: { items: CompareItem[] }) {
   const data = items.map((i) => ({ name: i.code, label: i.name, fee_cost: i.fee_cost }));
@@ -22,7 +22,7 @@ export function FeeBars({ items }: { items: CompareItem[] }) {
             labelFormatter={(label, payload) => payload?.[0]?.payload?.label ?? label}
             contentStyle={{ borderRadius: 8, borderColor: "var(--border)", fontSize: 13 }}
           />
-          <Bar dataKey="fee_cost" radius={[4, 4, 0, 0]} fill={BAR_COLOR} />
+          <Bar dataKey="fee_cost" radius={[4, 4, 0, 0]} fill={BAR_COLOR} maxBarSize={24} />
         </BarChart>
       </ResponsiveContainer>
     </div>

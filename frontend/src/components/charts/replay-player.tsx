@@ -175,7 +175,7 @@ export function ReplayPlayer({
               allowDataOverflow
               tick={{ fontSize: 11, fill: "var(--text-muted)" }}
               tickFormatter={(v: number) => formatMoney(v)}
-              width={96}
+              width={108}
             />
             <Tooltip
               formatter={(value) => [formatMoney(Number(value)), "Value"]}

@@ -3,7 +3,12 @@
 import { useState } from "react";
 import {
   Activity,
+  Ban,
   Bot,
+  Gavel,
+  Hash,
+  ShoppingCart,
+  Wrench,
   CheckCircle2,
   Download,
   FileText,
@@ -15,7 +20,7 @@ import {
   ShieldX,
   SlidersHorizontal,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
+import { KpiTile } from "@/components/shared/kpi-tile";
 import { RoleGate } from "@/components/shared/role-gate";
 import { ErrorState } from "@/components/shared/error-state";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -186,39 +191,38 @@ function SwitchDialog({
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string | number; hint: string }) {
-  return (
-    <div className="rounded-xl border border-(--border) bg-(--surface) p-4">
-      <p className="text-caption text-(--text-muted)">{label}</p>
-      <p className="text-key-figure tabular-nums text-(--text)">{value}</p>
-      <p className="mt-1 text-caption text-(--text-muted)">{hint}</p>
-    </div>
-  );
-}
-
 function Kpis({ view }: { view: Oversight }) {
   const k = view.kpis;
   const tools = k.tool_calls_t0 + k.tool_calls_t1 + k.tool_calls_t2;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <Kpi
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <KpiTile
+        icon={Bot}
         label="AI turns"
         value={k.agent_turns}
         hint={`${k.model_turns} by Claude, ${k.template_turns} from checked templates, ${k.suspended_turns} while paused.`}
       />
-      <Kpi label="Tool calls allowed" value={tools} hint={`T0 ${k.tool_calls_t0} · T1 ${k.tool_calls_t1} · T2 ${k.tool_calls_t2}. No T3 tool exists.`} />
-      <Kpi label="Calls blocked by the broker" value={k.denied_tool_calls} hint="Refused for tier, data ownership, an unknown tool or a pause." />
-      <Kpi
+      <KpiTile icon={Wrench} label="Tool calls allowed" value={tools} hint={`T0 ${k.tool_calls_t0} · T1 ${k.tool_calls_t1} · T2 ${k.tool_calls_t2}. No T3 tool exists.`} />
+      <KpiTile icon={Ban} label="Calls blocked by the broker" value={k.denied_tool_calls} hint="Refused for tier, data ownership, an unknown tool or a pause." />
+      <KpiTile
+        icon={Gavel}
         label="AI proposals the gate rejected"
         value={`${k.agent_proposals_rejected} of ${k.agent_proposals}`}
         hint="The gate checks the AI's proposals exactly as it checks a client's."
       />
-      <Kpi
+      <KpiTile
+        icon={Hash}
         label="Figures traced to a source"
         value={k.figures_traced}
         hint={`${k.grounding_rewrites} replies rewritten and ${k.grounding_fallbacks} replaced for an unsupported figure or wording.`}
       />
-      <Kpi label="Orders placed by the AI" value={k.orders_by_agent} hint={`It has no tool that can. Clients placed ${k.orders_by_clients} order sets themselves.`} />
+      <KpiTile
+        icon={ShoppingCart}
+        label="Orders placed by the AI"
+        value={k.orders_by_agent}
+        hint={`It has no tool that can. Clients placed ${k.orders_by_clients} order sets themselves.`}
+        emphasis
+      />
     </div>
   );
 }
@@ -427,19 +431,40 @@ function ControlRoomContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="AI Control Room"
-        description="Watch every action the AI advisor takes, stop it by hand, and export how it works."
-        action={
-          <span className="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--surface) px-3 py-1 text-caption text-(--text-muted)">
-            <span className="relative flex size-2.5" aria-hidden>
-              <span className={cn("absolute inline-flex size-full rounded-full bg-(--primary) opacity-60", isFetching && "animate-ping")} />
-              <span className="relative inline-flex size-2.5 rounded-full bg-(--primary)" />
+      <section className="bg-ink relative overflow-hidden rounded-2xl p-7 shadow-raised">
+        <div className="pointer-events-none absolute -right-24 -top-28 size-80 rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage: "linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px)",
+            backgroundSize: "36px 36px",
+          }}
+          aria-hidden
+        />
+        <div className="relative flex flex-wrap items-start justify-between gap-6">
+          <div className="max-w-2xl">
+            <p className="text-eyebrow text-[#c7d2fe]">Oversight · Art. 23 manual intervention</p>
+            <h1 className="mt-2 font-display text-[30px] font-bold text-white">AI Control Room</h1>
+            <p className="mt-1.5 text-body text-(--ink-muted)">
+              Watch every action the AI advisor takes, stop it by hand, and export how it works for a regulator.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-caption text-(--ink-text)">
+              <span className="relative flex size-2.5" aria-hidden>
+                <span className={cn("absolute inline-flex size-full rounded-full bg-[#a5b4fc] opacity-60", isFetching && "animate-ping")} />
+                <span className="relative inline-flex size-2.5 rounded-full bg-[#a5b4fc]" />
+              </span>
+              Live · refreshes every 3 seconds
             </span>
-            Live · refreshes every 3 seconds
-          </span>
-        }
-      />
+            {view ? (
+              <span className="text-caption text-(--ink-muted)">
+                Advisor {view.controls.advisor.state} · execution {view.controls.execution.state} · {view.llm === "ok" ? "Claude connected" : "template mode"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {isLoading ? (
         <Skeleton className="h-96 w-full" />

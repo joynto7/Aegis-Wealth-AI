@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Download, ShieldCheck } from "lucide-react";
+import { Bot, Cog, Download, FileJson, FileSpreadsheet, Scale, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
 import { ErrorState } from "@/components/shared/error-state";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { DecisionLabel } from "@/components/shared/decision-label";
 import { Money } from "@/components/shared/money";
+import { RegulationChips } from "@/components/shared/regulation-chips";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,9 +27,12 @@ import {
 import { usePageTitle } from "@/components/shell/page-title";
 import { useComplianceRules, useLogs, useRecords, useVerifyChain, downloadLogsExport } from "@/lib/queries";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { LogEntry } from "@/lib/types";
 
 const PAGE_SIZE = 20;
+
+const ACTOR_ICON: Record<string, LucideIcon> = { client: UserRound, agent: Bot, system: Cog, compliance: Scale };
 
 function OperationLogTab() {
   const [actor, setActor] = useState("all");
@@ -46,7 +51,7 @@ function OperationLogTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-(--border) bg-(--surface) p-3 shadow-card">
         <Select value={actor} onValueChange={(v) => { setActor(v); setOffset(0); }}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Actor" />
@@ -92,6 +97,14 @@ function OperationLogTab() {
               "permission_denied",
               "chain_verified",
               "evidence_exported",
+              "agent_turn",
+              "grounding_regenerated",
+              "grounding_fallback",
+              "advisor_suspended",
+              "advisor_resumed",
+              "execution_halted",
+              "execution_resumed",
+              "model_card_exported",
             ].map((a) => (
               <SelectItem key={a} value={a}>
                 {a.replace(/_/g, " ")}
@@ -108,49 +121,56 @@ function OperationLogTab() {
       ) : !data?.items.length ? (
         <EmptyState title="No matching log entries" description="Try different filters." />
       ) : (
-        <Card>
-          <CardContent className="px-6 py-5">
+        <Card className="py-0">
+          <CardContent className="p-0">
             <table className="w-full text-left text-body">
-              <thead className="border-b border-(--border) text-caption text-(--text-muted)">
+              <thead className="border-b border-(--border) bg-(--surface-2) text-caption text-(--text-muted)">
                 <tr>
-                  <th className="py-2">Time</th>
-                  <th className="py-2">Actor</th>
-                  <th className="py-2">Action</th>
-                  <th className="py-2">Tier</th>
-                  <th className="py-2">Decision</th>
+                  <th className="px-5 py-3 font-medium">Time</th>
+                  <th className="px-3 py-3 font-medium">Actor</th>
+                  <th className="px-3 py-3 font-medium">Action</th>
+                  <th className="px-3 py-3 font-medium">Tier</th>
+                  <th className="px-5 py-3 font-medium">Decision</th>
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="cursor-pointer border-b border-(--border) last:border-0 hover:bg-(--muted)"
-                    onClick={() => setDetail(l)}
-                  >
-                    <td className="py-2 text-(--text-muted)">{formatDateTime(l.ts)}</td>
-                    <td className="py-2 capitalize">{l.actor}</td>
-                    <td className="py-2">{l.action.replace(/_/g, " ")}</td>
-                    <td className="py-2">{l.tier ?? "—"}</td>
-                    <td className="py-2">
-                      {l.decision ? (
-                        <span
-                          className={
-                            l.decision === "denied"
-                              ? "inline-flex items-center rounded-full bg-(--reject-bg) px-2 py-0.5 text-caption text-(--reject)"
-                              : "inline-flex items-center rounded-full bg-(--pass-bg) px-2 py-0.5 text-caption text-(--pass)"
-                          }
-                        >
-                          {l.decision}
+                {data.items.map((l) => {
+                  const ActorIcon = ACTOR_ICON[l.actor] ?? Cog;
+                  return (
+                    <tr
+                      key={l.id}
+                      className={cn("cursor-pointer border-b border-(--border) last:border-0 hover:bg-(--surface-2)", l.decision === "denied" && "bg-(--reject-bg)/40")}
+                      onClick={() => setDetail(l)}
+                    >
+                      <td className="whitespace-nowrap px-5 py-3 text-(--text-muted)">{formatDateTime(l.ts)}</td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center gap-2 capitalize text-(--text)">
+                          <span className="flex size-7 items-center justify-center rounded-full bg-(--primary-soft) text-(--primary)">
+                            <ActorIcon className="size-3.5" aria-hidden />
+                          </span>
+                          {l.actor}
                         </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-3 py-3 text-(--text)">
+                        {l.action.replace(/_/g, " ")}
+                        {l.tool ? <span className="ml-1.5 font-mono text-caption text-(--text-muted)">{l.tool}</span> : null}
+                      </td>
+                      <td className="px-3 py-3">
+                        {l.tier ? (
+                          <span className="rounded-md bg-(--surface-2) px-1.5 py-0.5 font-mono text-caption text-(--text) ring-1 ring-(--border)">{l.tier}</span>
+                        ) : (
+                          <span className="text-(--text-muted)">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <DecisionLabel decision={l.decision} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            <div className="mt-3 flex items-center justify-between text-caption text-(--text-muted)">
+            <div className="flex items-center justify-between border-t border-(--border) px-5 py-3 text-caption text-(--text-muted)">
               <span>
                 {offset + 1}–{Math.min(offset + PAGE_SIZE, data.total)} of {data.total}
               </span>
@@ -301,6 +321,7 @@ function RulesTab() {
             <p className="font-semibold text-(--text)">{r.name}</p>
             <p className="text-body text-(--text-muted)">{r.description}</p>
             <p className="font-mono text-caption text-(--text-muted)">{r.threshold}</p>
+            <RegulationChips basis={r.basis} className="pt-1" />
           </CardContent>
         </Card>
       ))}
@@ -309,20 +330,56 @@ function RulesTab() {
 }
 
 function ExportTab() {
+  const [pending, setPending] = useState<"json" | "csv" | null>(null);
+  const [failed, setFailed] = useState<{ format: "json" | "csv"; error: unknown } | null>(null);
+
+  async function exportAs(format: "json" | "csv") {
+    setPending(format);
+    setFailed(null);
+    try {
+      await downloadLogsExport(format);
+    } catch (error) {
+      setFailed({ format, error });
+    } finally {
+      setPending(null);
+    }
+  }
+
   return (
-    <Card className="max-w-md">
-      <CardContent className="space-y-3 px-6 py-5">
-        <p className="text-body text-(--text-muted)">Export the full operation log for the evidence pack.</p>
-        <div className="flex gap-2">
-          <Button onClick={() => downloadLogsExport("json")}>
-            <Download className="size-4" /> JSON
-          </Button>
-          <Button variant="outline" onClick={() => downloadLogsExport("csv")}>
-            <Download className="size-4" /> CSV
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <p className="max-w-2xl text-body text-(--text-muted)">
+        Export the whole operation log for the evidence pack. The export is itself logged, so the file you download contains its
+        own entry.
+      </p>
+      <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
+        {(
+          [
+            { format: "json", icon: FileJson, title: "JSON", text: "Every field, including each entry's detail, for tools and auditors." },
+            { format: "csv", icon: FileSpreadsheet, title: "CSV", text: "One row per entry, for spreadsheets." },
+          ] as const
+        ).map(({ format, icon: Icon, title, text }) => (
+          <button
+            key={format}
+            type="button"
+            onClick={() => exportAs(format)}
+            disabled={pending !== null}
+            className="flex items-start gap-4 rounded-2xl border border-(--border) bg-(--surface) p-5 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-(--primary)/40 hover:shadow-raised disabled:opacity-60"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-(--primary-soft) text-(--primary)">
+              <Icon className="size-5" aria-hidden />
+            </span>
+            <span>
+              <span className="flex items-center gap-2 font-display text-form font-bold text-(--text)">
+                {pending === format ? "Exporting…" : `Export as ${title}`}
+                <Download className="size-4 text-(--text-muted)" aria-hidden />
+              </span>
+              <span className="mt-1 block text-caption text-(--text-muted)">{text}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {failed ? <ErrorState error={failed.error} onRetry={() => exportAs(failed.format)} /> : null}
+    </div>
   );
 }
 
@@ -330,7 +387,11 @@ function ConsoleContent() {
   usePageTitle("Compliance Console");
   return (
     <div>
-      <PageHeader title="Compliance Console" description="Read-only oversight: operation log, records, rules and evidence export." />
+      <PageHeader
+        eyebrow="Oversight"
+        title="Compliance console"
+        description="The append-only operation log, every advice record, the nine rules with their regulatory basis, and evidence export."
+      />
       <Tabs defaultValue="log">
         <TabsList className="mb-4">
           <TabsTrigger value="log">Operation log</TabsTrigger>

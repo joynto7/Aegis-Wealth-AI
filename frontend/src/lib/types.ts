@@ -1,440 +1,161 @@
 /**
- * Shared API types for Aegis Wealth AI.
+ * API types for Aegis Wealth AI (Section 2.6), generated from the backend's
+ * OpenAPI file and never written by hand (NFR-5.2).
  *
- * These mirror the API contract in Section 2.6 of the project documentation
- * exactly (field names, fixed value strings, shapes). In the real build they
- * would be generated from the backend's OpenAPI file with openapi-typescript;
- * here they are hand-written so the frontend can be built and reviewed before
- * the backend exists, per the "mock-first frontend" rule (Section 2.10.3).
+ *   cd backend && python scripts/export_openapi.py   # -> backend/openapi.json
+ *   cd frontend && npm run gen:types                 # -> src/lib/api-types.ts
+ *
+ * This module only gives the generated schemas their contract names, so
+ * screens import `Profile`, not `components["schemas"]["Profile"]`.
  */
+
+import type { components } from "./api-types";
+
+type Schemas = components["schemas"];
 
 // ---------------------------------------------------------------------------
 // 2.6.3 Fixed values
 // ---------------------------------------------------------------------------
 
-export type UserRole = "client" | "compliance";
-export type ProfileStatus = "complete" | "needs_review";
-export type ProposalStatus =
-  | "rejected"
-  | "warning"
-  | "acknowledged"
-  | "passed"
-  | "executed"
-  | "superseded";
-export type GateDecision = "PASS" | "WARNING" | "REJECT";
-export type RuleType = "hard" | "soft";
-export type RuleResult = "pass" | "fail";
-export type ReplayReaction = "hold" | "buy_more" | "sell_some" | "sell_all";
-export type ProductType =
-  | "deposit"
-  | "money_market_fund"
-  | "short_term_bond_fund"
-  | "bond_fund"
-  | "gold_etf"
-  | "index_etf"
-  | "active_equity_fund"
-  | "thematic_equity_fund";
-export type AssetClass = "cash" | "bond" | "gold" | "equity";
-export type ChatMode = "model" | "fallback";
-export type ChatGrounding = "passed" | "regenerated" | "fallback";
-export type LogActor = "client" | "agent" | "system" | "compliance";
-export type LogDecision = "allowed" | "denied";
-export type OrderStatus = "filled";
+export type UserRole = Schemas["User"]["role"];
+export type ProfileStatus = Schemas["Profile"]["status"];
+export type ProposalStatus = Schemas["Proposal"]["status"];
+export type GateDecision = Schemas["GateResult"]["decision"];
+export type RuleType = Schemas["GateRule"]["type"];
+export type RuleResult = Schemas["GateRule"]["result"];
+export type ReplayReaction = Schemas["ReplayReactionRequest"]["reaction"];
+export type ProductType = Schemas["Product"]["type"];
+export type AssetClass = Schemas["Product"]["asset_class"];
+export type ChatMode = Schemas["ChatReply"]["mode"];
+export type ChatGrounding = Schemas["ChatReply"]["grounding"];
+export type LogActor = Schemas["LogEntry"]["actor"];
+export type LogDecision = Schemas["ToolCallSummary"]["decision"];
+export type OrderStatus = Schemas["Order"]["status"];
 
 // ---------------------------------------------------------------------------
 // 2.6.2 Error format
 // ---------------------------------------------------------------------------
 
-export type ErrorCode =
-  | "UNAUTHENTICATED"
-  | "INVALID_CREDENTIALS"
-  | "FORBIDDEN"
-  | "TOKEN_INVALID"
-  | "TOKEN_EXPIRED"
-  | "NOT_FOUND"
-  | "PROFILE_REQUIRED"
-  | "CONTRADICTIONS_OPEN"
-  | "GATE_REJECTED"
-  | "WARNINGS_NOT_ACKNOWLEDGED"
-  | "QUIZ_REQUIRED"
-  | "TOKEN_USED"
-  | "STATE_CONFLICT"
-  | "INSUFFICIENT_CASH"
-  | "VALIDATION_ERROR"
-  | "RATE_LIMITED"
-  | "INTERNAL";
-
-export interface ApiErrorBody {
-  error: {
-    code: ErrorCode;
-    message: string;
-    details?: Record<string, unknown>;
-  };
-}
+export type ErrorCode = Schemas["ApiErrorDetail"]["code"];
+export type ApiErrorBody = Schemas["ApiErrorBody"];
 
 // ---------------------------------------------------------------------------
-// Users / auth
+// Response and request bodies
 // ---------------------------------------------------------------------------
 
-export interface User {
-  id: number;
-  email: string;
-  role: UserRole;
-  display_name: string;
-}
+export type User = Schemas["User"];
+export type QuestionOption = Schemas["QuestionOption"];
+export type Question = Schemas["Question"];
+export type Questionnaire = Schemas["Questionnaire"];
+export type Contradiction = Schemas["Contradiction"];
+export type ProfileReplay = Schemas["ProfileReplay"];
+export type Profile = Schemas["Profile"];
+export type ReplayEpisodeSummary = Schemas["ReplayEpisodeSummary"];
+export type ReplayPoint = Schemas["ReplayPoint"];
+export type ReplayResult = Schemas["ReplayResult"];
+export type ReplayEvent = Schemas["ReplayEvent"];
+export type Product = Schemas["Product"];
+export type CompareItem = Schemas["CompareItem"];
+export type CompareResult = Schemas["CompareResult"];
+export type ProposalItem = Schemas["ProposalItem"];
+export type ProposalMetrics = Schemas["ProposalMetrics"];
+export type StressContribution = Schemas["StressContribution"];
+export type StressResult = Schemas["StressResult"];
+export type GateRule = Schemas["GateRule"];
+export type GateResult = Schemas["GateResult"];
+export type Proposal = Schemas["Proposal"];
+export type ProposalSummary = Schemas["ProposalSummary"];
+export type QuizQuestion = Schemas["QuizQuestion"];
+export type QuizResult = Schemas["QuizResult"];
+export type ToolCallSummary = Schemas["ToolCallSummary"];
+export type Citation = Schemas["Citation"];
+export type NumberSource = Schemas["NumberSource"];
+export type RuleBasis = Schemas["RuleBasis"];
+export type ProductsCard = Schemas["ProductsCard"];
+export type ComparisonCard = Schemas["ComparisonCard"];
+export type ProposalCard = Schemas["ProposalCard"];
+export type RuleCard = Schemas["RuleCard"];
+export type ProfileCard = Schemas["ProfileCard"];
+export type BlockedCard = Schemas["BlockedCard"];
+export type ChatCard = NonNullable<Schemas["ChatReply"]["cards"]>[number];
+export type ChatMessage = Schemas["ChatMessage"];
+export type ChatReply = Schemas["ChatReply"];
+export type Order = Schemas["Order"];
+export type Position = Schemas["Position"];
+export type SandboxAccount = Schemas["SandboxAccount"];
+export type ConfirmTokenResponse = Schemas["ConfirmTokenResponse"];
+export type ExecuteResponse = Schemas["ExecuteResponse"];
+export type RecordSummary = Schemas["RecordSummary"];
+export type AdviceRecord = Schemas["AdviceRecord"];
+export type VerifyResult = Schemas["VerifyResult"];
+export type LogEntry = Schemas["LogEntry"];
+export type Rule = Schemas["Rule"];
+export type HealthStatus = Schemas["HealthStatus"];
 
 // ---------------------------------------------------------------------------
-// Risk profiling
+// Additions: compliance controls, oversight, regulations, model disclosure
 // ---------------------------------------------------------------------------
 
-export interface QuestionOption {
-  id: string; // "a" .. "e"
-  label: string;
-  points: number;
-}
-
-export interface Question {
-  id: string; // C1..C5, W1..W5
-  group: "capacity" | "willingness";
-  text: string;
-  options: QuestionOption[];
-}
-
-export interface Questionnaire {
-  version: string;
-  questions: Question[];
-}
-
-export interface Contradiction {
-  id: string; // X1, X2, X3
-  message: string;
-  question_ids: string[];
-}
-
-export interface ProfileReplay {
-  episode_id: string;
-  reaction: ReplayReaction;
-}
-
-export interface Profile {
-  id: number;
-  version: number;
-  status: ProfileStatus;
-  capacity_score: number;
-  willingness_score: number;
-  capacity_tier: number;
-  willingness_tier: number;
-  replay_adjustment: number;
-  tier: number;
-  tier_label: string;
-  max_acceptable_loss_pct: number;
-  contradictions: Contradiction[];
-  replay: ProfileReplay | null;
-  created_at: string;
-}
-
-export interface ReplayEpisodeSummary {
-  id: string; // E1, E2, E3
-  name: string;
-  start: string;
-  end: string;
-}
-
-export interface ReplayPoint {
-  month: string;
-  value: number;
-}
-
-export interface ReplayResult {
-  episode: ReplayEpisodeSummary;
-  tier: number;
-  weights_pct: Record<AssetClass, number>;
-  start_value: number;
-  series: ReplayPoint[];
-  max_drawdown_pct: number;
-  lowest_month: string;
-  end_value: number;
-  data_label: string;
-  data_as_of: string;
-}
+export type ControlName = Schemas["ControlChange"]["control"];
+export type ControlStateValue = Schemas["ControlState"]["state"];
+export type ControlState = Schemas["ControlState"];
+export type Controls = Schemas["Controls"];
+export type AgentTurn = Schemas["AgentTurn"];
+export type OversightKpis = Schemas["OversightKpis"];
+export type Oversight = Schemas["Oversight"];
+export type AiControl = Schemas["AiControl"];
+export type Framework = Schemas["Framework"];
+export type Regulations = Schemas["Regulations"];
+export type ModelCard = Schemas["ModelCard"];
 
 // ---------------------------------------------------------------------------
-// Products
+// Additions (v2): what-if, How to fix, planning, AI governance
 // ---------------------------------------------------------------------------
 
-export interface Product {
-  code: string;
-  name: string;
-  type: ProductType;
-  asset_class: AssetClass;
-  risk_level: number; // 1..5
-  annual_fee_pct: number;
-  liquidity_days: number;
-  lockup_months: number;
-  min_investment: number;
-  nav: number;
-  nav_date: string;
-  volatility_pct: number;
-  max_drawdown_pct: number;
-  description: string;
-  suitable: boolean | null;
-  data_label: string;
-}
-
-export interface CompareItem {
-  code: string;
-  name: string;
-  risk_level: number;
-  suitable: boolean | null;
-  annual_fee_pct: number;
-  assumed_return_pct: number;
-  fee_cost: number;
-  end_value_after_fees: number;
-  liquidity_days: number;
-  lockup_months: number;
-}
-
-export interface CompareResult {
-  amount: number;
-  horizon_years: number;
-  items: CompareItem[];
-  cheapest_code: string;
-  data_label: string;
-}
+export type ProposalPreview = Schemas["ProposalPreview"];
+export type Remedy = Schemas["Remedy"];
+export type RemedyChange = Schemas["RemedyChange"];
+export type RemedyItem = Schemas["RemedyItem"];
+export type ProjectionRequest = Schemas["ProjectionRequest"];
+export type Projection = Schemas["Projection"];
+export type ProjectionBand = Schemas["ProjectionBand"];
+export type TierOutcome = Schemas["TierOutcome"];
+export type RequiredMonthly = Schemas["RequiredMonthly"];
+export type Goal = Schemas["Goal"];
+export type GoalInput = Schemas["GoalInput"];
+export type Insight = Schemas["Insight"];
+export type Insights = Schemas["Insights"];
+export type PortfolioAnalytics = Schemas["PortfolioAnalytics"];
+export type ProjectionCard = Schemas["ProjectionCard"];
+export type RemedyCard = Schemas["RemedyCard"];
+export type Provenance = Schemas["Provenance"];
+export type ChatRating = Schemas["ChatFeedbackRequest"]["rating"];
+export type ThreatSignal = Schemas["ThreatSignal"];
+export type TraceSpan = Schemas["TraceSpan"];
+export type ReviewFlag = Schemas["ReviewFlag"];
+export type ReviewItem = Schemas["ReviewItem"];
+export type ReviewQueue = Schemas["ReviewQueue"];
+export type ReviewStatus = Schemas["ReviewItem"]["status"];
+export type TurnDetail = Schemas["TurnDetail"];
+export type Alert = Schemas["Alert"];
 
 // ---------------------------------------------------------------------------
-// Proposals
+// Additions: the monitoring loop (simulated market, drift, rebalancing)
 // ---------------------------------------------------------------------------
 
-export interface ProposalItem {
-  product_code: string;
-  name: string;
-  asset_class: AssetClass;
-  risk_level: number;
-  weight_pct: number;
-  amount: number;
-}
-
-export interface ProposalMetrics {
-  volatility_pct: number;
-  max_drawdown_pct: number;
-  weighted_fee_pct: number;
-  liquid_share_pct: number;
-  largest_weight_pct: number;
-}
-
-export interface StressContribution {
-  cash: number;
-  bond: number;
-  gold: number;
-  equity: number;
-}
-
-export interface StressResult {
-  scenario: "S1" | "S2" | "S3";
-  name: string;
-  loss_pct: number;
-  loss_cny: number;
-  contributions: StressContribution;
-}
-
-export interface GateRule {
-  id: string; // R-01 .. R-09
-  type: RuleType;
-  result: RuleResult;
-  message: string | null;
-}
-
-export interface GateResult {
-  decision: GateDecision;
-  rules: GateRule[];
-  acknowledged_rule_ids: string[];
-}
-
-export interface Proposal {
-  id: number;
-  version: number;
-  parent_id: number | null;
-  status: ProposalStatus;
-  tier: number;
-  amount: number;
-  horizon_years: number;
-  near_term_need: number;
-  items: ProposalItem[];
-  class_weights_pct: Record<AssetClass, number>;
-  metrics: ProposalMetrics;
-  stress: StressResult[];
-  gate: GateResult;
-  quiz_passed: boolean;
-  notes: string[];
-  data_label: string;
-  data_as_of: string;
-  created_at: string;
-}
-
-export interface ProposalSummary {
-  id: number;
-  version: number;
-  status: ProposalStatus;
-  amount: number;
-  tier: number;
-  gate_decision: GateDecision;
-  created_at: string;
-}
-
-export interface QuizQuestion {
-  id: "Q1" | "Q2" | "Q3";
-  text: string;
-  options: { id: string; label: string }[];
-}
-
-export interface QuizResult {
-  passed: boolean;
-  results: { id: string; correct: boolean; explanation: string }[];
-}
-
-// ---------------------------------------------------------------------------
-// Chat
-// ---------------------------------------------------------------------------
-
-export interface ToolCallSummary {
-  tool: string;
-  tier: "T0" | "T1" | "T2";
-  decision: LogDecision;
-  summary: string;
-}
-
-export interface Citation {
-  tool: string;
-  path: string;
-  value: number | string;
-}
-
-export interface ChatMessage {
-  message_id: number;
-  role: "user" | "assistant";
-  content: string;
-  mode?: ChatMode;
-  grounding?: ChatGrounding;
-  tool_calls?: ToolCallSummary[];
-  citations?: Citation[];
-  created_at: string;
-}
-
-export interface ChatReply {
-  message_id: number;
-  mode: ChatMode;
-  grounding: ChatGrounding;
-  reply: string;
-  tool_calls: ToolCallSummary[];
-  citations: Citation[];
-  created_at: string;
-}
-
-// ---------------------------------------------------------------------------
-// Sandbox execution
-// ---------------------------------------------------------------------------
-
-export interface Order {
-  id: number;
-  product_code: string;
-  amount: number;
-  units: number;
-  nav: number;
-  cost: number;
-  status: OrderStatus;
-  created_at: string;
-}
-
-export interface Position {
-  product_code: string;
-  name: string;
-  asset_class: AssetClass;
-  units: number;
-  avg_nav: number;
-  value: number;
-}
-
-export interface SandboxAccount {
-  cash: number;
-  positions: Position[];
-  total_value: number;
-  data_label: string;
-}
-
-export interface ConfirmTokenResponse {
-  confirm_token: string;
-  expires_at: string;
-}
-
-export interface ExecuteResponse {
-  proposal_id: number;
-  status: "executed";
-  orders: Order[];
-  cash_after: number;
-  record_id: number;
-}
-
-// ---------------------------------------------------------------------------
-// Records and audit
-// ---------------------------------------------------------------------------
-
-export interface RecordSummary {
-  id: number;
-  proposal_id: number;
-  date: string;
-  decision: GateDecision;
-  amount: number;
-  short_hash: string;
-}
-
-export interface AdviceRecord {
-  id: number;
-  user_id: number;
-  proposal_id: number;
-  content: {
-    profile: Pick<Profile, "version" | "tier" | "capacity_score" | "willingness_score" | "replay_adjustment">;
-    proposal: Proposal;
-    gate: GateResult;
-    quiz: QuizResult;
-    disclosures: { id: string; version: string }[];
-    consent_at: string;
-    orders: Order[];
-  };
-  prev_hash: string;
-  hash: string;
-  created_at: string;
-}
-
-export interface VerifyResult {
-  valid: boolean;
-  checked: number;
-  broken_record_id: number | null;
-}
-
-export interface LogEntry {
-  id: number;
-  ts: string;
-  user_id: number | null;
-  actor: LogActor;
-  action: string;
-  tool: string | null;
-  tier: "T0" | "T1" | "T2" | "T3" | null;
-  decision: LogDecision | null;
-  detail: Record<string, unknown>;
-}
-
-export interface Rule {
-  id: string;
-  type: RuleType;
-  name: string;
-  description: string;
-  threshold: string;
-}
-
-export interface HealthStatus {
-  status: "ok";
-  db: "ok";
-  llm: "ok" | "fallback";
-  data_as_of: string;
-}
+export type OrderSide = NonNullable<Schemas["Order"]["side"]>;
+export type MarketState = Schemas["MarketState"];
+export type MarketAdvanceRequest = Schemas["MarketAdvanceRequest"];
+export type DriftClass = Schemas["DriftClass"];
+export type DriftProduct = Schemas["DriftProduct"];
+export type DriftLargest = Schemas["DriftLargest"];
+export type RebalanceTrade = Schemas["RebalanceTrade"];
+export type RebalancePreview = Schemas["RebalancePreview"];
+export type ProposalRebalance = Schemas["ProposalRebalance"];
+export type LiveRuleFailure = Schemas["LiveRuleFailure"];
+export type OpenRebalance = Schemas["OpenRebalance"];
+export type MonitoringStatus = Schemas["PortfolioMonitoring"]["status"];
+export type PortfolioMonitoring = Schemas["PortfolioMonitoring"];
+export type ClientMonitoring = Schemas["ClientMonitoring"];
+export type MonitoringOverview = Schemas["MonitoringOverview"];
+export type DriftCard = Schemas["DriftCard"];

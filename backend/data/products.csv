@@ -1,0 +1,21 @@
+code,name,type,asset_class,risk_level,annual_fee_pct,liquidity_days,lockup_months,min_investment,nav,nav_date,volatility_pct,max_drawdown_pct,description
+DEP-01,Sample Demand Deposit,deposit,cash,1,0,0,0,100,1,2026-09-30,0,0,Instant-access demand deposit. Principal preserving.
+DEP-02,Sample 12-Month Term Deposit,deposit,cash,1,0,0,12,5000,1,2026-09-30,0,0,Fixed 12-month term deposit with a higher illustrative rate.
+MMF-01,Sample Money Market Fund A,money_market_fund,cash,1,0.15,0,0,1000,1.0021,2026-09-30,0.2,0.1,"Short-dated money-market instruments, daily liquidity."
+MMF-02,Sample Money Market Fund B,money_market_fund,cash,1,0.2,1,0,1000,1.0045,2026-09-30,0.25,0.1,"Money-market instruments and bank bills, T+1 liquidity."
+MMF-03,Sample Money Market Fund C,money_market_fund,cash,1,0.3,1,0,1000,1.0062,2026-09-30,0.3,0.15,"Higher-yield money-market instruments, T+1 liquidity."
+SBF-01,Sample Short-Term Bond Fund A,short_term_bond_fund,bond,2,0.3,1,0,1000,1.0832,2026-09-30,1.9,2.6,Short-duration government and investment-grade bonds.
+SBF-02,Sample Short-Term Bond Fund B,short_term_bond_fund,bond,2,0.4,2,0,1000,1.061,2026-09-30,2.1,2.9,"Short-duration corporate bonds, slightly higher yield."
+SBF-03,Sample Short-Term Bond Fund C,short_term_bond_fund,bond,2,0.45,2,0,1000,1.047,2026-09-30,2.2,3,Blended short-duration bond portfolio.
+BND-01,Sample Bond Fund A,bond_fund,bond,2,0.5,2,0,2000,1.1123,2026-09-30,3,4.5,"Broad investment-grade bond portfolio, medium duration."
+BND-02,Sample Bond Fund B,bond_fund,bond,2,0.65,3,0,2000,1.098,2026-09-30,3.3,4.9,Corporate bond portfolio with a modest credit tilt.
+BND-03,Sample Bond Fund C (36-month lock-up),bond_fund,bond,2,0.8,3,36,5000,1.145,2026-09-30,3.6,5.2,Higher-yield bond fund with a 36-month lock-up.
+GLD-01,Sample Gold ETF A,gold_etf,gold,3,0.4,2,0,1000,2.314,2026-09-30,12.5,18,Physically backed gold exchange-traded fund.
+GLD-02,Sample Gold ETF B,gold_etf,gold,3,0.55,2,0,1000,2.298,2026-09-30,12.8,18.4,Gold exchange-traded fund tracking spot gold.
+IDX-01,Sample Broad Index ETF A,index_etf,equity,3,0.15,2,0,1000,3.452,2026-09-30,18,35,"Broad domestic equity index, low cost."
+IDX-02,Sample Broad Index ETF B,index_etf,equity,3,0.3,2,0,1000,2.981,2026-09-30,18.4,36,Broad international equity index.
+IDX-03,Sample Broad Index ETF C,index_etf,equity,3,0.5,2,0,1000,1.887,2026-09-30,18.8,36.5,Broad equity index with dividend reinvestment.
+AEF-01,Sample Active Equity Fund A,active_equity_fund,equity,4,1.2,3,0,5000,1.654,2026-09-30,20.5,39,Actively managed diversified equity fund.
+AEF-02,Sample Active Equity Fund B,active_equity_fund,equity,4,1.5,3,0,5000,2.01,2026-09-30,21.2,40,Actively managed concentrated equity fund.
+HGF-01,Sample High-Growth Thematic Fund A,thematic_equity_fund,equity,5,1.5,3,0,5000,1.234,2026-09-30,27,52,Concentrated thematic growth equity fund.
+HGF-02,Sample High-Growth Thematic Fund B (12-month lock-up),thematic_equity_fund,equity,5,1.8,3,12,10000,0.891,2026-09-30,29,55,High-conviction thematic growth fund with a 12-month lock-up.

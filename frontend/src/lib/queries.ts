@@ -1,14 +1,35 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api-client";
-import { clearSessionToken, setSessionToken } from "@/lib/session-token";
+import { API_MOCK } from "@/lib/api-mode";
+import { clearSessionToken, getSessionToken, setSessionToken } from "@/lib/session-token";
 import type {
   AdviceRecord,
   ChatMessage,
-  ChatReply,
+  ChatRating,
+  Goal,
+  GoalInput,
+  Insights,
+  MarketState,
+  MonitoringOverview,
+  PortfolioAnalytics,
+  PortfolioMonitoring,
+  Projection,
+  ProjectionRequest,
+  ProposalPreview,
+  Remedy,
+  ReviewQueue,
+  TurnDetail,
   CompareResult,
   ConfirmTokenResponse,
+  ControlName,
+  Controls,
+  ControlStateValue,
+  ModelCard,
+  Oversight,
+  Regulations,
   ExecuteResponse,
   GateResult,
   HealthStatus,
@@ -46,9 +67,10 @@ export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { email: string; password: string }) =>
-      api.post<{ user: User; session_token: string; expires_at: string }>("/auth/login", body),
+      api.post<{ user: User; session_token?: string; expires_at?: string }>("/auth/login", body),
     onSuccess: (data) => {
-      setSessionToken(data.session_token);
+      // Only the mock layer returns the token; the real backend sets the httpOnly cookie instead.
+      if (data.session_token) setSessionToken(data.session_token);
       qc.setQueryData(["me"], data.user);
     },
   });
@@ -97,6 +119,11 @@ export function useSubmitProfile() {
     onSuccess: (profile) => {
       qc.setQueryData(["profile", "current"], profile);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      toast.success(
+        profile.status === "complete"
+          ? `Risk profile saved: tier ${profile.tier}.`
+          : "Risk profile saved. Fix the flagged answers to continue."
+      );
     },
   });
 }
@@ -108,11 +135,12 @@ export function useReplayEpisodes() {
   });
 }
 
-export function useReplay(episodeId: string | null) {
+export function useReplay(episodeId: string | null, amount = 100000) {
   return useQuery<ReplayResult>({
-    queryKey: ["replay", episodeId],
-    queryFn: () => api.get<ReplayResult>(`/replay/${episodeId}`),
+    queryKey: ["replay", episodeId, amount],
+    queryFn: () => api.get<ReplayResult>(`/replay/${episodeId}${amount === 100000 ? "" : `?amount=${amount}`}`),
     enabled: !!episodeId,
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -123,6 +151,7 @@ export function useReplayReaction() {
       api.post<Profile>("/profile/current/replay-reaction", body),
     onSuccess: (profile) => {
       qc.setQueryData(["profile", "current"], profile);
+      toast.success("Your reaction was saved.");
     },
   });
 }
@@ -185,6 +214,8 @@ export function useCreateProposal() {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      toast.success(`Proposal #${proposal.id} created. The gate returned ${proposal.gate.decision}.`);
     },
   });
 }
@@ -197,6 +228,10 @@ export function useReviseProposal(proposalId: number) {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      qc.invalidateQueries({ queryKey: ["remedy"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
+      toast.success(`Version ${proposal.version} saved. The gate returned ${proposal.gate.decision}.`);
     },
   });
 }
@@ -207,6 +242,7 @@ export function useAcknowledgeWarnings(proposalId: number) {
     mutationFn: (ruleIds: string[]) => api.post<Proposal>(`/proposals/${proposalId}/acknowledge`, { rule_ids: ruleIds }),
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
+      toast.success("Warnings acknowledged.");
     },
   });
 }
@@ -223,8 +259,9 @@ export function useSubmitQuiz(proposalId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (answers: Record<string, string>) => api.post<QuizResult>(`/proposals/${proposalId}/quiz`, { answers }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["proposals", proposalId] });
+      if (result.passed) toast.success("Quiz passed.");
     },
   });
 }
@@ -240,11 +277,38 @@ export function useExecuteProposal(proposalId: number) {
   return useMutation({
     mutationFn: (token: string) =>
       api.post<ExecuteResponse>(`/proposals/${proposalId}/execute`, undefined, { "X-Confirm-Token": token }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      toast.success(`${result.orders.length} orders filled. Advice record #${result.record_id} created.`);
       qc.invalidateQueries({ queryKey: ["proposals"] });
       qc.invalidateQueries({ queryKey: ["sandbox"] });
       qc.invalidateQueries({ queryKey: ["records"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
     },
+  });
+}
+
+/**
+ * A dry run of a revision (addition): the engines and the gate on the weights being edited, nothing saved.
+ * Keeps the previous result on screen while the next one computes, so the what-if lab never flickers.
+ */
+export function usePreview(proposalId: number, items: { product_code: string; weight_pct: number }[] | null) {
+  return useQuery<ProposalPreview>({
+    queryKey: ["preview", proposalId, items],
+    queryFn: () => api.post<ProposalPreview>(`/proposals/${proposalId}/preview`, { items }),
+    enabled: !!items && items.length > 0,
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
+}
+
+/** How to fix (addition): the smallest change that passes the gate. */
+export function useRemedy(proposalId: number | null, enabled = true) {
+  return useQuery<Remedy>({
+    queryKey: ["remedy", proposalId],
+    queryFn: () => api.get<Remedy>(`/proposals/${proposalId}/remedy`),
+    enabled: !!proposalId && enabled,
+    retry: false,
   });
 }
 
@@ -263,13 +327,71 @@ export function useChatHistory() {
   });
 }
 
-export function useSendChat() {
+/** Rate a reply (addition). A thumbs-down flags the turn for compliance review. */
+export function useChatFeedback() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { message: string; proposal_id?: number }) => api.post<ChatReply>("/chat", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chat", "history"] });
+    mutationFn: (body: { message_id: number; rating: ChatRating; reason?: string }) =>
+      api.post<{ message_id: number; rating: ChatRating }>("/chat/feedback", body),
+    onSuccess: (result) => {
+      qc.setQueryData<{ items: ChatMessage[] }>(["chat", "history"], (old) =>
+        old
+          ? { items: old.items.map((m) => (m.message_id === result.message_id ? { ...m, feedback: result.rating } : m)) }
+          : old
+      );
+      toast.success(
+        result.rating === "down" ? "Thanks. The compliance team will review this answer." : "Thanks for the feedback."
+      );
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Planning (additions): projections, goals, briefing, live-portfolio analytics
+// ---------------------------------------------------------------------------
+
+/** A seeded Monte Carlo projection; the same inputs always give the same answer, so it caches by its inputs. */
+export function useProjection(body: ProjectionRequest | null) {
+  return useQuery<Projection>({
+    queryKey: ["projection", body],
+    queryFn: () => api.post<Projection>("/projections", body),
+    enabled: !!body,
+    placeholderData: (previous) => previous,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useGoal() {
+  return useQuery<Goal | null>({
+    queryKey: ["goal"],
+    queryFn: async () => (await api.get<{ goal: Goal | null }>("/goals/current")).goal,
+  });
+}
+
+export function useSetGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GoalInput) => api.put<{ goal: Goal | null }>("/goals/current", body),
+    onSuccess: (data) => {
+      qc.setQueryData(["goal"], data.goal);
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      toast.success(`Goal saved: ${data.goal?.name}. Your dashboard now tracks it.`);
+    },
+  });
+}
+
+export function useInsights() {
+  return useQuery<Insights>({
+    queryKey: ["insights"],
+    queryFn: () => api.get<Insights>("/insights"),
+  });
+}
+
+export function usePortfolioAnalytics() {
+  return useQuery<PortfolioAnalytics>({
+    queryKey: ["sandbox", "analytics"],
+    queryFn: () => api.get<PortfolioAnalytics>("/sandbox/analytics"),
   });
 }
 
@@ -336,12 +458,181 @@ export function useComplianceRules() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Compliance controls and oversight (additions)
+// ---------------------------------------------------------------------------
+
+/** The two compliance switches. Clients see their state, not the reason; checked every 15 s. */
+export function useControls(enabled = true) {
+  return useQuery<Controls>({
+    queryKey: ["controls"],
+    queryFn: () => api.get<Controls>("/controls"),
+    refetchInterval: 15_000,
+    enabled,
+  });
+}
+
+export function useSetControl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { control: ControlName; state: ControlStateValue; reason: string }) =>
+      api.post<Controls>("/compliance/controls", body),
+    onSuccess: (controls, body) => {
+      qc.setQueryData(["controls"], controls);
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      qc.invalidateQueries({ queryKey: ["logs"] });
+      const verb: Record<ControlStateValue, string> = {
+        suspended: "AI advisor suspended",
+        active: "AI advisor resumed",
+        halted: "Order execution halted",
+        open: "Order execution resumed",
+      };
+      toast.success(`${verb[body.state]}. The change is in the operation log.`);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The monitoring loop (additions): the simulated market, drift and rebalancing
+// ---------------------------------------------------------------------------
+
+/** The client's live portfolio against their latest executed mix, with the trades a rebalancing would place. */
+export function useMonitoring(enabled = true) {
+  return useQuery<PortfolioMonitoring>({
+    queryKey: ["monitoring"],
+    queryFn: () => api.get<PortfolioMonitoring>("/monitoring"),
+    refetchInterval: 15_000,
+    enabled,
+  });
+}
+
+/** Proposes a rebalancing back to the latest executed mix: a new version the gate checks. Nothing trades. */
+export function useProposeRebalance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Proposal>("/proposals/rebalance", {}),
+    onSuccess: (proposal) => {
+      qc.setQueryData(["proposals", proposal.id], proposal);
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      toast.success(`Rebalancing proposal #${proposal.id} is ready. The gate returned ${proposal.gate.decision}.`);
+    },
+  });
+}
+
+/** The simulated market clock, for the compliance officer. */
+export function useMarket(enabled = true) {
+  return useQuery<MarketState>({
+    queryKey: ["market"],
+    queryFn: () => api.get<MarketState>("/compliance/market"),
+    enabled,
+  });
+}
+
+export function useAdvanceMarket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { months: number; reason: string }) => api.post<MarketState>("/compliance/market/advance", body),
+    onSuccess: (state) => {
+      qc.setQueryData(["market"], state);
+      qc.invalidateQueries({ queryKey: ["monitoring-overview"] });
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      qc.invalidateQueries({ queryKey: ["logs"] });
+      qc.invalidateQueries({ queryKey: ["health"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast.success(`The simulated market moved to ${state.as_of}. The change is in the operation log.`);
+    },
+  });
+}
+
+/** Every client's drift for the compliance officer, refreshed every 5 s. */
+export function useMonitoringOverview() {
+  return useQuery<MonitoringOverview>({
+    queryKey: ["monitoring-overview"],
+    queryFn: () => api.get<MonitoringOverview>("/compliance/monitoring"),
+    refetchInterval: 5_000,
+  });
+}
+
+/** The Control Room's live view: counts and the latest agent turns, refreshed every 3 s. */
+export function useOversight() {
+  return useQuery<Oversight>({
+    queryKey: ["oversight"],
+    queryFn: () => api.get<Oversight>("/compliance/overview"),
+    refetchInterval: 3_000,
+  });
+}
+
+/** Flagged AI turns for human review (addition), refreshed with the Control Room. */
+export function useReviews(status: "open" | "resolved" | "all" = "open") {
+  return useQuery<ReviewQueue>({
+    queryKey: ["reviews", status],
+    queryFn: () => api.get<ReviewQueue>(`/compliance/reviews?status=${status}`),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useTurn(logId: number | null) {
+  return useQuery<TurnDetail>({
+    queryKey: ["turn", logId],
+    queryFn: () => api.get<TurnDetail>(`/compliance/turns/${logId}`),
+    enabled: !!logId,
+  });
+}
+
+export function useDecideReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { log_id: number; decision: "cleared" | "escalated"; note: string }) =>
+      api.post<TurnDetail>(`/compliance/reviews/${body.log_id}`, { decision: body.decision, note: body.note }),
+    onSuccess: (turn) => {
+      qc.setQueryData(["turn", turn.log_id], turn);
+      qc.invalidateQueries({ queryKey: ["reviews"] });
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      toast.success(`Turn ${turn.status === "cleared" ? "cleared" : "escalated"}. The decision is in the operation log.`);
+    },
+  });
+}
+
+export function useRegulations() {
+  return useQuery<Regulations>({
+    queryKey: ["regulations"],
+    queryFn: () => api.get<Regulations>("/compliance/regulations"),
+    staleTime: Infinity,
+  });
+}
+
+/** Fetches the model disclosure (logged by the server) and saves it as a JSON file. */
+export async function downloadModelCard(): Promise<ModelCard> {
+  const card = await api.get<ModelCard>("/compliance/model-card");
+  const blob = new Blob([JSON.stringify(card, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `aegis_model_disclosure_${card.generated_at.slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success("Model disclosure downloaded. The export is in the operation log.");
+  return card;
+}
+
+/** Health, and (addition) the products' NAV date, which the simulated market moves; checked every 30 s. */
 export function useHealth() {
-  return useQuery<HealthStatus>({ queryKey: ["health"], queryFn: () => api.get("/health") });
+  return useQuery<HealthStatus>({ queryKey: ["health"], queryFn: () => api.get("/health"), refetchInterval: 30_000 });
 }
 
 export async function downloadLogsExport(format: "json" | "csv") {
-  const res = await fetch(`/api/logs/export?format=${format}`);
+  // Goes through fetch directly (the body is a file, not JSON), so it must
+  // carry the session itself, like ApiClient does.
+  const token = API_MOCK ? getSessionToken() : null;
+  const res = await fetch(`/api/logs/export?format=${format}`, {
+    headers: token ? { "X-Aegis-Session": token } : undefined,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    throw new ApiError(res.status, (body?.error?.code as never) ?? "INTERNAL", body?.error?.message ?? "The export failed.");
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -349,4 +640,5 @@ export async function downloadLogsExport(format: "json" | "csv") {
   a.download = `operation_log.${format}`;
   a.click();
   URL.revokeObjectURL(url);
+  toast.success(`Operation log exported as ${format.toUpperCase()}.`);
 }

@@ -32,3 +32,10 @@ export function requireRole(user: SeededUser, role: UserRole): Response | null {
 export function isAuthResult(x: AuthResult | Response): x is AuthResult {
   return "user" in x;
 }
+
+/** authenticate() plus requireRole() — for the endpoints Section 2.6.4 marks "Client" or "Client, own". */
+export function authenticateAs(request: Request, role: UserRole): AuthResult | Response {
+  const auth = authenticate(request);
+  if (!isAuthResult(auth)) return auth;
+  return requireRole(auth.user, role) ?? auth;
+}

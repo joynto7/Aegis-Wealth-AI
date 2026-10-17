@@ -1,7 +1,21 @@
 import type { NextConfig } from "next";
 
+// Section 2.6.1: the browser calls /api/* on its own origin and Next.js
+// forwards it to FastAPI, so there is no CORS. API_BASE_URL is the backend's
+// address as the Next.js server sees it (http://api:8000 in Docker Compose).
+const apiBaseUrl = process.env.API_BASE_URL;
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  // A self-contained server for the Docker image (frontend/Dockerfile).
+  output: "standalone",
+  // Next.js allows one `next dev` per output folder; a second local server (for example against an API on
+  // another port) sets NEXT_DIST_DIR to a folder of its own, such as .next-local.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  // No Next.js badge in the corner of the page during development.
+  devIndicators: false,
+  async rewrites() {
+    return apiBaseUrl ? [{ source: "/api/:path*", destination: `${apiBaseUrl}/api/:path*` }] : [];
+  },
   turbopack: {
     rules: {
       "*.css": {

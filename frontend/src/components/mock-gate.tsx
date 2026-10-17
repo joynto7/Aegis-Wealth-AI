@@ -32,8 +32,14 @@ export function MockGate({ children }: { children: React.ReactNode }) {
         <div className="max-w-sm text-center">
           <p className="text-form font-semibold text-(--text)">Couldn&apos;t start the mock API layer</p>
           <p className="mt-2 text-body text-(--text-muted)">
-            Reload the page. If this keeps happening, clear this site&apos;s service workers in your browser&apos;s
-            DevTools (Application → Service Workers → Unregister) and reload.
+            The mock API runs in a service worker, which browsers only allow on{" "}
+            <span className="font-mono">http://localhost:3000</span>. Open the app at that address, not the
+            &quot;Network&quot; address from <span className="font-mono">npm run dev</span>, and not in a private
+            window. Then reload.
+          </p>
+          <p className="mt-2 text-body text-(--text-muted)">
+            If it still fails, unregister this site&apos;s service workers in DevTools (Application → Service
+            Workers → Unregister) and reload.
           </p>
         </div>
       </div>

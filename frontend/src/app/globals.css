@@ -5,15 +5,17 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Aegis Wealth AI design tokens — Section 2.7.2 of the project documentation.
- * No screen uses a raw colour value; everything reads from these variables.
+ * Aegis Wealth AI design tokens (docs/ui-redesign.md, Part 2). No screen uses a
+ * raw colour value; everything reads from these variables. Green, amber and red
+ * stay reserved for PASS, WARNING and REJECT.
  */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-sans);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
+  --font-display: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -53,31 +55,73 @@
 }
 
 :root {
-  /* Base surfaces */
-  --bg: #f6f7f9;
+  /* Surfaces (contrast on --surface: text 17.9:1, muted 6.3:1) */
+  --bg: #f4f6fb;
   --surface: #ffffff;
-  --border: #e2e5ea;
-  --text: #0f172a;
-  --text-muted: #475569;
+  --surface-2: #f8fafd;
+  --border: #e3e8f1;
+  --border-strong: #cfd6e4;
+  --text: #0b1220;
+  --text-muted: #566079;
 
-  /* Brand / primary */
-  --primary: #1d4ed8;
-  --primary-hover: #1e40af;
-  --primary-soft: #eff4ff;
+  /* Brand: indigo for action (6.3:1 on white) */
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef0ff;
 
-  /* Status */
+  /* Ink: the trust surfaces (sidebar, heroes) */
+  --ink: #0a1330;
+  --ink-2: #16225a;
+  --ink-text: #e9ecf8;
+  --ink-muted: #a3acd0;
+  --ink-border: rgba(255, 255, 255, 0.09);
+  --ink-gradient: radial-gradient(120% 140% at 0% 0%, #22307a 0%, #0f1a45 45%, #0a1330 100%);
+
+  /* The AI only */
+  --ai-from: #6366f1;
+  --ai-to: #a855f7;
+  --ai-gradient: linear-gradient(135deg, var(--ai-from) 0%, var(--ai-to) 100%);
+  --ai-soft: #f3f0ff;
+
+  /* Status: PASS, WARNING, REJECT only */
   --pass: #15803d;
-  --pass-bg: #f0fdf4;
+  --pass-bg: #ecfdf3;
   --warning: #b45309;
-  --warning-bg: #fffbeb;
+  --warning-bg: #fffaeb;
   --reject: #b91c1c;
-  --reject-bg: #fef2f2;
+  --reject-bg: #fef3f2;
 
-  /* Asset classes (charts) — same colour for the same class in every chart */
-  --asset-cash: #64748b;
-  --asset-bond: #2563eb;
-  --asset-gold: #b7791f;
-  --asset-equity: #0f766e;
+  /* Asset classes: validated all-pairs for colour-blind separation (docs/ui-redesign.md) */
+  --asset-cash: #4a3aa7;
+  --asset-bond: #2a78d6;
+  --asset-gold: #eda100;
+  --asset-equity: #1baf7a;
+
+  /* Depth */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-raised: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 12px 24px -6px rgba(16, 24, 40, 0.1);
+  --shadow-glow: 0 10px 30px -10px rgba(79, 70, 229, 0.55);
+  --shadow-float: 0 24px 48px -16px rgba(16, 24, 40, 0.2), 0 2px 6px rgba(16, 24, 40, 0.06);
+
+  /* v2: a third surface, glass for floating layers, motion timing */
+  --surface-3: #eef2f9;
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 360ms;
+
+  /* v2: segmented controls (the active pill always lighter than its track) */
+  --segment-track: #eef1f7;
+  --segment-thumb: #ffffff;
+
+  /* v2: goal projection bands, one indigo hue (the outer band is the lightest) */
+  --band-outer: rgba(79, 70, 229, 0.12);
+  --band-inner: rgba(79, 70, 229, 0.26);
+  --band-line: #4f46e5;
+  --target-line: #0b1220;
 
   /* shadcn semantic mapping */
   --background: var(--bg);
@@ -89,27 +133,83 @@
   --primary-foreground: #ffffff;
   --secondary: var(--primary-soft);
   --secondary-foreground: var(--primary);
-  --muted: #eef0f3;
+  --muted: #eef1f7;
   --muted-foreground: var(--text-muted);
   --accent: var(--primary-soft);
   --accent-foreground: var(--primary-hover);
   --destructive: var(--reject);
-  --input: var(--border);
+  --input: var(--border-strong);
   --ring: var(--primary);
   --chart-1: var(--asset-cash);
   --chart-2: var(--asset-bond);
   --chart-3: var(--asset-gold);
   --chart-4: var(--asset-equity);
   --chart-5: var(--text-muted);
-  --radius: 0.5rem;
-  --sidebar: var(--surface);
-  --sidebar-foreground: var(--text);
+  --radius: 0.625rem;
+  --sidebar: var(--ink);
+  --sidebar-foreground: var(--ink-text);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--primary-soft);
-  --sidebar-accent-foreground: var(--primary);
-  --sidebar-border: var(--border);
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: var(--ink-border);
   --sidebar-ring: var(--primary);
+}
+
+/*
+ * Dark mode. Same token names, so every screen follows. Contrast on --surface
+ * (#0e1528): text 15.2:1, muted 7.0:1, primary 6.5:1; --primary-foreground on
+ * --primary 6.9:1.
+ */
+.dark {
+  --bg: #070b17;
+  --surface: #0e1528;
+  --surface-2: #121a30;
+  --border: #1f2a44;
+  --border-strong: #2b3a5c;
+  --text: #e7eaf3;
+  --text-muted: #98a2bb;
+
+  --primary: #8b93ff;
+  --primary-hover: #a9afff;
+  --primary-soft: #1b2050;
+
+  --ink: #050914;
+  --ink-2: #0d1531;
+  --ink-gradient: radial-gradient(120% 140% at 0% 0%, #1c2766 0%, #0c1436 45%, #050914 100%);
+  --ai-soft: #1d1640;
+
+  --pass: #4ade80;
+  --pass-bg: #062b17;
+  --warning: #fbbf24;
+  --warning-bg: #3b1a04;
+  --reject: #f87171;
+  --reject-bg: #3f0d0d;
+
+  --asset-cash: #5b4bc4;
+  --asset-bond: #3987e5;
+  --asset-gold: #c98500;
+  --asset-equity: #199e70;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 12px 28px -8px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 10px 30px -10px rgba(139, 147, 255, 0.45);
+  --shadow-float: 0 24px 48px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  --surface-3: #16203a;
+  --segment-track: #0a1122;
+  --segment-thumb: #25314f;
+  --glass: rgba(14, 21, 40, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --band-outer: rgba(139, 147, 255, 0.14);
+  --band-inner: rgba(139, 147, 255, 0.3);
+  --band-line: #a5b4fc;
+  --target-line: #e7eaf3;
+
+  --muted: #172038;
+  --primary-foreground: #0b1020;
+  --sidebar-primary-foreground: #0b1020;
+  color-scheme: dark;
 }
 
 @layer base {
@@ -118,6 +218,11 @@
   }
   body {
     @apply bg-(--bg) text-(--text);
+    /* Inter's single-storey a and open digits: calmer figures (v2) */
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
   }
   html {
     @apply font-sans;
@@ -158,20 +263,138 @@
     line-height: 24px;
   }
   .text-section {
+    font-family: var(--font-display);
     font-size: 20px;
     line-height: 28px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
   .text-page-title {
-    font-size: 24px;
-    line-height: 32px;
+    font-family: var(--font-display);
+    font-size: 28px;
+    line-height: 36px;
     font-weight: 700;
+    letter-spacing: -0.02em;
   }
   .text-key-figure {
+    font-family: var(--font-display);
     font-size: 30px;
     line-height: 36px;
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .text-hero-figure {
+    font-family: var(--font-display);
+    font-size: 48px;
+    line-height: 52px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .text-eyebrow {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .bg-ink {
+    background: var(--ink-gradient);
+    color: var(--ink-text);
+  }
+  .bg-ai {
+    background: var(--ai-gradient);
+    color: #ffffff;
+  }
+  .text-ai {
+    background: var(--ai-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-raised {
+    box-shadow: var(--shadow-raised);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .shadow-float {
+    box-shadow: var(--shadow-float);
+  }
+  /* v2: floating layers (sticky bars, trays, popovers) */
+  .surface-glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(160%) blur(16px);
+    backdrop-filter: saturate(160%) blur(16px);
+    border: 1px solid var(--glass-border);
+  }
+  /* v2: a 1px AI-gradient ring, for elements the AI produced (the AI only) */
+  .ring-ai {
+    position: relative;
+  }
+  .ring-ai::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--ai-gradient);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  /* v2: the AI is working (a slow sweep along the ring) */
+  .ai-working::before {
+    background: conic-gradient(from var(--aegis-angle, 0deg), var(--ai-from), var(--ai-to), transparent 60%, var(--ai-from));
+    animation: aegis-sweep 2.4s linear infinite;
+  }
+  /* v2: loading shimmer for skeletons that wait on the engines */
+  .shimmer {
+    background: linear-gradient(90deg, var(--muted) 0%, var(--surface-3) 50%, var(--muted) 100%);
+    background-size: 200% 100%;
+    animation: aegis-shimmer 1.4s var(--ease-in-out) infinite;
+  }
+  .grid-faint {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@property --aegis-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes aegis-sweep {
+  to {
+    --aegis-angle: 360deg;
+  }
+}
+
+@keyframes aegis-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
   }
 }
 

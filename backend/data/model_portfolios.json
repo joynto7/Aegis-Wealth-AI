@@ -1,0 +1,42 @@
+{
+  "version": "mp-2026-10",
+  "tier_labels": {
+    "1": "Conservative",
+    "2": "Moderately conservative",
+    "3": "Balanced",
+    "4": "Growth",
+    "5": "Aggressive"
+  },
+  "weights_pct": {
+    "1": {
+      "cash": 100,
+      "bond": 0,
+      "gold": 0,
+      "equity": 0
+    },
+    "2": {
+      "cash": 30,
+      "bond": 70,
+      "gold": 0,
+      "equity": 0
+    },
+    "3": {
+      "cash": 15,
+      "bond": 50,
+      "gold": 10,
+      "equity": 25
+    },
+    "4": {
+      "cash": 10,
+      "bond": 30,
+      "gold": 10,
+      "equity": 50
+    },
+    "5": {
+      "cash": 5,
+      "bond": 15,
+      "gold": 10,
+      "equity": 70
+    }
+  }
+}

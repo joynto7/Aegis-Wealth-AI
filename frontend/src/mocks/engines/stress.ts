@@ -32,6 +32,8 @@ export function computeStress(classWeightsPct: Record<AssetClass, number>, amoun
   });
 }
 
+// Half away from zero, as the worked example in Section 2.6.5 expects
+// (S2: -6.725% -> -6.73%). Math.round alone rounds -x.5 towards zero.
 function round2(n: number) {
-  return Math.round(n * 100) / 100;
+  return (Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-9)) / 100;
 }

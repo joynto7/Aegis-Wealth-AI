@@ -1,7 +1,8 @@
 import type { Rule } from "@/lib/types";
+import { ruleBasis } from "@/mocks/data/regulations";
 
 /** rules.json — thresholds for the nine compliance-gate rules (Section 2.5.5). */
-export const RULES: Rule[] = [
+const RAW_RULES: Omit<Rule, "basis">[] = [
   {
     id: "R-01",
     type: "hard",
@@ -66,6 +67,9 @@ export const RULES: Rule[] = [
     threshold: "worst stress loss_pct ≤ max_acceptable_loss_pct",
   },
 ];
+
+/** Each rule with the regulatory requirement it is designed to meet (addition). */
+export const RULES: Rule[] = RAW_RULES.map((r) => ({ ...r, basis: ruleBasis(r.id) }));
 
 export function findRule(id: string): Rule | undefined {
   return RULES.find((r) => r.id === id);

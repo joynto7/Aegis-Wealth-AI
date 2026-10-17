@@ -1,176 +1,288 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Activity, ArrowRight, Layers, ListOrdered, PieChart, Receipt, ShieldAlert, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
-import { DataLabel } from "@/components/shared/data-label";
 import { Money } from "@/components/shared/money";
-import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
-import { ChartCard } from "@/components/shared/chart-card";
+import { Panel } from "@/components/shared/panel";
+import { DecisionLabel } from "@/components/shared/decision-label";
 import { AllocationDonut, AllocationLegend } from "@/components/charts/allocation-donut";
-import { Card, CardContent } from "@/components/ui/card";
+import { StressBars } from "@/components/charts/stress-bars";
+import { KpiTile } from "@/components/shared/kpi-tile";
+import { AnimatedMoney } from "@/components/shared/figure";
+import { AskAbout } from "@/components/shared/ask-about";
+import { ProjectionPanel } from "@/components/proposal/projection-panel";
+import { DriftPanel } from "@/components/monitoring/drift-panel";
+import { SideChip } from "@/components/monitoring/trades-table";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/components/shell/page-title";
-import { useLogs, useSandboxAccount, useSandboxOrders } from "@/lib/queries";
+import { useLogs, usePortfolioAnalytics, useSandboxAccount, useSandboxOrders } from "@/lib/queries";
+import { useAssetColors } from "@/lib/asset-colors";
+import { ACTIVITY, FALLBACK_ACTIVITY_ICON, describeActivity } from "@/lib/activity";
+import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
-import type { AssetClass } from "@/lib/types";
+import type { AssetClass, SandboxAccount } from "@/lib/types";
+
+function AccountHero({ account }: { account: SandboxAccount }) {
+  const invested = account.total_value - account.cash;
+  return (
+    <section className="bg-ink relative overflow-hidden rounded-2xl p-7 shadow-raised">
+      <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
+      <div className="relative">
+        <p className="flex items-center gap-2 text-body text-(--ink-muted)">
+          <Wallet className="size-4" aria-hidden /> Total value · {account.data_label}
+        </p>
+        <p className="mt-3 text-hero-figure text-white">
+          <AnimatedMoney value={account.total_value} />
+        </p>
+        <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-white/10 pt-5">
+          <div>
+            <dt className="text-caption text-(--ink-muted)">Invested</dt>
+            <dd className="font-display text-section text-white">
+              <Money value={invested} />
+            </dd>
+          </div>
+          <div>
+            <dt className="text-caption text-(--ink-muted)">Cash</dt>
+            <dd className="font-display text-section text-white">
+              <Money value={account.cash} />
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
 
 function AccountOverview() {
   const { data: account, isLoading, error, refetch } = useSandboxAccount();
   const { data: ordersData } = useSandboxOrders();
+  const colors = useAssetColors();
 
-  if (isLoading) return <Skeleton className="h-80 w-full" />;
+  if (isLoading) return <Skeleton className="h-80 w-full rounded-2xl" />;
   if (error || !account) return <ErrorState error={error} onRetry={() => refetch()} />;
 
   if (account.positions.length === 0) {
     return (
-      <EmptyState
-        title="No sandbox activity yet"
-        description="Once you confirm a proposal, your simulated orders and positions appear here."
-      />
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <AccountHero account={account} />
+        <section className="flex flex-col justify-center gap-3 rounded-2xl border border-dashed border-(--border-strong) bg-(--surface) p-7">
+          <span className="flex size-11 items-center justify-center rounded-2xl bg-(--primary-soft) text-(--primary)">
+            <PieChart className="size-5" aria-hidden />
+          </span>
+          <h2 className="font-display text-section text-(--text)">Nothing invested yet</h2>
+          <p className="text-body text-(--text-muted)">
+            Your sandbox holds simulated cash. Once you confirm a proposal, your positions, their mix and every order appear here.
+          </p>
+          <Button asChild className="w-fit">
+            <Link href="/proposals/new">
+              Build a proposal <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </section>
+      </div>
     );
   }
 
   const weights: Record<AssetClass, number> = { cash: 0, bond: 0, gold: 0, equity: 0 };
   for (const p of account.positions) weights[p.asset_class] += (p.value / account.total_value) * 100;
-  const cashPct = (account.cash / account.total_value) * 100;
-  weights.cash += cashPct;
+  weights.cash += (account.cash / account.total_value) * 100;
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardContent className="px-6 py-5">
-            <p className="text-caption text-(--text-muted)">Total value</p>
-            <p className="text-key-figure text-(--text)">
-              <Money value={account.total_value} />
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="px-6 py-5">
-            <p className="text-caption text-(--text-muted)">Cash</p>
-            <p className="text-key-figure text-(--text)">
-              <Money value={account.cash} />
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <AccountHero account={account} />
+        <Panel icon={PieChart} title="Mix by asset class" description="Share of total value, cash included.">
+          <div className="grid items-center gap-4 sm:grid-cols-[170px_1fr]">
+            <AllocationDonut weights={weights} height={170} centerValue={`${account.positions.length}`} centerLabel="positions" />
+            <AllocationLegend weights={weights} columns />
+          </div>
+        </Panel>
       </div>
 
-      <ChartCard title="Holdings by asset class" summary="Share of total value by asset class, including cash." dataLabel="Simulated">
-        <AllocationDonut weights={weights} />
-        <AllocationLegend weights={weights} />
-      </ChartCard>
-
-      <Card>
-        <CardContent className="px-6 py-5">
-          <h3 className="mb-3 text-form font-semibold text-(--text)">Positions</h3>
+      <Panel icon={Wallet} title="Positions" description="Units, average purchase price and current value at the sample NAV.">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-body">
-            <thead className="border-b border-(--border) text-caption text-(--text-muted)">
-              <tr>
-                <th className="py-2">Product</th>
-                <th className="py-2">Units</th>
-                <th className="py-2">Avg NAV</th>
-                <th className="py-2">Value</th>
+            <thead className="text-caption text-(--text-muted)">
+              <tr className="border-b border-(--border)">
+                <th className="py-2.5 font-medium">Product</th>
+                <th className="py-2.5 text-right font-medium">Units</th>
+                <th className="py-2.5 text-right font-medium">Average NAV</th>
+                <th className="py-2.5 text-right font-medium">Value</th>
               </tr>
             </thead>
             <tbody>
               {account.positions.map((p) => (
                 <tr key={p.product_code} className="border-b border-(--border) last:border-0">
-                  <td className="py-2 font-medium text-(--text)">{p.name}</td>
-                  <td className="py-2 tabular-nums">{p.units.toFixed(4)}</td>
-                  <td className="py-2 tabular-nums">{p.avg_nav.toFixed(4)}</td>
-                  <td className="py-2">
+                  <td className="py-3">
+                    <span className="flex items-center gap-2">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[p.asset_class] }} aria-hidden />
+                      <span className="font-semibold text-(--text)">{p.name}</span>
+                      <span className="text-caption text-(--text-muted)">{ASSET_CLASS_LABEL[p.asset_class]}</span>
+                    </span>
+                  </td>
+                  <td className="py-3 text-right tabular-nums">{p.units.toFixed(4)}</td>
+                  <td className="py-3 text-right tabular-nums">{p.avg_nav.toFixed(4)}</td>
+                  <td className="py-3 text-right font-semibold">
                     <Money value={p.value} withCents />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
-      <Card>
-        <CardContent className="px-6 py-5">
-          <h3 className="mb-3 text-form font-semibold text-(--text)">Order history</h3>
-          <table className="w-full text-left text-body">
-            <thead className="border-b border-(--border) text-caption text-(--text-muted)">
-              <tr>
-                <th className="py-2">Date</th>
-                <th className="py-2">Product</th>
-                <th className="py-2">Amount</th>
-                <th className="py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(ordersData?.items ?? []).map((o) => (
-                <tr key={o.id} className="border-b border-(--border) last:border-0">
-                  <td className="py-2 text-(--text-muted)">{formatDateTime(o.created_at)}</td>
-                  <td className="py-2 font-medium">{o.product_code}</td>
-                  <td className="py-2">
-                    <Money value={o.amount} withCents />
-                  </td>
-                  <td className="py-2 capitalize text-(--pass)">{o.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <Panel
+        icon={ListOrdered}
+        title="Order history"
+        description="Every simulated order, newest first, purchases and a rebalancing's sales alike. Each was placed by your own Confirm click."
+      >
+        <ol className="space-y-2">
+          {(ordersData?.items ?? []).map((o) => (
+            <li key={o.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-(--border) px-4 py-3">
+              <span className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-caption text-(--text-muted)">#{o.id}</span>
+              <SideChip side={o.side} />
+              <span className="font-semibold text-(--text)">{o.product_code}</span>
+              <span className="text-caption text-(--text-muted)">
+                {o.units.toFixed(4)} units at {o.nav.toFixed(4)}
+              </span>
+              <span className="ml-auto font-semibold text-(--text)">
+                <Money value={o.amount} withCents />
+              </span>
+              <span className="rounded-full bg-(--primary-soft) px-2 py-0.5 text-caption font-medium capitalize text-(--primary)">{o.status}</span>
+              <span className="w-full text-caption text-(--text-muted) sm:w-auto">{formatDateTime(o.created_at)}</span>
+            </li>
+          ))}
+        </ol>
+      </Panel>
+    </div>
+  );
+}
+
+/**
+ * What the client holds now: its drift from the agreed mix at the simulated market's prices (monitoring loop), the same
+ * hypothetical shocks a proposal is tested with, and a projection forward.
+ */
+function RiskAndGoal() {
+  const account = useSandboxAccount();
+  const analytics = usePortfolioAnalytics();
+  if (analytics.isLoading || account.isLoading) return <Skeleton className="h-80 w-full rounded-2xl" />;
+  if (analytics.error || !analytics.data || !account.data) {
+    return <ErrorState error={analytics.error ?? account.error} onRetry={() => analytics.refetch()} />;
+  }
+  const a = analytics.data;
+  const worst = a.stress.reduce((w, s) => (s.loss_pct < w.loss_pct ? s : w), a.stress[0]);
+  return (
+    <div className="space-y-6">
+      <DriftPanel />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiTile icon={Wallet} label="Invested" value={<Money value={a.invested} />} hint={`Of ${a.positions} position${a.positions === 1 ? "" : "s"}, at the sample NAV.`} />
+        <KpiTile icon={Receipt} label="Weighted annual fee" value={`${a.weighted_fee_pct.toFixed(2)}%`} hint="Across everything you hold, cash at 0%." />
+        <KpiTile icon={Layers} label="Largest position" value={`${a.largest_position_pct}%`} hint="Share of total value in one product." />
+        <KpiTile
+          icon={ShieldAlert}
+          label="Worst hypothetical loss"
+          value={`−${Math.abs(worst.loss_pct).toFixed(2)}%`}
+          hint={
+            <>
+              {worst.name}: about <Money value={Math.abs(worst.loss_cny)} />. Hypothetical.
+            </>
+          }
+        />
+      </div>
+      <Panel
+        icon={Activity}
+        title="Stress test of what you hold"
+        description="The same hypothetical instant shocks a proposal is checked with, applied to your positions and cash."
+        action={<AskAbout question="What would a combined crisis do to the portfolio I hold now?" />}
+      >
+        <StressBars stress={a.stress} />
+        <p className="mt-3 text-caption text-(--text-muted)">{a.data_label}.</p>
+      </Panel>
+      <ProjectionPanel
+        basis={{ kind: "account" }}
+        defaultHorizon={10}
+        defaultAmount={account.data.total_value}
+        title="Will what you hold reach your goal?"
+      />
     </div>
   );
 }
 
 function ActivityLog() {
   const { data, isLoading, error, refetch } = useLogs({ limit: 100 });
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-2xl" />;
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
-  if (!data?.items.length) return <EmptyState title="No activity yet" description="Actions you take will appear here." />;
   return (
-    <Card>
-      <CardContent className="px-6 py-5">
-        <table className="w-full text-left text-body">
-          <thead className="border-b border-(--border) text-caption text-(--text-muted)">
-            <tr>
-              <th className="py-2">Time</th>
-              <th className="py-2">Action</th>
-              <th className="py-2">Decision</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((l) => (
-              <tr key={l.id} className="border-b border-(--border) last:border-0">
-                <td className="py-2 text-(--text-muted)">{formatDateTime(l.ts)}</td>
-                <td className="py-2">{l.action.replace(/_/g, " ")}</td>
-                <td className="py-2">
-                  {l.decision ? (
-                    <span className={l.decision === "denied" ? "text-(--reject)" : "text-(--pass)"}>{l.decision}</span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </CardContent>
-    </Card>
+    <Panel icon={Activity} title="My activity" description="Your own entries in the append-only operation log, newest first.">
+      {!data?.items.length ? (
+        <p className="py-8 text-center text-body text-(--text-muted)">Actions you take will appear here.</p>
+      ) : (
+        <ol className="divide-y divide-(--border)">
+          {data.items.map((l) => {
+            const Icon = ACTIVITY[l.action]?.icon ?? FALLBACK_ACTIVITY_ICON;
+            return (
+              <li key={l.id} className="flex items-center gap-3 py-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-(--surface-2) text-(--primary) ring-1 ring-(--border)">
+                  <Icon className="size-3.5" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-body font-medium text-(--text)">{describeActivity(l)}</span>
+                  <span className="block text-caption text-(--text-muted)">{formatDateTime(l.ts)}</span>
+                </span>
+                <DecisionLabel decision={l.decision} />
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Panel>
   );
 }
 
+const TABS = ["overview", "risk", "activity"] as const;
+type AccountTab = (typeof TABS)[number];
+
 function AccountContent() {
   usePageTitle("Sandbox Account");
+  const [tab, setTab] = useState<AccountTab>("overview");
+
+  // A link may open a tab directly (#risk, as the briefing's drift insight does); the tab follows back and forward.
+  useEffect(() => {
+    function sync() {
+      const hash = window.location.hash.replace("#", "") as AccountTab;
+      if (TABS.includes(hash)) setTab(hash);
+    }
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  function openTab(next: string) {
+    setTab(next as AccountTab);
+    window.history.replaceState(null, "", next === "overview" ? window.location.pathname : `#${next}`);
+  }
+
   return (
     <div>
-      <PageHeader title="Sandbox Account" description="Simulated cash, positions and order history." action={<DataLabel label="Simulated" />} />
-      <Tabs defaultValue="overview">
-        <TabsList className="mb-4">
+      <PageHeader eyebrow="Portfolio" title="Sandbox account" description="Simulated cash, positions and orders. Every change here traces back to your own click." />
+      <Tabs value={tab} onValueChange={openTab}>
+        <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="risk">Risk and goal</TabsTrigger>
           <TabsTrigger value="activity">My activity</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <AccountOverview />
+        </TabsContent>
+        <TabsContent value="risk">
+          <RiskAndGoal />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityLog />

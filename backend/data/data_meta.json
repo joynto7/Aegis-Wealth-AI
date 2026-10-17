@@ -1,0 +1,11 @@
+{
+  "products": {
+    "data_label": "Sample data",
+    "data_as_of": "2026-09-30"
+  },
+  "history": {
+    "data_label": "Illustrative",
+    "data_as_of": "2026-09-30",
+    "note": "Synthetic monthly returns shaped like the three required episodes. Replace with licensed series per decision D-1 before claiming real history."
+  }
+}

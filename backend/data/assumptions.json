@@ -1,0 +1,11 @@
+{
+  "version": "as-2026-10",
+  "data_label": "Hypothetical",
+  "note": "Assumed gross annual return per asset class, used only to illustrate fee cost. Not a forecast.",
+  "gross_annual_return": {
+    "cash": 0.015,
+    "bond": 0.03,
+    "gold": 0.04,
+    "equity": 0.06
+  }
+}

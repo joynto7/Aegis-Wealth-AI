@@ -1,0 +1,24 @@
+[project]
+name = "aegis-wealth-ai-backend"
+version = "1.0.0"
+description = "Aegis Wealth AI: FastAPI backend, deterministic engines and the advisor agent"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"  # the container runs as a non-root user; no cache to write
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "BLE", "A", "SIM"]
+ignore = ["B008"]  # FastAPI's Depends()/Query() defaults are the documented pattern
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"scripts/*" = ["E501", "SIM108"]  # operational scripts: long request lines read better unwrapped
+"app/agent/prompts.py" = ["E501"]  # prompt prose reads better unwrapped

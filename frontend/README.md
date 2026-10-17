@@ -1,35 +1,61 @@
 # Aegis Wealth AI — Frontend
 
-The client for Aegis Wealth AI: a wealth-advisory sandbox that profiles risk, compares products,
+The web app for Aegis Wealth AI: a wealth-advisory sandbox that profiles risk, compares products,
 proposes an allocation, checks it against a compliance gate, and executes it in a sandbox account
-once the client confirms. Built against the API contract and UI design system in the project
-documentation (Sections 2.6 and 2.7).
+once the client confirms. Built to the API contract and UI design system in the project
+documentation (Sections 2.6 and 2.7). The whole system starts with `docker compose up --build` from the
+repository root; see the [root README](../README.md).
 
-## Status: frontend-only, mock-first
+## Two ways to run it
 
-There is no backend in this build yet. Every `/api/*` call is served in-browser by
-[MSW](https://mswjs.io) (`src/mocks/`), which implements the full 32-endpoint contract with the
-same request/response shapes, error envelope and fixed value names a real FastAPI backend would
-return — including the scoring, allocation, metrics, stress, compliance-gate, quiz and hash-chain
-engines as pure, deterministic functions (`src/mocks/engines/`), per Section 2.5's formulas. This
-follows the "mock-first frontend" rule in Section 2.10.3: the UI is complete and demoable on its
-own, and swapping MSW for a real backend later means only deleting `src/mocks` and pointing
-`ApiClient` at the real API — no screen code changes.
+| Mode | Command | API |
+| --- | --- | --- |
+| Against the real backend | `NEXT_PUBLIC_API_MOCK=0 API_BASE_URL=http://localhost:8000 npm run dev` | FastAPI in `../backend`, through the `/api/*` rewrite in `next.config.ts` |
+| Mock-first (no backend) | `npm run dev` | [MSW](https://mswjs.io) in the browser (`src/mocks/`) |
 
-The AI advisor chat always runs in **fallback mode** (FR-6.4): there is no model key configured, so
-replies come from the same keyword-matched templates the real backend falls back to when the
-model is unavailable. They're grounded by construction, and tool calls/citations are still shown
-in the chat drawer exactly as the real agent would present them.
+Mock mode follows the "mock-first frontend" rule in Section 2.10.3. The mock implements all 54
+operations (the 32 contract endpoints, streaming chat, oversight, planning, what-if and the monitoring
+loop), with the same shapes and error envelope. Its engines (`src/mocks/engines/`) are ports of the backend's, so the
+numbers, item reasons and gate details match; `scripts/verify.ts` checks both against the
+documentation's worked examples. The version 2 ports give the backend's exact results: the goal
+projection shares its random generator (mulberry32, the same seed) and rounding (`numbers.ts`, half
+away from zero on the written digits), How to fix matched the Python engine on 400 random proposals,
+and the threat signals on 36 test messages. The monitoring-loop ports (`market.ts`, `drift.ts`,
+`rebalance.ts`) give the backend's NAVs, drift and trades unit for unit: the mock's monthly history is
+checked against `../backend/data/history_monthly.csv` value for value, and units are floored in exact
+decimals (`unitsFor`), as the backend's `Decimal` does. Screens never import from `src/mocks`, so
+switching modes needs no screen change.
 
-## Getting started
+| Variable | Effect |
+| --- | --- |
+| `NEXT_PUBLIC_API_MOCK` | `0`: requests go to the real backend. `1`, or unset: MSW answers `/api/*` in the browser. Read at build time. |
+| `API_BASE_URL` | Where Next.js forwards `/api/*` when mocks are off: `http://localhost:8000` locally, `http://api:8000` in Docker Compose. |
 
-```bash
-npm install
-npm run dev
-```
+**Sessions.**
+- Against the real backend, the session is the httpOnly `aegis_session` cookie, and nothing is stored
+  in the browser.
+- In mock mode, a Service Worker never sees the `Cookie` header. The token is therefore kept in
+  `localStorage` and sent as an `X-Aegis-Session` header, and the mock database lives in the tab's
+  `sessionStorage`: a refresh keeps your data, while a new tab starts a fresh demo.
+- Mock mode needs <http://localhost:3000>. The "Network" address and private windows can't run the
+  service worker.
 
-Open <http://localhost:3000>. The app waits for the mock service worker to start, then redirects
-you to `/login`.
+**Advisor chat.**
+- Against the real backend, the advisor uses Claude when the API has `ANTHROPIC_API_KEY`, and checked
+  templates otherwise.
+- In mock mode it always answers from templates.
+- Either way, the drawer streams the agent's progress: each tool call appears with its tier, the
+  broker's decision and its result card while the turn runs. The reply arrives only after the
+  grounding check.
+- Each reply shows its cards (fee comparison, proposal with the gate's verdict, rule with its
+  regulatory basis, profile, products, or a call the broker blocked), and every figure in it is
+  underlined: hover or focus it to see the tool field, message or profile value it came from.
+- When compliance suspends the advisor, the drawer says so and the reply is a fixed notice.
+- Version 2: the drawer opens with a notice that the client is talking to an AI system; each reply
+  carries its label (AI-generated, Automated template (checked) or System notice) with a provenance
+  popover (model, configuration fingerprint, content hash); a live step timeline shows the run; goal
+  projection and How to fix cards render in the thread, the latter with *Apply*; and every reply can
+  be copied or rated, with a reason for a thumbs-down. Suggested questions follow the current page.
 
 ### Demo accounts
 
@@ -39,44 +65,94 @@ you to `/login`.
 | chen@example.com | Client | password123 |
 | officer@example.com | Compliance officer | password123 |
 
-Each client's sandbox account is seeded with CNY 500,000 in cash. Data resets on a full page
-reload — the mock "database" is in-memory module state, not persisted.
-
 ## Scripts
 
 ```bash
-npm run dev        # start the dev server
-npm run build       # production build
-npm run start        # serve the production build
-npm run lint          # ESLint
-npx tsc --noEmit        # typecheck
-npx tsx scripts/verify.ts  # sanity-check the engines against the documentation's worked examples
+npm run dev              # dev server on :3000
+npm run build            # production build (standalone output, used by the Docker image)
+npm run start            # serve the production build
+npm run lint             # ESLint
+npm run typecheck        # tsc --noEmit
+npm run gen:types        # regenerate src/lib/api-types.ts from ../backend/openapi.json
+npx tsx scripts/verify.ts  # 50 checks: mock engines against the worked examples and the backend's results, mock data against ../backend/data (exits 1 on a mismatch)
 ```
+
+## API types are generated (NFR-5.2)
+
+`src/lib/api-types.ts` is generated from the backend's OpenAPI file and never edited by hand;
+`src/lib/types.ts` only gives its schemas their contract names. After an API change:
+
+```bash
+cd ../backend && python scripts/export_openapi.py   # -> backend/openapi.json
+cd ../frontend && npm run gen:types && npm run typecheck
+```
+
+A contract change that breaks a screen or the mock then fails the type check.
 
 ## Structure
 
 ```
 src/
-  app/                 Next.js App Router routes — one folder per screen (S01–S12)
+  app/                 Next.js App Router routes: one folder per screen (S01-S12), plus control-room/
+                       (the compliance officer's AI Control Room) and planner/ (the Goal Planner);
+                       (app)/template.tsx fades each page in
   components/
     ui/                shadcn/ui primitives (Button, Card, Dialog, Sheet, ...)
-    shared/             StatusBadge, TierBadge, DataLabel, Money, Percent, PageHeader, Stepper, ...
-    charts/              AllocationDonut, ReplayLine, StressBars, FeeBars (Recharts)
-    shell/                Sidebar, TopBar, ChatDrawer, page-title context
-  lib/                  types.ts (API contract), api-client.ts, queries.ts (TanStack Query hooks),
-                         format.ts, asset-colors.ts
-  mocks/
-    data/                 static reference data: products, questionnaire, model portfolios,
-                          scenarios, rules, disclosures, synthetic history, seeded users
-    engines/               pure functions: scoring, allocation, metrics, stress, fees, gate, quiz,
-                          replay, hash chain, confirmation tokens
-    services/              proposal creation/revision, the chat "agent", chain verification
-    db.ts                   in-memory store (sessions, profiles, proposals, orders, records, logs)
-    handlers.ts             the 32 MSW request handlers
+    shared/            StatusBadge, TierBadge, SuitabilityBadge, DecisionLabel, DataLabel, Money,
+                       Percent, PageHeader, Stepper, RegulationChips, AnimatedMoney and AnimatedNumber
+                       (figure.tsx), AiLabel and AiNotice, AskAbout, InsightCard, Segmented, ...
+    chat/              ChatCards (tool results as cards, incl. projection, How to fix and drift) and ReplyText
+                       (figures linked to their sources)
+    charts/            AllocationDonut, ReplayLine, ReplayPlayer (the month-by-month replay), StressBars, FeeBars,
+                       FanChart, ProbabilityRing, TierBars, Sparkline, TraceWaterfall
+    proposal/          WhatIfLab (sliders with a live gate), FixPanel (How to fix), ProjectionPanel,
+                       RebalancePanel (a rebalancing's trades, and the banner when its prices are stale)
+    monitoring/        DriftPanel (the account's drift from the agreed mix), DriftChart (band, target and
+                       today's weight per class), TradesTable and SideChip, MonitoringRoom (the Control
+                       Room's Monitoring tab: the market clock, the advance dialog, every client's drift)
+    oversight/         TurnInspector (the Control Room's side sheet: provenance, signals, trace, decision)
+    shell/             Sidebar, TopBar (with the light/dark toggle), ChatDrawer, DockedChat, CommandPalette
+  lib/                 api-types.ts (generated), types.ts, api-client.ts (incl. streamChat),
+                       queries.ts (TanStack Query hooks), labels.ts, disclosures.ts, format.ts,
+                       chart-theme.ts, use-debounced.ts
+  mocks/               the MSW mock API: data, engines (incl. projection, remedy, threats, numbers,
+                       market, drift, rebalance), services (incl. planning, reviews, monitoring), db.ts,
+                       handlers.ts
 ```
 
 ## Design system
 
-Tokens (colours, type scale, spacing, radius) live in `src/app/globals.css` as CSS variables, per
-Section 2.7.2 — no screen uses a raw colour value. Components are built on shadcn/ui (Radix
-primitives) and Tailwind CSS v4.
+The research, the design language and a prompt for every screen are in
+[../docs/ui-redesign.md](../docs/ui-redesign.md).
+
+- **Tokens** (colours, type scale, spacing, radius, shadows) live in `src/app/globals.css` as CSS
+  variables, with a dark set under `.dark`; text pairs meet WCAG 2.2 AA. No screen uses a raw colour
+  value. The palette is ink navy for trust surfaces (sidebar, heroes), indigo for action, and a
+  violet gradient for the AI only.
+- **Status colours.** Green, amber and red mean PASS, WARNING and REJECT only, always with an icon and
+  a word.
+- **Type.** Plus Jakarta Sans for titles and hero figures, Inter for everything else.
+- **Charts.** Asset-class colours were validated all-pairs for colour-blind separation in both modes
+  (`src/lib/asset-colors.ts`), and the riskometer uses a validated one-hue ramp.
+- **`cn`** (`src/lib/utils.ts`) knows the custom type scale, so `text-caption` and a colour such as
+  `text-(--text)` no longer cancel each other.
+- **Shell features:** the ⌘K command palette (`components/shell/command-palette.tsx`), which also
+  sends a typed question to Aegis, and privacy mode (`lib/privacy.tsx`; every `<Money>` and
+  `<AnimatedMoney>` hides while it is on).
+- **Components** are built on shadcn/ui (Radix primitives) and Tailwind CSS v4.
+- **Version 2** adds motion and elevation tokens, a glass surface, segmented-control tokens and a
+  one-hue band ramp for projections (`--band-*`, `--target-line`), all with dark values; Motion
+  (`motion`) for transitions under `MotionConfig reducedMotion="user"`; NumberFlow for figures that
+  roll to their new value; and a table twin for every chart. Part 4 of the design document has the
+  details.
+
+### Running a second dev server
+
+`next.config.ts` reads `NEXT_DIST_DIR` (default `.next`), so a second dev server can run beside the
+first with its own build folder, for example mock mode on another port:
+
+```bash
+NEXT_PUBLIC_API_MOCK=1 NEXT_DIST_DIR=.next-mock npx next dev -p 3002
+```
+
+Folders named `.next-*` are git-ignored.

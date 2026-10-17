@@ -26,9 +26,9 @@ export function ReplayLine({ series, lowestMonth }: { series: ReplayPoint[]; low
             formatter={(value) => [formatMoney(Number(value)), "Value"]}
             contentStyle={{ borderRadius: 8, borderColor: "var(--border)", fontSize: 13 }}
           />
-          <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="value" stroke="#1d4ed8" strokeWidth={2} dot={false} />
           {lowestPoint ? (
-            <ReferenceDot x={lowestPoint.month} y={lowestPoint.value} r={5} fill="#b91c1c" stroke="none" />
+            <ReferenceDot x={lowestPoint.month} y={lowestPoint.value} r={5} fill="#0f172a" stroke="#ffffff" strokeWidth={2} />
           ) : null}
         </LineChart>
       </ResponsiveContainer>

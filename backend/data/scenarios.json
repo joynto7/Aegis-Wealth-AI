@@ -1,0 +1,36 @@
+{
+  "version": "sc-2026-10",
+  "data_label": "Hypothetical",
+  "scenarios": [
+    {
+      "id": "S1",
+      "name": "Equity crash",
+      "shocks": {
+        "equity": -0.3,
+        "bond": 0.02,
+        "gold": 0.05,
+        "cash": 0
+      }
+    },
+    {
+      "id": "S2",
+      "name": "Rate rise of 2 points",
+      "shocks": {
+        "equity": -0.1,
+        "bond": -0.08,
+        "gold": -0.03,
+        "cash": 0.005
+      }
+    },
+    {
+      "id": "S3",
+      "name": "Combined crisis",
+      "shocks": {
+        "equity": -0.35,
+        "bond": -0.1,
+        "gold": 0.08,
+        "cash": 0
+      }
+    }
+  ]
+}

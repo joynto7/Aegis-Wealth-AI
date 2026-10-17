@@ -1,0 +1,8 @@
+{
+  "version": "mk-2026-10",
+  "data_label": "Illustrative",
+  "start_date": "2026-09-30",
+  "replay_from": "2009-03",
+  "max_months_per_advance": 12,
+  "note": "A simulated market for the sandbox. Each simulated month replays one month of the illustrative monthly history, starting from March 2009 (the post-crisis rally) so a short demo shows drift, and moves every product's NAV by its asset class's return for that month. Not a forecast and not real prices."
+}

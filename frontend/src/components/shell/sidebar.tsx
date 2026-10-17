@@ -3,75 +3,230 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  ClipboardList,
-  Package,
-  FileSpreadsheet,
-  Wallet,
   Archive,
+  FileSpreadsheet,
+  Gauge,
+  Goal,
+  History,
+  LayoutDashboard,
+  Package,
+  PauseCircle,
+  Radar,
   ShieldCheck,
-  ShieldAlert,
+  Wallet,
+  type LucideIcon,
 } from "lucide-react";
+import { AegisMark, AegisWordmark } from "@/components/shell/brand";
+import { useControls, useMe } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 
-const CLIENT_NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/profile", label: "Risk Profile", icon: ClipboardList },
-  { href: "/products", label: "Products", icon: Package },
-  { href: "/proposals/new", label: "Proposals", icon: FileSpreadsheet },
-  { href: "/account", label: "Account", icon: Wallet },
-  { href: "/records", label: "Records", icon: Archive },
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const CLIENT_NAV: NavGroup[] = [
+  {
+    label: "Invest",
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/profile", label: "Risk Profile", icon: Gauge },
+      { href: "/profile/replay", label: "Crisis Replay", icon: History },
+      { href: "/products", label: "Products", icon: Package },
+      { href: "/proposals/new", label: "Proposals", icon: FileSpreadsheet },
+      { href: "/planner", label: "Goal Planner", icon: Goal },
+    ],
+  },
+  {
+    label: "Portfolio",
+    items: [
+      { href: "/account", label: "Account", icon: Wallet },
+      { href: "/records", label: "Records", icon: Archive },
+    ],
+  },
 ];
 
-const COMPLIANCE_NAV = [
-  { href: "/console", label: "Console", icon: ShieldCheck },
-  { href: "/records", label: "Records", icon: Archive },
+const COMPLIANCE_NAV: NavGroup[] = [
+  {
+    label: "Oversight",
+    items: [
+      { href: "/control-room", label: "Control Room", icon: Radar },
+      { href: "/console", label: "Console", icon: ShieldCheck },
+      { href: "/records", label: "Records", icon: Archive },
+    ],
+  },
 ];
 
-export function Sidebar({ role, className }: { role: UserRole; className?: string }) {
-  const pathname = usePathname();
-  const items = role === "compliance" ? COMPLIANCE_NAV : CLIENT_NAV;
+export function navGroups(role: UserRole): NavGroup[] {
+  return role === "compliance" ? COMPLIANCE_NAV : CLIENT_NAV;
+}
 
+/** Flat list of nav items, for the mobile menu and the command palette. */
+export function SidebarNavItems(role: UserRole): NavItem[] {
+  return navGroups(role).flatMap((g) => g.items);
+}
+
+/** The most specific item matching the path, so /profile/replay doesn't also light up /profile. */
+export function activeHref(pathname: string, role: UserRole): string | undefined {
+  const matches = SidebarNavItems(role)
+    .map((i) => i.href)
+    .filter(
+      (href) =>
+        pathname === href ||
+        (href !== "/" && pathname.startsWith(`${href}/`)) ||
+        (href === "/proposals/new" && pathname.startsWith("/proposals"))
+    );
+  return matches.sort((a, b) => b.length - a.length)[0];
+}
+
+function AdvisorStatus({ compact }: { compact: boolean }) {
+  const controls = useControls();
+  const paused = controls.data?.advisor.state === "suspended";
+  const halted = controls.data?.execution.state === "halted";
   return (
-    <nav
+    <div
       className={cn(
-        "hidden h-full shrink-0 flex-col border-r border-(--border) bg-(--surface) md:flex md:w-18 xl:w-[248px]",
-        className
+        "flex items-center gap-2.5 rounded-xl border border-(--ink-border) bg-white/[0.04] text-[12.5px] text-(--ink-text)",
+        compact ? "justify-center p-2" : "px-3 py-2.5"
       )}
+      title={paused ? "AI advisor paused by compliance" : "AI advisor active"}
     >
-      <div className="flex h-14 items-center gap-2 border-b border-(--border) px-5">
-        <ShieldAlert className="size-5 shrink-0 text-(--primary)" aria-hidden />
-        <span className="hidden text-form font-semibold text-(--text) xl:inline">Aegis Wealth AI</span>
-      </div>
-      <ul className="flex-1 space-y-1 p-3">
-        {items.map((item) => {
-          const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-          const Icon = item.icon;
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                title={item.label}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-body transition-colors",
-                  active
-                    ? "bg-(--primary-soft) font-medium text-(--primary)"
-                    : "text-(--text-muted) hover:bg-(--muted) hover:text-(--text)"
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon className="size-4.5 shrink-0" aria-hidden />
-                <span className="hidden xl:inline">{item.label}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+      {paused ? (
+        <PauseCircle className="size-4 shrink-0 text-(--ink-muted)" aria-hidden />
+      ) : (
+        <span className="relative flex size-2.5 shrink-0" aria-hidden>
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#a5b4fc] opacity-60" />
+          <span className="relative inline-flex size-2.5 rounded-full bg-[#a5b4fc]" />
+        </span>
+      )}
+      <span className={cn("leading-tight", compact && "sr-only")}>
+        <span className="block font-medium">{paused ? "AI advisor paused" : "AI advisor active"}</span>
+        <span className="block text-[11px] text-(--ink-muted)">
+          {halted ? "Order execution halted" : paused ? "By the compliance team" : "Guarded by 9 rules"}
+        </span>
+      </span>
+    </div>
   );
 }
 
-export function SidebarNavItems(role: UserRole) {
-  return role === "compliance" ? COMPLIANCE_NAV : CLIENT_NAV;
+function UserCard({ compact }: { compact: boolean }) {
+  const { data: user } = useMe();
+  if (!user) return null;
+  const initials = user.display_name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <div className={cn("flex items-center gap-3", compact && "justify-center")}>
+      <span className="bg-ai flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold" aria-hidden>
+        {initials}
+      </span>
+      <span className={cn("min-w-0 leading-tight", compact && "sr-only")}>
+        <span className="block truncate text-[13px] font-medium text-white">{user.display_name}</span>
+        <span className="block truncate text-[11.5px] text-(--ink-muted)">
+          {user.role === "compliance" ? "Compliance officer" : "Client · sandbox"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+export function SidebarNav({
+  role,
+  compact = false,
+  onNavigate,
+}: {
+  role: UserRole;
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
+  const active = activeHref(pathname, role);
+  return (
+    <div className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+      {navGroups(role).map((group) => (
+        <div key={group.label}>
+          <p className={cn("text-eyebrow mb-2 px-3 text-(--ink-muted)", compact && "sr-only")}>{group.label}</p>
+          <ul className="space-y-1">
+            {group.items.map((item) => {
+              const isActive = item.href === active;
+              const Icon = item.icon;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    title={item.label}
+                    onClick={onNavigate}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-medium transition-colors",
+                      compact && "justify-center px-0",
+                      isActive ? "bg-white/[0.09] text-white" : "text-(--ink-muted) hover:bg-white/[0.05] hover:text-white"
+                    )}
+                  >
+                    {isActive ? (
+                      <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[#a5b4fc]" aria-hidden />
+                    ) : null}
+                    <Icon className={cn("size-[18px] shrink-0", isActive && "text-[#c7d2fe]")} aria-hidden />
+                    <span className={cn(compact && "sr-only")}>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The ink sidebar: brand, grouped navigation, the AI advisor's state and the user. */
+export function Sidebar({ role, className }: { role: UserRole; className?: string }) {
+  return (
+    <nav
+      aria-label="Main"
+      className={cn(
+        "bg-ink hidden h-full shrink-0 flex-col border-r border-(--ink-border) md:flex md:w-[76px] xl:w-[264px]",
+        className
+      )}
+    >
+      <div className="flex h-16 items-center px-5">
+        <Link href="/" aria-label="Aegis Wealth AI home" className="hidden xl:block">
+          <AegisWordmark />
+        </Link>
+        <Link href="/" aria-label="Aegis Wealth AI home" className="mx-auto xl:hidden">
+          <AegisMark />
+        </Link>
+      </div>
+      <div className="hidden min-h-0 flex-1 flex-col xl:flex">
+        <SidebarNav role={role} />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col xl:hidden">
+        <SidebarNav role={role} compact />
+      </div>
+      <div className="space-y-3 border-t border-(--ink-border) p-3">
+        <div className="hidden xl:block">
+          <AdvisorStatus compact={false} />
+        </div>
+        <div className="xl:hidden">
+          <AdvisorStatus compact />
+        </div>
+        <div className="hidden px-1 py-1 xl:block">
+          <UserCard compact={false} />
+        </div>
+        <div className="py-1 xl:hidden">
+          <UserCard compact />
+        </div>
+      </div>
+    </nav>
+  );
 }

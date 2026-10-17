@@ -36,7 +36,7 @@ const CLIENT_NAV: NavGroup[] = [
   {
     label: "Invest",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/profile", label: "Risk Profile", icon: Gauge },
       { href: "/profile/replay", label: "Crisis Replay", icon: History },
       { href: "/products", label: "Products", icon: Package },
@@ -200,10 +200,10 @@ export function Sidebar({ role, className }: { role: UserRole; className?: strin
       )}
     >
       <div className="flex h-16 items-center px-5">
-        <Link href="/" aria-label="Aegis Wealth AI home" className="hidden xl:block">
+        <Link href="/dashboard" aria-label="Aegis Wealth AI dashboard" className="hidden xl:block">
           <AegisWordmark />
         </Link>
-        <Link href="/" aria-label="Aegis Wealth AI home" className="mx-auto xl:hidden">
+        <Link href="/dashboard" aria-label="Aegis Wealth AI dashboard" className="mx-auto xl:hidden">
           <AegisMark />
         </Link>
       </div>

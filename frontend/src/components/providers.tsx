@@ -69,7 +69,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(getQueryClient);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         {/* Motion follows the OS setting: transforms off under prefers-reduced-motion (v2 design system). */}
         <MotionConfig reducedMotion="user">

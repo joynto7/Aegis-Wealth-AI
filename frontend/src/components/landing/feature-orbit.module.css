@@ -304,21 +304,14 @@
   color: var(--orbit-soft-text);
 }
 
-.brandOrb {
-  border-color: rgba(99, 102, 241, 0.22);
-  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.2), rgba(255, 255, 255, 0.86) 72%);
-  box-shadow: 0 0 100px -30px rgba(99, 102, 241, 0.48), 0 0 42px -20px rgba(168, 85, 247, 0.3);
-}
-
-.brandOrbInner {
-  border-color: rgba(79, 70, 229, 0.14);
-}
-
 .brandName {
   color: var(--orbit-text);
 }
 
-.brandTagline,
+.brandTagline {
+  color: var(--orbit-muted);
+}
+
 .activeDescription,
 .supportingText {
   color: var(--orbit-muted);
@@ -381,15 +374,6 @@
 
 .featureControl {
   border-radius: 9999px;
-}
-
-:global(.dark) .brandOrb {
-  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.22), rgba(8, 18, 46, 0.5) 68%);
-  box-shadow: 0 0 90px -28px rgba(139, 147, 255, 0.45);
-}
-
-:global(.dark) .brandOrbInner {
-  border-color: rgba(255, 255, 255, 0.06);
 }
 
 :global(.dark) .cardEyebrow {

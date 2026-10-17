@@ -155,13 +155,12 @@ function DemoCard({ id, active, onSelect, place = "" }: { id: DemoId; active: bo
 
 function CenterBrand() {
   return (
-    <div className="flex flex-col items-center justify-center text-center">
-      <div className={cn("relative flex size-32 items-center justify-center rounded-full border sm:size-36 xl:size-40", styles.brandOrb)}>
-        <div className={cn("absolute inset-2 rounded-full border", styles.brandOrbInner)} aria-hidden="true" />
-        <AegisMark className="relative size-[72px] drop-shadow-[0_0_28px_rgba(139,92,246,.45)] sm:size-20 xl:size-24" />
+    <div className="flex items-center justify-center gap-4 text-left">
+      <AegisMark className="size-14 shrink-0 sm:size-16" />
+      <div className="flex flex-col leading-none">
+        <p className={cn("font-display text-[34px] font-bold tracking-[-0.04em] sm:text-[38px]", styles.brandName)}>Aegis</p>
+        <p className={cn("mt-1 text-[17px] font-normal tracking-normal sm:text-[18px]", styles.brandTagline)}>Wealth AI</p>
       </div>
-      <p className={cn("mt-3 font-display text-3xl font-extrabold tracking-[-0.04em]", styles.brandName)}>Aegis</p>
-      <p className={cn("mt-0.5 text-[10px] font-semibold uppercase tracking-[.28em]", styles.brandTagline)}>Wealth AI</p>
     </div>
   );
 }

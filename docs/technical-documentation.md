@@ -621,6 +621,12 @@ A database from an earlier version gets the new chat columns (cards, number sour
 `orders.side` on start-up (`add_missing_columns`), and the new `goals`, `market_clock` and
 `rebalance_plans` tables.
 
+The hosted demo uses the `Dockerfile` at the repository root, which runs both in one container (Render's
+free plan, `render.yaml`). The web server listens on `$PORT` and forwards `/api/*` to Uvicorn on
+127.0.0.1:8000, which is not exposed. `deploy/start.sh` adds the service's public address to
+`ALLOWED_ORIGINS` and stops both processes if either one exits. The database is seeded on each start, so the
+hosted demo resets whenever the instance restarts.
+
 ## 9. Decisions and deviations from the project documentation
 
 | Item | Decision |

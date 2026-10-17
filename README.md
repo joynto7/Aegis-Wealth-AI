@@ -221,6 +221,8 @@ evidence/           red-team log, performance report, scenario run, exported ope
 docs/               technical documentation, security self-assessment, demo script, contract changes, UI design, v2 plan,
                     monitoring-loop plan
 compose.yaml        one-command run
+Dockerfile          the API and the web app in one container, for the hosted demo (with deploy/start.sh)
+render.yaml         Render Blueprint for the hosted demo
 ```
 
 ## Development without Docker
@@ -241,6 +243,41 @@ NEXT_PUBLIC_API_MOCK=0 API_BASE_URL=http://localhost:8000 npm run dev
 With `NEXT_PUBLIC_API_MOCK` unset or `1`, the web app runs on its in-browser mock API instead (see
 [frontend/README.md](frontend/README.md)). After changing the API, regenerate the frontend's types:
 `python scripts/export_openapi.py` in `backend/`, then `npm run gen:types` in `frontend/`.
+
+## Hosting the live demo
+
+The `Dockerfile` at the repository root runs the API and the web app in one container: Next.js serves the
+pages on `$PORT` (10000 by default) and forwards `/api/*` to FastAPI inside the container. It is the real
+backend, not the in-browser mock. To try it locally:
+
+```bash
+docker build -t aegis . && docker run --rm -p 10000:10000 aegis
+```
+
+Then open <http://localhost:10000>.
+
+To host it on [Render](https://render.com) for free:
+
+1. Sign in to Render with GitHub.
+2. Choose **New > Blueprint**, then pick this repository. Render reads `render.yaml`.
+3. Apply. The first build takes several minutes, then the site is at `https://aegis-wealth-ai.onrender.com`
+   (Render adds a suffix if the name is taken).
+
+What to know about the hosted demo:
+
+- **It sleeps.** A free instance sleeps after about 15 minutes without traffic, and the next visit takes
+  about a minute to wake it.
+- **It starts fresh.** The SQLite database is created and seeded on every start, so the demo resets
+  after each restart or deploy.
+- **The data is shared.** Everyone who opens the link uses the same demo accounts at the same time. For
+  example, if the officer moves the market, every client sees it.
+- **The advisor runs in fallback mode.** It answers with checked templates unless an `ANTHROPIC_API_KEY`
+  is added in the service's Environment settings. Since anyone can sign in to the demo accounts, a key
+  there is open to anyone's use.
+
+The API accepts unsafe requests only from origins it knows. On Render, the start script adds the
+service's own address (`RENDER_EXTERNAL_URL`). On another host, set `PUBLIC_URL` to the site's address, or
+set `ALLOWED_ORIGINS` directly. Behind HTTPS, also set `COOKIE_SECURE=1`.
 
 ## Data and licences
 

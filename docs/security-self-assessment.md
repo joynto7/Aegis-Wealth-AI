@@ -272,7 +272,12 @@ The OWASP GenAI Security Project's list of agent-specific risks (December 2025),
 
 ## 7. Limitations and next steps
 
-- **HTTPS.** The demo is HTTP on localhost; production needs TLS 1.2+ and `COOKIE_SECURE=1`.
+- **HTTPS.** The local demo is HTTP on localhost; production needs TLS 1.2+ and `COOKIE_SECURE=1`. The
+  hosted demo (`render.yaml`) is served over the host's HTTPS with `COOKIE_SECURE=1`.
+- **The hosted demo is public.** Its demo accounts and password are published, so anyone with the link
+  can sign in as them, see what other visitors did, and trigger the lock-out (#13). It holds sample data
+  only and resets on every restart. The API port is not exposed there: only the web server is
+  reachable, and it forwards `/api/*` inside the container.
 - **Shared rate-limit state.** Limits and lock-out live in one process's memory; multiple instances
   would need a shared store.
 - **Proxy trust.** Behind the web container, client IPs come from `X-Forwarded-For`

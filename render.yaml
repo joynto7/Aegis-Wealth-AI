@@ -1,0 +1,20 @@
+# Render Blueprint for the live demo: one free web service built from the Dockerfile at the repo root.
+# In Render: New > Blueprint, pick this repository, Apply. The address is https://<name>.onrender.com.
+# Free instances sleep after about 15 minutes without traffic; the next visit wakes them in about a minute,
+# and the demo data starts fresh after each restart or deploy.
+services:
+  - type: web
+    name: aegis-wealth-ai
+    runtime: docker
+    plan: free
+    # Closest Render region to Shenzhen.
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      # Render serves the site over HTTPS, so the session cookie can be Secure.
+      - key: COOKIE_SECURE
+        value: "1"
+      # No ANTHROPIC_API_KEY: the advisor answers in fallback mode (checked templates). To use the model,
+      # add the key under the service's Environment settings in Render; it is never committed.

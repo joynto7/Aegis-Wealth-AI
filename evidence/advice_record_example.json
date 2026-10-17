@@ -190,7 +190,8 @@
       "notes": [],
       "data_label": "Sample data; stress results are hypothetical",
       "data_as_of": "2026-09-30",
-      "created_at": "2026-10-16T18:47:42Z"
+      "created_at": "2026-10-17T10:27:54Z",
+      "rebalance": null
     },
     "gate": {
       "decision": "PASS",
@@ -299,7 +300,7 @@
         "version": "2026-10"
       }
     ],
-    "consent_at": "2026-10-16T18:47:42Z",
+    "consent_at": "2026-10-17T10:27:54Z",
     "orders": [
       {
         "id": 1,
@@ -309,7 +310,8 @@
         "nav": 1.0,
         "cost": 30000.0,
         "status": "filled",
-        "created_at": "2026-10-16T18:47:42Z"
+        "created_at": "2026-10-17T10:27:54Z",
+        "side": "buy"
       },
       {
         "id": 2,
@@ -319,7 +321,8 @@
         "nav": 1.0832,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-16T18:47:42Z"
+        "created_at": "2026-10-17T10:27:54Z",
+        "side": "buy"
       },
       {
         "id": 3,
@@ -329,7 +332,8 @@
         "nav": 1.061,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-16T18:47:42Z"
+        "created_at": "2026-10-17T10:27:54Z",
+        "side": "buy"
       },
       {
         "id": 4,
@@ -339,7 +343,8 @@
         "nav": 2.314,
         "cost": 20000.0,
         "status": "filled",
-        "created_at": "2026-10-16T18:47:42Z"
+        "created_at": "2026-10-17T10:27:54Z",
+        "side": "buy"
       },
       {
         "id": 5,
@@ -349,11 +354,12 @@
         "nav": 3.452,
         "cost": 50000.0,
         "status": "filled",
-        "created_at": "2026-10-16T18:47:42Z"
+        "created_at": "2026-10-17T10:27:54Z",
+        "side": "buy"
       }
     ]
   },
   "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "hash": "ce53a457d681a30916301156ab7f8067fa0c5a972f1670152d484206650367dd",
-  "created_at": "2026-10-16T18:47:42Z"
+  "hash": "8f3aca4ca7ea5e252f23e7db60652366c335d52d1e59d24f62da2dc5e03161d7",
+  "created_at": "2026-10-17T10:27:54Z"
 }

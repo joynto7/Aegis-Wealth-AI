@@ -1,9 +1,13 @@
-"""Execution evidence (deliverable 6): run Scenarios 1, 4, 5 and 3 on a fresh sandbox and export the operation log.
+"""Execution evidence (deliverable 6): run Scenarios 1, 4, 5, 6 and 3 on a fresh sandbox and export the operation log.
 
 Scenario 5 is an addition: the compliance officer watches the AI in the Control
 Room, reviews a flagged turn, suspends the advisor and halts execution by hand,
 then exports the model disclosure. Scenario 1 also shows the v2 additions: How to
 fix after a rejection, the AI label on a reply, a goal projection and the briefing.
+Scenario 6 is the monitoring loop: the officer moves the simulated market, the
+client's portfolio drifts, the advisor proposes a rebalancing it cannot execute,
+a rebalancing priced before the next move is refused, and the client executes a
+fresh one with her own quiz, Confirm and token.
 
 Writes evidence/operation_log.json and .csv (exported by the compliance officer,
 as in Scenario 3), evidence/scenario_run.json (each step, its result and its
@@ -310,6 +314,112 @@ def main() -> None:
     run.steps[-1]["note"] = (
         f"{disclosure['advisor']['model']} ({disclosure['advisor']['mode']}), prompt "
         f"{disclosure['advisor']['system_prompt_sha256'][:12]}..., report sha256 {disclosure['content_sha256'][:12]}..."
+    )
+
+    # Scenario 6 (addition): the monitoring loop. Simulated market moves, drift, an alert, a rebalancing through the gate.
+    moved = run.step(
+        "Officer",
+        "advance the simulated market 6 months",
+        officer.post(
+            "/api/compliance/market/advance", json={"months": 6, "reason": "Evidence run: six months of the 2009 rally"}
+        ),
+    )
+    run.steps[-1]["note"] = (
+        f"month {moved['month']}, {moved['as_of']}, replayed 2009-03 to {moved['replayed']}; since the start: "
+        + ", ".join(f"{c} {v:+.2f}%" for c, v in moved["since_start_pct"].items())
+    )
+    run.step(
+        "Rina",
+        "try to move the market herself",
+        rina.post("/api/compliance/market/advance", json={"months": 1, "reason": "A client cannot do this"}),
+        403,
+        "FORBIDDEN: only the compliance officer moves the clock",
+    )
+    drift = run.step("Rina", "open the drift of her portfolio", rina.get("/api/monitoring"))
+    largest = next(c for c in drift["classes"] if c["asset_class"] == drift["largest"]["asset_class"])
+    run.steps[-1]["note"] = (
+        f"status {drift['status']}: {largest['asset_class']} {largest['current_pct']}% against {largest['target_pct']}% "
+        f"({largest['drift_pp']:+} points, band {drift['band_pp']:g}); live gate {drift['live_gate']}"
+        + (f" ({', '.join(f['id'] for f in drift['rules_failing'])})" if drift["rules_failing"] else "")
+        + f"; a rebalancing would sell CNY {drift['rebalance']['sell_total']:,.2f}"
+    )
+    alerts = run.step("Officer", "see the drift alert in the Control Room", officer.get("/api/compliance/overview"))
+    alert = next(a for a in alerts["alerts"] if a["id"].startswith("drift-"))
+    run.steps[-1]["note"] = f"{alert['severity']}: {alert['title']}. {alert['detail']}"
+    asked = run.step(
+        "Rina", "ask 'Has my portfolio drifted?'", rina.post("/api/chat", json={"message": "Has my portfolio drifted?"})
+    )
+    run.steps[-1]["note"] = (
+        "; ".join(f"{t['tool']} {t['tier']} {t['decision']}" for t in asked["tool_calls"])
+        + f"; cards: {', '.join(c['type'] for c in asked['cards'])} -> {asked['reply']}"
+    )
+    orders_before = len(rina.get("/api/sandbox/orders").json()["items"])
+    agent = run.step(
+        "Rina", "ask 'Please rebalance my portfolio'", rina.post("/api/chat", json={"message": "Please rebalance my portfolio"})
+    )
+    by_agent = next(c for c in agent["cards"] if c["type"] == "proposal")
+    run.steps[-1]["note"] = (
+        "; ".join(f"{t['tool']} {t['tier']} {t['decision']}" for t in agent["tool_calls"])
+        + f"; rebalancing #{by_agent['proposal_id']} v{by_agent['version']} gate {by_agent['gate_decision']} -> {agent['reply']}"
+    )
+    orders_after = len(rina.get("/api/sandbox/orders").json()["items"])
+    run.steps.append(
+        {
+            "n": len(run.steps) + 1,
+            "actor": "System",
+            "action": "orders placed by the advisor's proposal",
+            "status": 200,
+            "ok": orders_after == orders_before,
+            "note": f"{orders_after - orders_before} orders: proposing trades nothing",
+            "at_seconds": round(time.perf_counter() - run.started, 2),
+        }
+    )
+    position = (-by_agent["proposal_id"]) % 3
+    run.step(
+        "Rina",
+        "pass the quiz on the rebalancing",
+        rina.post(
+            f"/api/proposals/{by_agent['proposal_id']}/quiz", json={"answers": {q: str(position + 1) for q in ("Q1", "Q2", "Q3")}}
+        ),
+    )
+    run.step(
+        "Officer",
+        "advance the market 1 more month",
+        officer.post("/api/compliance/market/advance", json={"months": 1, "reason": "Evidence run: the market moves again"}),
+    )
+    run.step(
+        "Rina",
+        "click Confirm on the rebalancing priced a month ago",
+        rina.post(f"/api/proposals/{by_agent['proposal_id']}/confirm", json={}),
+        409,
+        "STATE_CONFLICT: prices moved since it was priced, so its trades no longer match",
+    )
+    fresh = run.step("Rina", "propose a fresh rebalancing", rina.post("/api/proposals/rebalance", json={}), 201)
+    run.steps[-1]["note"] = (
+        f"#{fresh['id']} version {fresh['version']} of #{fresh['parent_id']}, gate {fresh['gate']['decision']}; sells CNY "
+        f"{fresh['rebalance']['sell_total']:,.2f}, buys CNY {fresh['rebalance']['buy_total']:,.2f}; #{by_agent['proposal_id']} superseded"
+    )
+    position = (-fresh["id"]) % 3
+    run.step(
+        "Rina",
+        "pass the quiz",
+        rina.post(f"/api/proposals/{fresh['id']}/quiz", json={"answers": {q: str(position + 1) for q in ("Q1", "Q2", "Q3")}}),
+    )
+    token = run.step("Rina", "click Confirm", rina.post(f"/api/proposals/{fresh['id']}/confirm", json={}))["confirm_token"]
+    rebalanced = run.step(
+        "System",
+        "sell, then buy, and create the advice record",
+        rina.post(f"/api/proposals/{fresh['id']}/execute", headers={"X-Confirm-Token": token}, json={}),
+    )
+    sides = [o["side"] for o in rebalanced["orders"]]
+    run.steps[-1]["note"] = (
+        f"{sides.count('sell')} sales then {sides.count('buy')} purchases, cash after CNY {rebalanced['cash_after']:,.2f}, "
+        f"record #{rebalanced['record_id']}"
+    )
+    watch = run.step("Officer", "check every client's drift", officer.get("/api/compliance/monitoring"))
+    run.steps[-1]["note"] = ", ".join(
+        f"{c['client']} {c['status']} ({c['largest']['asset_class']} {c['largest']['drift_pp']:+} points)"
+        for c in watch["clients"]
     )
 
     # Scenario 3: the compliance officer audits.

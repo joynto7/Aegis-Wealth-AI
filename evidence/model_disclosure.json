@@ -1,6 +1,6 @@
 {
   "report": "Aegis Wealth AI: AI model and asset-allocation logic disclosure",
-  "generated_at": "2026-10-16T18:47:42Z",
+  "generated_at": "2026-10-17T10:27:54Z",
   "advisor": {
     "provider": "Anthropic",
     "model": "claude-opus-5-5",
@@ -10,8 +10,8 @@
     "timeout_seconds": 20.0,
     "max_tool_rounds": 4,
     "history_messages": 10,
-    "system_prompt_sha256": "a1b1db1f2793bbb04cdc66ec7412d35a69d7950a41463993ee1fa5952c008295",
-    "tools_sha256": "4b9a1c28c4db1823d2a8066a8812f09cae93f47a6a56479bb34ffd075ec24263",
+    "system_prompt_sha256": "653666e7acff62e626bcc5d05d4f04eb844121d7affd03304474ec9c16b3df1b",
+    "tools_sha256": "6cf856bcb3505926e33e1dcf3a28c78fd78eb85a95125662c7817df5c45db3fb",
     "data_sent": "Each turn: the client's tier, capacity and willingness scores, maximum acceptable loss, profile status, current proposal number and status, the last 10 chat messages, and the results of the tools it calls.",
     "data_never_sent": "Names, email addresses, passwords, session or confirmation tokens, and other clients' data."
   },
@@ -52,6 +52,11 @@
       "description": "How to fix one of the client's own proposals: the smallest change, computed by code, that gets it through the compliance gate, with each change and the rule it fixes. Read-only: the client applies it with the Apply button on the card, and the gate checks the new version again. Null means the latest open proposal."
     },
     {
+      "name": "check_drift",
+      "tier": "T1",
+      "description": "Check how far the client's own invested portfolio has drifted from the mix they last agreed to (their latest executed proposal), at the simulated market's current prices: each asset class's target and live weight, the drift in percentage points against the band, rules the live holdings now fail, and the trades a rebalancing would place. Read-only: nothing is saved or traded. Prices are simulated from illustrative history."
+    },
+    {
       "name": "create_proposal",
       "tier": "T2",
       "description": "Create a new proposal from an amount (CNY), a horizon in whole years and the amount needed within 2 years. The compliance gate always runs; nothing is executed. Requires a complete, current risk profile."
@@ -60,6 +65,11 @@
       "name": "revise_proposal",
       "tier": "T2",
       "description": "Save a new version of one of the client's open proposals with new product weights (they must total 100). The compliance gate always runs on the new version; nothing is executed."
+    },
+    {
+      "name": "propose_rebalance",
+      "tier": "T2",
+      "description": "Propose a rebalancing of the client's own portfolio back to their latest executed mix: saves a new proposal version with the trades, and the compliance gate always runs on it. Nothing is executed: the client opens it, takes the quiz and presses Confirm. Returns the open rebalancing if one is already priced at today's prices."
     }
   ],
   "permission_tiers": [
@@ -359,19 +369,19 @@
   "controls": {
     "advisor": {
       "state": "active",
-      "changed_at": "2026-10-16T18:47:42Z",
+      "changed_at": "2026-10-17T10:27:54Z",
       "reason": "Evidence run finished",
       "changed_by": "Amara (Compliance)"
     },
     "execution": {
       "state": "open",
-      "changed_at": "2026-10-16T18:47:42Z",
+      "changed_at": "2026-10-17T10:27:54Z",
       "reason": "Evidence run finished",
       "changed_by": "Amara (Compliance)"
     }
   },
   "regulations": {
-    "version": "reg-2026-10-v2",
+    "version": "reg-2026-10-v3",
     "note": "Mapping prepared by the team for this sandbox. It shows which requirement each control is designed to meet; it is not legal advice.",
     "frameworks": [
       {
@@ -439,6 +449,18 @@
         "short": "OWASP Agentic Top 10",
         "title": "OWASP Top 10 for Agentic Applications (2026)",
         "jurisdiction": "Industry standard"
+      },
+      {
+        "id": "HK-SFC-ODAP",
+        "short": "HK SFC online platforms guidelines",
+        "title": "Guidelines on Online Distribution and Advisory Platforms (SFC, effective 6 April 2019)",
+        "jurisdiction": "Hong Kong"
+      },
+      {
+        "id": "US-FINRA-DIA",
+        "short": "FINRA digital advice report",
+        "title": "Report on Digital Investment Advice (FINRA, March 2016)",
+        "jurisdiction": "United States"
       }
     ],
     "ai_controls": [
@@ -618,7 +640,7 @@
         "title": "OWASP Top 10 for Agentic Applications (2026)",
         "ref": "ASI02 Tool misuse and exploitation",
         "requirement": "Constrain what each tool can do and validate its inputs.",
-        "control": "Nine strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
+        "control": "Eleven strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
         "check": "built_in",
         "note": null
       },
@@ -641,6 +663,26 @@
         "control": "Orders need the client's Confirm click and a one-time token; promise words and unsupported figures never reach the client.",
         "check": "built_in",
         "note": null
+      },
+      {
+        "id": "SFC-REBALANCE",
+        "framework": "HK SFC online platforms guidelines",
+        "title": "Guidelines on Online Distribution and Advisory Platforms (SFC, effective 6 April 2019)",
+        "ref": "Ch. 4 (robo-advice): rebalancing",
+        "requirement": "Treat rebalancing as a recommendation that triggers the suitability requirement, and keep effective rebalancing practices.",
+        "control": "A rebalancing is a new proposal version: the nine-rule gate checks it against the client's current tier, How to fix applies if it fails, and only the client's quiz and Confirm execute it.",
+        "check": "built_in",
+        "note": "Applied as good practice: Aegis is a sandbox, not a licensed platform."
+      },
+      {
+        "id": "FINRA-REBALANCE",
+        "framework": "FINRA digital advice report",
+        "title": "Report on Digital Investment Advice (FINRA, March 2016)",
+        "ref": "Rebalancing (effective practices)",
+        "requirement": "Establish the customer's intent to rebalance, disclose how rebalancing works and any drift threshold, and set how the tool acts in a major market movement.",
+        "control": "The 5-point drift band is one number in rules.json, shown beside every drift figure. Nothing rebalances without the client's own request and Confirm, and trades priced before the market moved cannot execute.",
+        "check": "built_in",
+        "note": "Applied as good practice."
       }
     ]
   },
@@ -649,29 +691,32 @@
     "model_portfolios": "mp-2026-10",
     "scenarios": "sc-2026-10",
     "assumptions": "as-2026-10",
-    "rules": "rules-2026-10",
+    "rules": "rules-2026-10-v2",
     "disclosures": "disc-2026-10",
     "episodes": "ep-2026-10",
-    "regulations": "reg-2026-10-v2",
+    "regulations": "reg-2026-10-v3",
+    "market": "mk-2026-10",
     "products_as_of": "2026-09-30",
     "history": "Illustrative, as of 2026-09-30"
   },
   "governance": {
-    "config_fingerprint": "e1e58f73f2c692200856a13ff7cb38cb126b72660ea7190387a7b1dc01a9c9d1",
+    "config_fingerprint": "1d9385c90112d0bfed46758d81dca5f2e1bc69204c3ce5ab3be72df5c08495ff",
     "config_components": {
       "provider": "anthropic",
       "model": "claude-opus-5-5",
       "effort": "medium",
       "max_tokens": 16000,
-      "system_prompt_sha256": "a1b1db1f2793bbb04cdc66ec7412d35a69d7950a41463993ee1fa5952c008295",
-      "tools_sha256": "4b9a1c28c4db1823d2a8066a8812f09cae93f47a6a56479bb34ffd075ec24263",
+      "system_prompt_sha256": "653666e7acff62e626bcc5d05d4f04eb844121d7affd03304474ec9c16b3df1b",
+      "tools_sha256": "6cf856bcb3505926e33e1dcf3a28c78fd78eb85a95125662c7817df5c45db3fb",
       "tool_tiers": {
+        "check_drift": "T1",
         "compare_products": "T0",
         "create_proposal": "T2",
         "explain_rule": "T0",
         "get_profile_summary": "T1",
         "get_proposal": "T1",
         "project_goal": "T1",
+        "propose_rebalance": "T2",
         "revise_proposal": "T2",
         "search_products": "T0",
         "suggest_fix": "T1"
@@ -681,10 +726,11 @@
         "assumptions": "as-2026-10",
         "disclosures": "disc-2026-10",
         "episodes": "ep-2026-10",
+        "market": "mk-2026-10",
         "model_portfolios": "mp-2026-10",
         "questionnaire": "q-2026-10",
-        "regulations": "reg-2026-10-v2",
-        "rules": "rules-2026-10",
+        "regulations": "reg-2026-10-v3",
+        "rules": "rules-2026-10-v2",
         "scenarios": "sc-2026-10"
       }
     },
@@ -772,5 +818,5 @@
     ],
     "tracing": "Each turn is recorded as spans named after the OpenTelemetry GenAI semantic conventions (invoke_agent, chat, execute_tool) plus aegis.grounding and aegis.template, with durations, tiers, decisions and token use. Prompts and tool arguments are not captured."
   },
-  "content_sha256": "5821953062d53368d921f23fb385d4e547170a9fbfaea58334dac41a891e7968"
+  "content_sha256": "12ead3aef756f4003e1db6ebea0c50ee85fa50ca2a5108fdcc57b8e854e4a802"
 }

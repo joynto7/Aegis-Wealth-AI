@@ -1,6 +1,6 @@
 {
-  "run_at": "2026-10-16T18:47:42Z",
-  "seconds": 1.69,
+  "run_at": "2026-10-17T10:27:54Z",
+  "seconds": 1.77,
   "all_ok": true,
   "steps": [
     {
@@ -10,7 +10,7 @@
       "status": 200,
       "ok": true,
       "note": "",
-      "at_seconds": 0.98
+      "at_seconds": 0.97
     },
     {
       "n": 2,
@@ -28,7 +28,7 @@
       "status": 409,
       "ok": true,
       "note": "proposal blocked: CONTRADICTIONS_OPEN",
-      "at_seconds": 1.01
+      "at_seconds": 1.0
     },
     {
       "n": 4,
@@ -55,7 +55,7 @@
       "status": 200,
       "ok": true,
       "note": "tier lowered to 3",
-      "at_seconds": 1.02
+      "at_seconds": 1.01
     },
     {
       "n": 7,
@@ -234,7 +234,7 @@
       "status": 200,
       "ok": true,
       "note": "3 AI turns; tool calls T0 0, T1 2, T2 1; 1 blocked by the broker; 1 of 1 AI proposals rejected by the gate; 7 figures traced; 0 orders by the AI",
-      "at_seconds": 1.65
+      "at_seconds": 1.66
     },
     {
       "n": 27,
@@ -243,7 +243,7 @@
       "status": 200,
       "ok": true,
       "note": "2 AI turns flagged for a person: Chen (high): Broker blocked get_proposal (T1); Chen (high): Threat signal: Instruction override, AI proposal #5 rejected by the gate",
-      "at_seconds": 1.65
+      "at_seconds": 1.66
     },
     {
       "n": 28,
@@ -251,7 +251,7 @@
       "action": "inspect the injection turn",
       "status": 200,
       "ok": true,
-      "note": "signals: Instruction override (ASI01, high); 4 trace spans; configuration e1e58f73f2c6...",
+      "note": "signals: Instruction override (ASI01, high); 4 trace spans; configuration 1d9385c90112...",
       "at_seconds": 1.66
     },
     {
@@ -270,7 +270,7 @@
       "status": 200,
       "ok": true,
       "note": "",
-      "at_seconds": 1.66
+      "at_seconds": 1.67
     },
     {
       "n": 31,
@@ -297,7 +297,7 @@
       "status": 409,
       "ok": true,
       "note": "EXECUTION_HALTED: no token issued",
-      "at_seconds": 1.67
+      "at_seconds": 1.68
     },
     {
       "n": 34,
@@ -323,53 +323,188 @@
       "action": "export the model disclosure",
       "status": 200,
       "ok": true,
-      "note": "claude-opus-5-5 (fallback), prompt a1b1db1f2793..., report sha256 5821953062d5...",
-      "at_seconds": 1.68
+      "note": "claude-opus-5-5 (fallback), prompt 653666e7acff..., report sha256 12ead3aef756...",
+      "at_seconds": 1.69
     },
     {
       "n": 37,
       "actor": "Officer",
-      "action": "filter the log to denied actions",
+      "action": "advance the simulated market 6 months",
       "status": 200,
       "ok": true,
-      "note": "3 denied entries",
-      "at_seconds": 1.68
+      "note": "month 6, 2027-03-31, replayed 2009-03 to 2009-08; since the start: cash +0.36%, bond +3.86%, gold +14.78%, equity +38.75%",
+      "at_seconds": 1.69
     },
     {
       "n": 38,
+      "actor": "Rina",
+      "action": "try to move the market herself",
+      "status": 403,
+      "ok": true,
+      "note": "FORBIDDEN: only the compliance officer moves the clock",
+      "at_seconds": 1.7
+    },
+    {
+      "n": 39,
+      "actor": "Rina",
+      "action": "open the drift of her portfolio",
+      "status": 200,
+      "ok": true,
+      "note": "status drifted: equity 30.66% against 25.0% (+5.66 points, band 5); live gate WARNING (R-08); a rebalancing would sell CNY 13,126.91",
+      "at_seconds": 1.7
+    },
+    {
+      "n": 40,
+      "actor": "Officer",
+      "action": "see the drift alert in the Control Room",
+      "status": 200,
+      "ok": true,
+      "note": "medium: Portfolio drift beyond the band. Client #2: Equity is 30.66% against a 25% target (+5.66 points; the band is 5). No rebalancing has been proposed yet.",
+      "at_seconds": 1.71
+    },
+    {
+      "n": 41,
+      "actor": "Rina",
+      "action": "ask 'Has my portfolio drifted?'",
+      "status": 200,
+      "ok": true,
+      "note": "check_drift T1 allowed; cards: drift -> At the simulated prices of 2027-03-31, your equity share is 30.66% against your 25% target (+5.66 points; the band is 5). Rebalancing would sell about CNY 13,127. Ask me to propose it, or press Propose rebalancing on the card; the gate checks it and nothing trades until you confirm.",
+      "at_seconds": 1.71
+    },
+    {
+      "n": 42,
+      "actor": "Rina",
+      "action": "ask 'Please rebalance my portfolio'",
+      "status": 200,
+      "ok": true,
+      "note": "propose_rebalance T2 allowed; rebalancing #6 v4 gate PASS -> I prepared rebalancing proposal #6 (version 4), back to the mix of proposal #3: it sells CNY 13,127 and buys CNY 13,127, and the gate's verdict is PASS. I can't place it: open it, pass the quiz and press Confirm.",
+      "at_seconds": 1.72
+    },
+    {
+      "n": 43,
+      "actor": "System",
+      "action": "orders placed by the advisor's proposal",
+      "status": 200,
+      "ok": true,
+      "note": "0 orders: proposing trades nothing",
+      "at_seconds": 1.72
+    },
+    {
+      "n": 44,
+      "actor": "Rina",
+      "action": "pass the quiz on the rebalancing",
+      "status": 200,
+      "ok": true,
+      "note": "",
+      "at_seconds": 1.73
+    },
+    {
+      "n": 45,
+      "actor": "Officer",
+      "action": "advance the market 1 more month",
+      "status": 200,
+      "ok": true,
+      "note": "",
+      "at_seconds": 1.73
+    },
+    {
+      "n": 46,
+      "actor": "Rina",
+      "action": "click Confirm on the rebalancing priced a month ago",
+      "status": 409,
+      "ok": true,
+      "note": "STATE_CONFLICT: prices moved since it was priced, so its trades no longer match",
+      "at_seconds": 1.73
+    },
+    {
+      "n": 47,
+      "actor": "Rina",
+      "action": "propose a fresh rebalancing",
+      "status": 201,
+      "ok": true,
+      "note": "#7 version 4 of #3, gate PASS; sells CNY 15,115.06, buys CNY 15,115.06; #6 superseded",
+      "at_seconds": 1.74
+    },
+    {
+      "n": 48,
+      "actor": "Rina",
+      "action": "pass the quiz",
+      "status": 200,
+      "ok": true,
+      "note": "",
+      "at_seconds": 1.74
+    },
+    {
+      "n": 49,
+      "actor": "Rina",
+      "action": "click Confirm",
+      "status": 200,
+      "ok": true,
+      "note": "",
+      "at_seconds": 1.75
+    },
+    {
+      "n": 50,
+      "actor": "System",
+      "action": "sell, then buy, and create the advice record",
+      "status": 200,
+      "ok": true,
+      "note": "2 sales then 3 purchases, cash after CNY 300,000.00, record #2",
+      "at_seconds": 1.75
+    },
+    {
+      "n": 51,
+      "actor": "Officer",
+      "action": "check every client's drift",
+      "status": 200,
+      "ok": true,
+      "note": "Rina on_target (cash +0.0 points)",
+      "at_seconds": 1.76
+    },
+    {
+      "n": 52,
+      "actor": "Officer",
+      "action": "filter the log to denied actions",
+      "status": 200,
+      "ok": true,
+      "note": "4 denied entries",
+      "at_seconds": 1.76
+    },
+    {
+      "n": 53,
       "actor": "Officer",
       "action": "open a denied entry",
       "status": 200,
       "ok": true,
       "note": "permission_denied: tool get_proposal, tier T1, reason T1 covers only the client's own data",
-      "at_seconds": 1.68
+      "at_seconds": 1.76
     },
     {
-      "n": 39,
+      "n": 54,
       "actor": "Officer",
       "action": "verify every advice-record chain",
       "status": 200,
       "ok": true,
-      "note": "valid=True, checked=1",
-      "at_seconds": 1.69
+      "note": "valid=True, checked=2",
+      "at_seconds": 1.76
     },
     {
-      "n": 40,
+      "n": 55,
       "actor": "Officer",
       "action": "export the log as JSON",
       "status": 200,
       "ok": true,
       "note": "",
-      "at_seconds": 1.69
+      "at_seconds": 1.76
     },
     {
-      "n": 41,
+      "n": 56,
       "actor": "Officer",
       "action": "export the log as CSV",
       "status": 200,
       "ok": true,
       "note": "",
-      "at_seconds": 1.69
+      "at_seconds": 1.77
     }
   ]
 }

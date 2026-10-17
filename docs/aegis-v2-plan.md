@@ -198,7 +198,7 @@ self-assessment (with the OWASP ASI mapping) updated.
 6. Browser verification, documentation (F).
 
 **Not in v2, proposed as follow-ups:** a Chinese interface; a monitoring loop with simulated market
-moves, drift alerts and rebalancing proposals; an MCP gateway that lets outside agents use the T0 and
+moves, drift alerts and rebalancing proposals (since built: [monitoring-plan.md](monitoring-plan.md)); an MCP gateway that lets outside agents use the T0 and
 T1 tools under the same broker and kill switch; an external anchor for the record chain.
 
 ## Part 5: As built (17 October 2026)

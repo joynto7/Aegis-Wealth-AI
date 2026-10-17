@@ -69,6 +69,32 @@ fields.
 | Log actions `goal_set`, `chat_feedback`, `review_decided` | Operation log | The new client and officer actions. `agent_turn` entries also carry `signals`, `trace`, `usage`, `latency_ms`, `served_model`, `fallback_reason` and `config_fingerprint`. |
 | Table `goals`; column `chat_messages.provenance` | Database | Created on start-up for a database from an earlier version. |
 
+## Additions for the monitoring loop (backwards compatible)
+
+A simulated market clock, drift and rebalancing ([monitoring-plan.md](monitoring-plan.md)). 5 new operations (54 in
+all); every existing response keeps its fields, and the new fields have defaults for older stored data.
+
+| Change | Where | Why |
+| --- | --- | --- |
+| `GET /api/compliance/market` | New, compliance only | The simulated market clock (`MarketState`): `month`, `as_of` (the simulated month-end), `replayed`, `next_replay`, `last_returns_pct` and `since_start_pct` by asset class, `start_date`, `replay_from`, `max_months_per_advance`, `changed_at`, `changed_by`, `reason`, `data_label`, `note`. |
+| `POST /api/compliance/market/advance` | New, compliance only | `{months: 1 to 12 (default 1), reason: 5 to 300 characters}`. Replays the next months of the illustrative history and moves every product's NAV; nothing trades. Logged as `market_advanced` (`from_month`, `to_month`, `as_of`, `replayed`, `since_start_pct`, `reason`). 403 for a client, 422 for months out of range or a short reason. |
+| `GET /api/compliance/monitoring` | New, compliance only | `MonitoringOverview`: the market, the band, every invested client's `status` (`on_target`, `drifted`, `rule_breach`), largest drift, portfolio drift, rules failing now and new since they confirmed, any open rebalancing; `counts` and the `policy` text. |
+| `GET /api/monitoring` | New, client | `PortfolioMonitoring`: the client's own live holdings against their latest executed proposal. `status` (`none` before a portfolio), `classes` and `products` (target, current, `drift_pp`, `outside_band`), `largest`, `portfolio_drift_pct`, `live_gate`, `rules_failing` (with `new`), the `rebalance` preview (trades, totals; nothing saved) and `open_rebalance`. The clock's reason and author are left out for a client. |
+| `POST /api/proposals/rebalance` | New, client | 201 `Proposal`: a rebalancing, the next version of the latest executed proposal with its weights at the live value, checked by the gate. Returns the open rebalancing when it is already priced at today's prices. 409 STATE_CONFLICT with no executed portfolio, or when there is nothing to trade; the T2 profile checks apply (409 PROFILE_REQUIRED or CONTRADICTIONS_OPEN, logged as a denied `rebalance_proposed`). |
+| `rebalance: ProposalRebalance \| null` | `Proposal`, and so advice records | A rebalancing's `source_proposal_id`, `market_month`, `market_as_of`, `portfolio_value`, `trades` (`side`, `units`, `nav`, `amount`, `from_pct`, `to_pct`), `sell_total`, `buy_total`, `net_cash`, `turnover_pct`, `drift_before`, `band_pp` and `stale`. Null for an ordinary proposal. |
+| 409 STATE_CONFLICT on a stale rebalancing | `POST /api/proposals/{id}/confirm`, `/execute`, `/revise`; `GET /api/proposals/{id}/remedy` | A rebalancing priced before the market moved, or before the holdings changed, cannot go ahead; Confirm and Execute log it as a denied T3 action. A revision of a current rebalancing stays a rebalancing, with trades for its weights. |
+| `side: buy \| sell` (default `buy`) | `Order`, so `ExecuteResponse`, `GET /api/sandbox/orders` and advice records | A rebalancing sells, then buys. Orders placed before have no side stored and read as `buy`. |
+| `kind: new \| rebalance` | `ProposalSummary`, `ProposalCard` | Lists and chat cards can tell a rebalancing apart. |
+| `ChatCard` type `drift` | `ChatReply.cards` | The `check_drift` tool's result: status, market month and date, classes, largest drift, portfolio drift, rules failing, what a rebalancing would sell, any open rebalancing. |
+| Agent tools `check_drift` (T1) and `propose_rebalance` (T2) | Model disclosure, `TOOL_TIERS` | Eleven tools in all; still none can execute. |
+| `drift` insight | `GET /api/insights` | Once the market has moved: the largest class drift against the band, or the rule the holdings now fail. |
+| Alerts `drift-{user_id}` | `Oversight.alerts` | `high` when a hard rule fails on a client's live holdings, `medium` when a class drifted beyond the band. |
+| `nav`, `nav_date` move with the market | `GET /api/products`, `GET /api/products/{code}`, positions | The simulated NAV of the current market month. |
+| `data_as_of` is the current NAV date; `market_month` | `GET /api/health` | The simulated month-end once the market has moved (the data date at month 0), for the top bar. |
+| Data versions `rules-2026-10-v2` (adds `drift_band_pp: 5`), `reg-2026-10-v3`, `mk-2026-10` (`market.json`) | Configuration fingerprint, model disclosure | Two frameworks (HK SFC online platforms guidelines, FINRA's report on digital investment advice) and two controls in the regulatory map. |
+| Log actions `market_advanced`, `rebalance_proposed`; `orders_executed.detail.rebalance` | Operation log | The new officer and client (or agent) actions. |
+| Tables `market_clock`, `rebalance_plans`; column `orders.side` | Database | Created on start-up for a database from an earlier version. |
+
 ## Behaviour now fixed by the implementation
 
 These follow the documentation; listed so the frontend and the docs agree.

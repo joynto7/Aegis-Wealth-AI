@@ -112,6 +112,8 @@ def main() -> None:
         ("GET", f"/api/proposals/{pid}/remedy", {}),
         ("GET", "/api/insights", {}),
         ("GET", "/api/sandbox/analytics", {}),
+        # The monitoring loop: the client's drift view.
+        ("GET", "/api/monitoring", {}),
     ]
     results = []
 
@@ -137,6 +139,9 @@ def main() -> None:
     # The compliance Control Room's live view and the model disclosure, as the officer.
     c.request("POST", "/api/auth/login", json={"email": "officer@example.com", "password": PASSWORD}).raise_for_status()
     for path in ("/api/compliance/overview", "/api/compliance/model-card", "/api/compliance/reviews?status=all"):
+        measure("GET", path, {})
+    # The monitoring loop (addition): the market clock and every client's drift, as the officer.
+    for path in ("/api/compliance/market", "/api/compliance/monitoring"):
         measure("GET", path, {})
     latest_turn = c.request("GET", "/api/compliance/overview").json()["turns"][0]["log_id"]
     measure("GET", f"/api/compliance/turns/{latest_turn}", {})

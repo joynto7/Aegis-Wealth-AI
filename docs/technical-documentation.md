@@ -17,12 +17,12 @@ flowchart TB
     Next["Next.js server<br/>/api/* rewrite"]
   end
   subgraph API container
-    Routers["FastAPI routers<br/>32 endpoints + 17 additions<br/>(streaming chat, oversight, planning)"]
-    Services["Services<br/>profiles, proposals, execution,<br/>records, logs, chat, sandbox,<br/>controls, oversight, planning, reviews"]
-    Engines["Pure engines<br/>scoring, contradictions, replay, allocation,<br/>metrics, stress, fees, gate, quiz, chain,<br/>projection, remedy"]
+    Routers["FastAPI routers<br/>32 endpoints + 22 additions<br/>(streaming chat, oversight, planning,<br/>monitoring)"]
+    Services["Services<br/>profiles, proposals, execution,<br/>records, logs, chat, sandbox,<br/>controls, oversight, planning, reviews,<br/>market, monitoring"]
+    Engines["Pure engines<br/>scoring, contradictions, replay, allocation,<br/>metrics, stress, fees, gate, quiz, chain,<br/>projection, remedy, market, drift, rebalance"]
     Agent["Agent<br/>turn loop, permission broker,<br/>grounding check, fallback, prompts,<br/>threat scan, trace, fingerprint"]
     Data[("backend/data<br/>CSV + versioned JSON")]
-    DB[("SQLite<br/>18 tables")]
+    DB[("SQLite<br/>20 tables")]
   end
   Claude[("Claude API<br/>claude-opus-5-5")]
 
@@ -41,7 +41,7 @@ flowchart TB
 | Services | SQLAlchemy 2 | Transactions, ownership, the operation log, orchestration of engines |
 | Engines | Plain Python | Every number and every rule, as pure functions of versioned data files |
 | Agent | Anthropic Python SDK | A manual tool-use loop behind a permission broker |
-| Database | SQLite (WAL) | The 16 tables of Section 3.5, plus `controls` for the compliance switches and `goals` for saved goals; append-only triggers on records and the log |
+| Database | SQLite (WAL) | The 16 tables of Section 3.5, plus `controls` for the compliance switches, `goals` for saved goals, `market_clock` for the simulated market and `rebalance_plans` for a rebalancing's priced trades; append-only triggers on records and the log |
 
 **One origin.** The browser only talks to the web server; Next.js forwards `/api/*` to FastAPI
 (`API_BASE_URL`), so there is no CORS, and the session cookie stays httpOnly and same-site.
@@ -59,8 +59,10 @@ projections and a table twin for every chart.
 
 **Mock-first frontend.** With `NEXT_PUBLIC_API_MOCK=1`, the same screens run on an in-browser mock API
 (MSW) whose engines are ports of the backend's. `scripts/verify.ts` checks the ports against the same
-worked examples; the projection, How to fix and threat-signal ports give the backend's exact results
-(a shared random generator and the same half-away-from-zero rounding).
+worked examples; the projection, How to fix, threat-signal, market-clock, drift and rebalancing ports give
+the backend's exact results (a shared random generator, the same half-away-from-zero rounding and exact
+decimal unit arithmetic), and the mock's monthly history is checked against the backend's CSV value for
+value.
 
 ## 2. Request flow: one advisory run
 
@@ -304,12 +306,76 @@ SBF-01 40%, SBF-02 20%. A sweep of 8,000 random allocations left no REJECT after
 - **Live analytics** (`GET /api/sandbox/analytics`). The executed portfolio's class weights, weighted
   fee, largest position and stress losses, for the account's *Risk and goal* tab.
 
+### 3.9 The monitoring loop (`market.py`, `drift.py`, `rebalance.py`, additions)
+
+A simulated market, drift from the agreed mix, and rebalancing that still goes through the gate and the
+client's own Confirm. Research, design and decisions: [monitoring-plan.md](monitoring-plan.md).
+
+**Market clock** (`engines/market.py`, `services/market.py`). One row per database (`market_clock`): the
+number of months replayed. Only the compliance officer moves it (`POST /api/compliance/market/advance`,
+1 to 12 months, with a reason, logged as `market_advanced`). The k-th advance applies the k-th month of
+the illustrative history counted from March 2009 (`data/market.json`), wrapping after September 2026,
+and every product's NAV becomes
+
+```
+NAV_k = round4(NAV_0 × Π_{i=1..k} (1 + r_class,i))
+```
+
+computed from the base NAV each time, so rounding never accumulates. Month k is dated the last day of
+the k-th month after 30 September 2026. The new NAVs and dates are written to the products table, so
+positions are valued, and new orders filled, at the simulated price; the shelf, the account and the
+top bar's NAV date follow. Nothing trades when the clock moves.
+
+**Drift** (`engines/drift.py`). The target is the latest executed proposal, the mix the client last
+agreed to. For each asset class, with live value V_c and total V:
+
+```
+w_c = V_c / V × 100      drift_c = w_c − T_c (points)      portfolio drift = ½ Σ |drift_c|
+```
+
+A class is outside its band when |drift_c| is more than `drift_band_pp` (5, in `rules.json`), compared
+on the rounded figure the client sees. The **whole gate also runs on the live weights**
+(`services/monitoring.py`), with today's profile and the target's horizon and near-term need, so a
+holding at the 40% limit fails R-03 after an equity rally, and a holding of a product above a tier the
+client has since lowered fails R-02. Each failing rule says whether it is new since the client
+confirmed. Status: `rule_breach` (a hard rule fails), `drifted` (a class outside the band, or a new
+warning), `on_target`.
+
+**Rebalancing trades** (`engines/rebalance.py`). Each product's goal is its target weight times the
+live value: a product above it sells the excess, one below buys the gap, and one the target no longer
+holds sells every unit. Units are floored to 4 decimals at the current NAV, as at execution; gaps under
+CNY 1 are left alone. Sales come first and fund the purchases; the account's cash covers the cents
+rounding leaves, and if even that falls short the largest purchase shrinks.
+
+**The rebalancing proposal** (`POST /api/proposals/rebalance`, or the agent's `propose_rebalance`).
+The next version of the executed proposal, with its weights at the live value, built through the same
+`persist()` as any proposal, so the gate runs on it and How to fix applies when it fails (for example
+after the client's tier fell). Its trades are stored with the market month and a hash of the holdings
+they were priced on (`rebalance_plans`). Once the market moves or the holdings change, the rebalancing
+is **stale**: Confirm, Execute, revisions and How to fix refuse it with 409 STATE_CONFLICT, and the
+client proposes a fresh one, which supersedes it. A rebalancing priced at today's prices is returned
+again rather than duplicated, and one with nothing to trade is refused. Execution sells, then buys,
+in one transaction with the advice record, whose orders carry their `side`.
+
+**Surfaces.** The briefing leads with a `drift` insight once the market has moved; the account's
+*Risk and goal* tab shows the drift chart (each class's band, target and today's weight), the rules
+the holdings fail today and the trades a rebalancing would place; the Control Room raises a `high`
+alert for a broken rule and a `medium` one for drift beyond the band, and its **Monitoring** tab holds
+the clock and every client's drift.
+
+Worked example (`tests/test_drift.py`): the Scenario 1 mix (DEP-01 15%, SBF-01 25%, SBF-02 25%, GLD-01
+10%, IDX-01 25%, CNY 200,000), after six months of the 2009 rally (equity +38.75%, bonds +3.86%): value
+CNY 226,295.10, equity 30.66% (+5.66 points, outside the band), bonds 45.89%, portfolio drift 5.80%,
+R-08 newly failing. The rebalancing sells 122.8953 GLD-01 (CNY 326.41) and 2,672.5613 IDX-01 (CNY
+12,800.50), then buys DEP-01, SBF-01 and SBF-02 for CNY 13,126.93; afterwards every class is within 0.01
+points of its target.
+
 ## 4. The advisor agent
 
 **Model call** (`app/agent/llm.py`):
 - `client.beta.messages.create` on `claude-opus-5-5`, with effort `medium` and `max_tokens` 16,000.
 - Server-side refusal fallback: beta `server-side-fallback-2026-07-01`, `fallbacks="default"`.
-- Nine strict tools, with tool choice left on auto.
+- Eleven strict tools, with tool choice left on auto.
 - Prompt caching on the fixed system prompt (which also caches the tool list rendered before it).
 - Client timeout 20 s, one retry. Thinking is always on for this model; thinking blocks are echoed
   back unchanged within a turn.
@@ -336,13 +402,18 @@ SBF-01 40%, SBF-02 20%. A sweep of 8,000 random allocations left no REJECT after
 | `get_proposal` | T1 |
 | `project_goal` (addition) | T1 |
 | `suggest_fix` (addition) | T1 |
+| `check_drift` (addition) | T1 |
 | `create_proposal` | T2 |
 | `revise_proposal` | T2 |
+| `propose_rebalance` (addition) | T2 |
 
 There is no tool that confirms or executes. `project_goal` runs the projection of Section 3.6 on the
 client's proposal or tier mix and is told to call the result illustrative and to mention the bad
 case. `suggest_fix` runs How to fix on an open proposal; the agent cannot apply it, the client does
-with *Apply* on the card.
+with *Apply* on the card. `check_drift` returns the client's drift at simulated prices and the trades a
+rebalancing would place; `propose_rebalance` saves a rebalancing for the gate, under the same T2
+preconditions as a revision. Neither can confirm or execute it: the system prompt says so, and no tool
+can.
 
 **Grounding check** (`app/agent/grounding.py`):
 - Extracts every number in the reply, ignoring identifiers such as R-03, S3, T2 and SBF-01.
@@ -365,7 +436,9 @@ so its reply picks the figures that matter instead of reciting the table. In Sce
 sees the rejected version as a REJECT card naming R-02 and R-03. Two cards are additions of version 2:
 a **projection** card (a compact fan chart with the chance and the bad, typical and good cases) and a
 **fix** card (each change with its rule, the gate before and after, and an *Apply as version N+1*
-button).
+button). The monitoring loop adds a **drift** card (each class against its target, the rules failing, what
+a rebalancing would sell, and a *Propose rebalancing* button the client clicks), and proposal cards say
+when they are a rebalancing.
 
 **Fallback answers** (`app/agent/fallback.py`):
 - The five intents of Section 2.5.8, plus answers to each red-team attack class. Execution requests
@@ -379,6 +452,9 @@ button).
   *how do I fix this* (runs `suggest_fix`) and goal questions such as *"Can I reach CNY 300,000 in 8
   years?"* (parses the target and horizon and runs `project_goal`). An explanation of a rejection now
   ends with the fix.
+- The monitoring loop adds two more: a drift question (*"Has my portfolio drifted?"*) runs `check_drift`,
+  and a request to rebalance runs `propose_rebalance` and reports the gate's verdict. *"Rebalance and
+  execute it now"* is an execution request and is declined.
 
 **Streaming** (`POST /api/chat/stream`, P1): the same checked turn as server-sent events. `status` and
 `tool` events arrive while it runs (each `tool` event carries its card, so results appear while the
@@ -440,7 +516,7 @@ compliance officer's **Control Room** (`/control-room`, the officer's landing pa
 
 | Requirement (Art. 23 unless noted) | Aegis control |
 | --- | --- |
-| Report the AI model's main parameters and asset-allocation logic to the regulator | **Model disclosure** (`GET /api/compliance/model-card`): provider, model, effort, limits, SHA-256 fingerprints of the system prompt and tool list, the configuration fingerprint, the 9 tools and 4 tiers, the grounding policy, the model portfolios, the 7 allocation steps, assumed returns, stress scenarios, the 9 rules with their basis, the switches' state, the data versions and a governance section (labelling, threat signals, review triggers, tracing). The report carries its own SHA-256; each export is logged. |
+| Report the AI model's main parameters and asset-allocation logic to the regulator | **Model disclosure** (`GET /api/compliance/model-card`): provider, model, effort, limits, SHA-256 fingerprints of the system prompt and tool list, the configuration fingerprint, the 11 tools and 4 tiers, the grounding policy, the model portfolios, the 7 allocation steps, assumed returns, stress scenarios, the 9 rules with their basis, the switches' state, the data versions and a governance section (labelling, threat signals, review triggers, tracing). The report carries its own SHA-256; each export is logged. |
 | Open a separate account for each investor's AI-managed investing | Each client's own sandbox account |
 | Make investors aware of the AI algorithm's inherent defects and risks | Disclosure **DISC-04**, "How the AI advisor works, and its limits", on the Confirm screen and in every advice record |
 | Follow the suitability and disclosure rules | The gate checks the AI's proposals exactly as a client's |
@@ -453,8 +529,10 @@ compliance officer's **Control Room** (`/control-room`, the officer's landing pa
 | Supervise AI output; keep a person accountable (HK SFC GenAI circular, 2024; FINRA 2026 report) | The **review queue**: flagged turns cleared or escalated by the officer, with a note |
 | Track model versions and agent actions (FINRA 2026 report; CSRC FinTech plan 2026–2030) | The configuration fingerprint on every turn, the trace, and the model disclosure |
 | Defend an agent against goal hijack, tool misuse and privilege abuse (OWASP Agentic Top 10) | The broker, the gate and the threat signals, mapped item by item |
+| Treat rebalancing as a recommendation under the suitability requirement (HK SFC online platforms guidelines, Ch. 4) | A rebalancing is a new proposal version the gate checks against the client's current tier; only the client's quiz and Confirm execute it |
+| Establish intent, disclose drift thresholds, act predictably in a major market move (FINRA report on digital investment advice, 2016) | The 5-point band in `rules.json`, shown beside every drift figure; nothing rebalances without the client; a rebalancing priced before the market moved cannot execute |
 
-Version 2 organises the page in three tabs:
+Version 2 organises the page in tabs (the monitoring loop adds the fourth):
 
 - **Live** (refreshed every 3 seconds). **Alerts** derived from the log: three or more blocked calls by
   one client in 15 minutes, two or more AI proposals rejected in an hour, high threat signals in the
@@ -476,7 +554,12 @@ Version 2 organises the page in three tabs:
   fingerprints, the tools and the JSON download), how the AI's output is governed (labelled,
   fingerprinted, screened, traced, reviewed, stoppable), and the regulatory checklist (20 controls
   across 8 frameworks, grouped by framework, each with its live status). The disclosure itself now has
-  a governance section.
+  a governance section. With the monitoring loop the checklist has 22 controls across 10 frameworks.
+- **Monitoring** (monitoring loop). The simulated market: its date, the month it replayed last, each
+  class's move last month and since the start, who moved it and why, and *Advance the market* (1, 3, 6
+  or 12 months, with a reason of 5 to 300 characters). The drift policy with the counts on target,
+  drifted and in breach, and every invested client's status, largest drift, portfolio drift, rules failing
+  now (marked when new) and any rebalancing waiting for them. Drift alerts on the Live tab open it.
 
 ## 6. Security design
 
@@ -495,16 +578,18 @@ The permission tiers, controls, known-risk list and red-team results are in
   reason.
 - Threat signals on every message, a supervisory review queue, alerts from the log, AI labels with
   content hashes, and a configuration fingerprint on every turn (version 2).
+- Supervised monitoring: only the officer moves the simulated market; a rebalancing is a proposal
+  through the gate, priced once, and only the client's own Confirm executes it (monitoring loop).
 
 ## 7. Quality and testing
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Backend tests | `docker compose run --rm api pytest -q` | 173 passed |
+| Backend tests | `docker compose run --rm api pytest -q` | 196 passed |
 | Red-team | `python scripts/redteam.py` | 30/30, criteria met; 27 of 30 flagged for review by the threat signals |
-| Performance | `python scripts/perf.py` | Every endpoint p95 under 5 ms except projections: 41 ms for a proposal with all five tiers, 130 ms for 30 years with all five tiers (target 2 s) |
-| Scenario evidence | `python scripts/evidence.py` | 41 steps of Scenarios 1, 4, 5 and 3, all as specified, including How to fix, a goal projection, the briefing and a review decision |
-| Frontend | `npm run lint`, `npm run typecheck`, `npm run build`, `npx tsx scripts/verify.ts` | Clean; 39 checks pass, including the mock data against `backend/data` and the projection, How to fix and threat-signal ports against the backend's results |
+| Performance | `python scripts/perf.py` | Every endpoint p95 about 5 ms or less except projections: 42 ms for a proposal with all five tiers, 132 ms for 30 years with all five tiers (target 2 s); the monitoring endpoints under 3 ms |
+| Scenario evidence | `python scripts/evidence.py` | 56 steps of Scenarios 1, 4, 5, 6 and 3, all as specified, including How to fix, a goal projection, the briefing, a review decision and the monitoring loop (a market move, drift, an alert, the advisor's rebalancing, a stale one refused, a fresh one executed) |
+| Frontend | `npm run lint`, `npm run typecheck`, `npm run build`, `npx tsx scripts/verify.ts` | Clean; 50 checks pass, including the mock data against `backend/data` and the projection, How to fix, threat-signal, market-clock, drift and rebalancing ports against the backend's results |
 | Lint | `ruff check`, `ruff format --check` | Clean |
 
 The backend tests include all 12 acceptance tests (AT-01 to AT-12), one file per engine (Section 2.9.2),
@@ -516,7 +601,12 @@ Version 2 adds the projection engine (the worked example, reproducibility, the e
 contribution), How to fix (both worked examples, every rule, open proposals only), the planning API
 (projections, goals, the briefing, live analytics, preview, with their permissions) and governance
 (labels and headers, the fingerprint, threat signals on the red-team set and on ordinary questions,
-traces, feedback, the review queue and its decisions, alerts).
+traces, feedback, the review queue and its decisions, alerts). The monitoring loop adds the market clock
+(replay order and wrap-around, NAVs from the base, month ends), drift and rebalancing (the worked
+example, the band's edge, full sales, cash shortfalls) and the end-to-end API: the officer-only clock
+with its logged reason, drift reaching the client and the officer, R-03 failing after a rally, a
+rebalancing through the gate and the client's Confirm, the stale-price guard, How to fix after a lower
+tier, client ownership, and the advisor proposing but never executing.
 
 ## 8. Deployment
 
@@ -527,8 +617,9 @@ traces, feedback, the review queue and its decisions, alerts).
 
 The web app is on port 3000, and the API documentation is at <http://localhost:8000/docs>.
 Configuration is environment-only (`.env.example`); the only secret is `ANTHROPIC_API_KEY`.
-A database from an earlier version gets the new chat columns (cards, number sources, provenance) on
-start-up (`add_missing_columns`) and the new `goals` table.
+A database from an earlier version gets the new chat columns (cards, number sources, provenance) and
+`orders.side` on start-up (`add_missing_columns`), and the new `goals`, `market_clock` and
+`rebalance_plans` tables.
 
 ## 9. Decisions and deviations from the project documentation
 
@@ -547,3 +638,6 @@ start-up (`add_missing_columns`) and the new `goals` table.
 | How to fix | Fixed repair order mirroring the allocation engine, rather than an optimiser, so each change can be explained by the rule it serves. Applying it is a normal revision through the gate. |
 | Review decisions | Stored as append-only log entries, not a new table, so a decision cannot be edited or deleted. |
 | Threat signals | Advisory, not blocking: the broker and the gate are the controls, and blocking on patterns would refuse legitimate questions. |
+| Simulated market | Replays the synthetic history from March 2009 so a demo shows drift in a few months; NAVs are recomputed from the base each time. It moves prices only: horizons and near-term needs keep the agreed values. |
+| Drift band | One absolute band of 5 points per class, disclosed beside every figure; the 5/25 relative band was considered and not adopted, to keep one number. |
+| Rebalancing | Never drafted automatically: drift raises an alert and a briefing, and the client or the advisor (T2) proposes. Priced once: a stale rebalancing cannot execute. Restores the latest executed mix for every holding. |

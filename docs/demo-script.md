@@ -34,8 +34,18 @@ and compliance 30%, innovation and interaction 30%). Record on the Docker build
 | 4:45 | Governance tab | Scroll the checklist; press "Download disclosure (JSON)" | "Every requirement mapped to a control, and the disclosure a regulator asks for, in one click." |
 | 5:00 | End | | |
 
+**Optional 40-second segment: the monitoring loop.** Swap it in for the Governance tab (4:45) when the
+theme of agents that act on conditions comes up. In the officer window, open the Control Room's
+**Monitoring** tab, press *Advance the market*, choose 6 months with the reason "Demo: six months of the
+2009 rally". Say: "Time moves only when compliance moves it, with a logged reason." In Rina's window, the
+dashboard briefing now leads with *Your portfolio has drifted*: open it, point at equity above its band,
+and press *Propose rebalancing*. Say: "The loop watches and proposes; it never trades. The rebalancing is
+a new version the gate checks against her tier today, and only her own Confirm, after the quiz, can
+execute it. If the market moves again first, Confirm refuses the old prices."
+
 After recording, in the Console, export the operation log as JSON and CSV into the evidence pack
 (deliverable 06), next to `evidence/redteam_log.json`. The evidence script
-(`python scripts/evidence.py`) already runs Scenarios 1, 3, 4 and the Control Room steps
-(Scenario 5), including How to fix, a goal projection and a review decision, and writes
-`evidence/model_disclosure.json`.
+(`python scripts/evidence.py`) already runs Scenarios 1, 3, 4, the Control Room steps (Scenario 5)
+and the monitoring loop (Scenario 6), including How to fix, a goal projection, a review decision, a
+market move, the advisor's rebalancing proposal, a stale one refused and a fresh one executed, and
+writes `evidence/model_disclosure.json`.

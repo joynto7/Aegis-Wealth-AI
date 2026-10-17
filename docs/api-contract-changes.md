@@ -41,6 +41,34 @@ steps 1 and 4 are for the backend lead.
 | Disclosure DISC-04 | `backend/data/disclosures.json`, advice records | The AI's inherent limits and risks (2018 Guiding Opinions, Art. 23). Records now list four disclosures. |
 | Table `controls`; columns `chat_messages.cards`, `chat_messages.number_sources` | Database | Added on start-up to a database from an earlier version. |
 
+## Additions for version 2 (backwards compatible)
+
+Planning, what-if and AI governance. 11 new operations (49 in all); every existing response keeps its
+fields.
+
+| Change | Where | Why |
+| --- | --- | --- |
+| `POST /api/proposals/{id}/preview` | New, client (owner) | A dry run of a revision for the What-if lab: same body as `/revise`, same engines and gate, nothing saved or logged. Returns `ProposalPreview` (`total_pct`, items, class weights, metrics, stress, gate). Same T2 preconditions as a revision; another client's proposal is 403. |
+| `GET /api/proposals/{id}/remedy` | New, client (owner) | How to fix: `Remedy` with `gate_before`/`failed_before`, `gate_after`/`failed_after`, `fixed_rule_ids`, `changes` (product, `from_pct`, `to_pct`, `rule_ids`, `reasons`), `items` to send to `/revise`, `metrics_after`, `summary`. 409 STATE_CONFLICT on a closed proposal; the T2 profile checks apply. |
+| `POST /api/projections` | New, client | Goal projection. Body `ProjectionRequest`: `basis` (`tier`, `proposal` or `account`), `proposal_id`, `tier`, `amount`, `horizon_years` (1 to 30), `monthly_contribution`, `target_amount`, `compare_tiers`. Returns `Projection`: yearly P10 to P90 bands, end values, `probability_target_pct`, `probability_loss_pct`, `median_shortfall`, `required_monthly` (50/75/90%), the five-tier comparison, the seed and the method. 409 PROFILE_REQUIRED for a tier basis without a profile; 422 when `proposal_id` is missing for a proposal basis or the amount and contribution are both 0. |
+| `GET /api/goals/current`, `PUT /api/goals/current` | New, client | The client's current goal (`name`, `target_amount`, `horizon_years`, `monthly_contribution`), `{"goal": null}` before the first. Each PUT saves a new version and logs `goal_set`. |
+| `GET /api/insights` | New, client | The dashboard briefing: `items` (`id`, `tone`, `title`, `body`, `figure`, `figure_label`, `href`, `action`), `source`, `generated_at`. Computed by code. |
+| `GET /api/sandbox/analytics` | New, client | The live portfolio: value, cash, invested, class weights, weighted fee, largest position, positions, stress. |
+| `POST /api/chat/feedback` | New, client | `{message_id, rating: up/down, reason?}` on one of the client's own replies; logged as `chat_feedback`. 404 for an unknown reply, 403 for another client's. |
+| `provenance: Provenance` | `ChatReply`, `ChatMessage` | The reply's AI label and fingerprints: `label`, `ai_generated`, `generator`, `provider`, `model`, `mode`, `config_fingerprint`, `content_sha256`, `created_at`, `standards`. `ChatMessage` also gains the client's `feedback`. |
+| `X-AI-Generated`, `X-AI-Label`, `X-AI-Content-SHA256`, `X-AI-Config-Fingerprint` | `POST /api/chat` response headers | The implicit, machine-readable label (China's AI-content labelling measures). |
+| `ChatCard` types `projection`, `remedy` | `ChatReply.cards` | The `project_goal` and `suggest_fix` tool results. |
+| `signals`, `flags`, `review_status`, `latency_ms` | `AgentTurn` in the overview | Threat signals (`id`, `label`, `severity`, `owasp`, `evidence`), review flags and the review state of each turn. |
+| `threat_turns`, `reviews_open`, `reviews_escalated`, `feedback_down` | `OversightKpis` | The new Control Room counts. |
+| `config_fingerprint`, `alerts` | `Oversight` | The configuration fingerprint and the alerts derived from the log (`id`, `severity`, `title`, `detail`, `since`). |
+| `GET /api/compliance/reviews?status=open\|resolved\|all` | New, compliance only | The review queue: `items` (turn, client, message preview, severity, flags, status, decision) and `counts`. |
+| `GET /api/compliance/turns/{log_id}` | New, compliance only | The turn inspector: message, reply, provenance, tools, cards, proposals, signals, trace spans, token use, latency, served model, configuration fingerprint, feedback, flags and decision. |
+| `POST /api/compliance/reviews/{log_id}` | New, compliance only | `{decision: cleared/escalated, note}` (note 5 to 300 characters), logged as `review_decided`. 404 for an unknown turn, 409 STATE_CONFLICT for a turn with no flag. |
+| `AiControl.check` value `reviews`; `ModelCard.governance` | Regulations, model disclosure | The review queue's live status in the checklist; the disclosure's labelling, threat-signal, review and tracing policies. |
+| Regulations version `reg-2026-10-v2` | `GET /api/compliance/regulations` | Five more frameworks (China's AI-content labelling measures, the CSRC FinTech plan 2026–2030, the HK SFC generative-AI circular, FINRA's 2026 report, the OWASP Agentic Top 10) and 20 AI controls. |
+| Log actions `goal_set`, `chat_feedback`, `review_decided` | Operation log | The new client and officer actions. `agent_turn` entries also carry `signals`, `trace`, `usage`, `latency_ms`, `served_model`, `fallback_reason` and `config_fingerprint`. |
+| Table `goals`; column `chat_messages.provenance` | Database | Created on start-up for a database from an earlier version. |
+
 ## Behaviour now fixed by the implementation
 
 These follow the documentation; listed so the frontend and the docs agree.

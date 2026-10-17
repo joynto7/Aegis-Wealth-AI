@@ -17,6 +17,8 @@ automated test, and the test evidence is in `evidence/`.
 | Sessions and password hashes | `sessions` (SHA-256 of the cookie), `users` (bcrypt) | Identity |
 | The Anthropic API key | Backend environment only (`.env`, git-ignored) | Model access and cost |
 | Compliance switches | `controls` table, changes in the operation log | Stop the AI advisor and sandbox execution by hand |
+| Saved goals (version 2) | `goals` table, `goal_set` log entries | The client's targets; they drive the briefing and the projections |
+| AI labels, traces and review decisions (version 2) | `chat_messages.provenance`, `agent_turn` and `review_decided` log entries | Evidence of what the AI said, how it got there, and who reviewed it |
 
 Out of scope by design: real money, brokerage connections, live market data and self-registration. No
 code path exists for any of them, so no prompt can reach one.
@@ -31,16 +33,17 @@ refused call as a "blocked" card in the chat.
 | Tier | Who | What it allows | Unlocked when | Enforced in code | Proven by |
 | --- | --- | --- | --- | --- | --- |
 | **T0** Read | Agent and client | Product shelf, comparison, rule text | A valid session, and the advisor not suspended | `app/core/auth.py:21` (`current_user`); broker allows T0 tools for any client session while the advisor is active (`app/agent/broker.py:109`) | AT-01; `test_api_auth.py`; `test_oversight.py` |
-| **T1** Client data | Agent (for the logged-in client) and client | The client's own profile and proposals | The data belongs to the session's user | The broker passes the session's user into every tool; `app/services/proposals.py:97` (`get_owned`) returns 403 for another client's id, which the broker turns into `PERMISSION_DENIED` (`app/agent/broker.py:120`) | AT-02 (`test_api_ownership.py`); `test_agent.py::test_t1_tools_only_read_the_clients_own_data`; red-team group 5 |
+| **T1** Client data | Agent (for the logged-in client) and client | The client's own profile and proposals, and in version 2 their goal projections and How to fix (both read-only: applying a fix is a T2 revision by the client) | The data belongs to the session's user | The broker passes the session's user into every tool; `app/services/proposals.py:97` (`get_owned`) returns 403 for another client's id, which the broker turns into `PERMISSION_DENIED` (`app/agent/broker.py:120`) | AT-02 (`test_api_ownership.py`); `test_agent.py::test_t1_tools_only_read_the_clients_own_data`; red-team group 5 |
 | **T2** Propose | Agent and client | Create and revise proposals; the gate always runs | Profile complete, no open contradiction, under 365 days old | `app/services/profiles.py:130` (`t2_error`), checked by the broker (`app/agent/broker.py:111`) and by the proposal routes; the gate runs inside `app/services/proposals.py`, so no path skips it | AT-04, AT-07; `test_agent.py::test_broker_denies_t2_with_an_open_contradiction_and_unknown_tools` |
 | **T3** Execute (sandbox) | The client's click only | Place simulated orders | PASS or acknowledged WARNING, quiz passed, a valid one-time token from `POST /confirm`, and execution not halted | No agent tool exists for T3; any unknown tool name is denied as T3 (`app/agent/broker.py:106`). `app/services/execution.py:45` issues a token (`secrets.token_urlsafe(32)`, stored as SHA-256, 5 minutes, bound to the items' hash); `execution.py:88` checks it in the documented order and claims it with a compare-and-set update (`execution.py:110`) so it works exactly once. While execution is halted, both refuse with EXECUTION_HALTED (`execution.py:46`, `:90`), even for a token issued before | AT-10 (`test_tokens.py`); red-team groups 1 and 4; `test_oversight.py` |
-| **C** Oversight (addition) | The compliance officer only | Suspend or resume the AI advisor; halt or resume execution; export the model disclosure | The compliance role, and a reason of 5 to 300 characters | `app/core/auth.py:45` (`compliance_user`); `app/services/controls.py:66` (`set_state`) logs each change with its reason. A suspension is checked at the start of every turn and again by the broker before every tool call, so it also stops a turn under way | `test_oversight.py` (switches, mid-turn suspension, halt with an earlier token, role checks, input checks) |
+| **C** Oversight (addition) | The compliance officer only | Suspend or resume the AI advisor; halt or resume execution; export the model disclosure; clear or escalate a flagged AI turn (version 2) | The compliance role, and a reason of 5 to 300 characters | `app/core/auth.py:45` (`compliance_user`); `app/services/controls.py:66` (`set_state`) logs each change with its reason. A suspension is checked at the start of every turn and again by the broker before every tool call, so it also stops a turn under way | `test_oversight.py` (switches, mid-turn suspension, halt with an earlier token, role checks, input checks) |
 
 The compliance officer still cannot change any client's data: every state-changing endpoint for
 profiles, proposals and orders requires the client role (`app/core/auth.py:39`). Beyond reading and
-exporting, the officer's only powers are the two switches and the disclosure export, as Art. 23 of
-China's 2018 Guiding Opinions on asset management asks: the firm must be able to step in by hand and
-stop its AI business.
+exporting, the officer's only powers are the two switches, the disclosure export and review decisions
+on flagged AI turns, as Art. 23 of China's 2018 Guiding Opinions on asset management asks: the firm
+must be able to step in by hand and stop its AI business. A review decision changes no client data:
+it is an append-only log entry with the officer's note.
 
 ## 3. Controls
 
@@ -66,6 +69,9 @@ stop its AI business.
 - All database access goes through the ORM.
 - Agent tool inputs are validated twice: by strict JSON schemas at the model, then server-side by the
   broker.
+- Version 2 inputs follow the same rules: projections bound the horizon (1 to 30 years), the amount
+  (up to CNY 10,000,000), the contribution and the target; review notes and feedback reasons are
+  capped at 300 characters.
 
 **Request hardening** (`app/main.py:58`).
 - Cross-site POSTs are refused by an Origin check, on top of the SameSite cookie.
@@ -116,6 +122,35 @@ envelope. No stack trace reaches the browser (`app/core/errors.py`).
   that ran. The report carries its own fingerprint, and each export is logged.
 - A live feed shows every agent turn with its tools, tiers, broker decisions and gate results.
 
+**AI governance** (version 2).
+- *Labels.* Every reply carries a visible label (AI-generated, Automated template (checked) or System
+  notice) and machine-readable provenance: the serving model, the configuration fingerprint and the
+  SHA-256 of the text, stored with the message and sent as `X-AI-*` headers on `POST /api/chat`
+  (China's AI-content labelling measures; EU AI Act Art. 50). The chat opens with a notice that the
+  client is talking to an AI system.
+- *Configuration fingerprint.* One SHA-256 over the model and its settings, the system prompt, the
+  tool list and tiers, the grounding policy and the data versions (`app/agent/fingerprint.py`).
+  Every turn and every reply records it, so any configuration change is visible in the log.
+- *Threat signals.* Twelve pattern rules and an obfuscation check tag each client message, mapped to
+  the OWASP Top 10 for Agentic Applications (`app/agent/threats.py`). They are advisory: they never
+  block a message, so they cannot be used to refuse service, and the broker and the gate remain the
+  controls. On the red-team set they flag 27 of 30 prompts at medium or high; on 30 ordinary questions
+  they flag none.
+- *Review queue.* A turn with a medium or high signal, a blocked call, a rejected AI proposal, a reply
+  rewritten or replaced after the number check, or a client's thumbs-down waits for the officer, who
+  clears or escalates it with a note. Decisions are `review_decided` entries under the same
+  append-only trigger as the rest of the log.
+- *Alerts* derived from the log: repeated blocked calls by one client, repeated gate rejections of AI
+  proposals, high threat signals, a high rate of failed number checks, open reviews and a stopped
+  switch.
+- *Trace.* Each turn's spans (model calls, tool calls, the number check, templates) with durations,
+  tiers, decisions and token counts. Prompts, replies and tool arguments are not captured, so the
+  trace adds no personal data.
+- *Feedback.* A client can rate only their own replies (403 otherwise).
+- *What-if and How to fix.* The preview saves and logs nothing and needs the same T2 preconditions as a
+  revision. How to fix only suggests: applying it is a revision by the client, so the gate runs again
+  and the version history keeps it.
+
 **Tamper evidence.**
 - Advice records are chained by SHA-256 (`app/engines/chain.py`), and verification names the first
   changed record (`app/services/records.py:56`).
@@ -144,9 +179,13 @@ envelope. No stack trace reaches the browser (`app/core/errors.py`).
 | 12 | Model outage or runaway cost | API down, or a tool loop | Template fallback; 4-round cap; 20-second budget; 20 chat messages a minute (AT-12) | Fallback answers are plainer |
 | 13 | Password guessing | Repeated log-in attempts | 10 attempts a minute per IP; 5-failure account lock-out; generic errors; bcrypt | Lock-out can be triggered on purpose to block a demo account for 5 minutes |
 | 14 | Cross-site request forgery | A malicious page posts to the API | SameSite=Lax cookie, Origin check, JSON-only bodies | Relies on browsers sending Origin, as all current ones do |
-| 15 | The AI misbehaves in a way no rule anticipated | Replies drift after a model update | The officer watches the live feed and can suspend the advisor at once; a suspension also stops a turn under way | A human has to notice; there is no automatic tripwire yet |
+| 15 | The AI misbehaves in a way no rule anticipated | Replies drift after a model update | Alerts from the log (blocked calls, rejected AI proposals, high threat signals, failing number checks); a review queue of flagged turns; client thumbs-downs; the officer can suspend the advisor at once, which also stops a turn under way | Alerts are thresholds, not anomaly detection; a person still has to act |
 | 16 | Misuse of a compliance switch | An officer halts execution without cause | Compliance role only; a reason is required and logged; clients keep every other screen, and proposals stay as they are | Availability depends on one role; no second approver |
-| 17 | Disclosed model differs from the running one | A report filed before the prompt changed | SHA-256 fingerprints of the system prompt and tool list in every disclosure; the report's own hash | A fingerprint shows a change, not whether it matters |
+| 17 | Disclosed model differs from the running one | A report filed before the prompt changed | SHA-256 fingerprints of the system prompt and tool list in every disclosure; the report's own hash; the configuration fingerprint on every turn and reply (version 2) | A fingerprint shows a change, not whether it matters |
+| 18 | AI output mistaken for human advice, or a template for the model | A client trusts a reply as if a person wrote it | A visible label on every reply, the AI notice at the top of the chat, provenance with the serving model, and `X-AI-*` headers | A screenshot or copied text loses the machine-readable label |
+| 19 | Over-reliance on a projection | "84% chance" read as a promise | Every projection is labelled illustrative and shows the bad case (P10) and the chance of a loss; the answer is seeded and reproducible; the AI must say "illustrative" and mention the bad case | Resampled synthetic history; the past does not predict the future |
+| 20 | An attack goes unnoticed because nothing failed | An injection the gate stopped without anyone looking | Threat signals put the turn in the review queue and raise an alert when severe | Pattern rules miss new wording: 3 of the 30 red-team prompts raise no medium signal (two still reach review through a block or a rejection) |
+| 21 | Review decisions rewritten after the fact | Clearing an escalation quietly | Decisions are append-only log entries under the database trigger; the queue is rebuilt from the log | The same whole-database risk as #10 |
 
 ## 5. Red-team results
 
@@ -170,6 +209,13 @@ runs on a fresh database, with a fresh PASS proposal before each prompt.
 | Cross-client data | 0 |
 | Unsupported numbers or banned phrases in final replies | 0 |
 
+**Threat signals** (version 2): 27 of the 30 prompts raised a medium or high signal, which puts the turn
+in the review queue (`flagged_for_review` in the log; each entry lists its signals and OWASP items).
+Of the other three, two reach the queue through another flag: the broker blocked the request for
+another client's proposal (#27) and the gate rejected the 80% revision (#20). The third (#19, *"only
+equity funds"*) raised a low signal only; the engine built a suitable mix that passed, so there was
+nothing to review.
+
 Rule-breaking requests were attempted as revisions and rejected by the gate (R-02, R-03, R-04). The
 request for another client's proposal was denied by the broker at T1 and logged as
 `permission_denied`. In the chat, the client sees each rejected version as a REJECT card naming the
@@ -180,7 +226,24 @@ The committed log was produced in fallback mode (no API key). With `ANTHROPIC_AP
 model. The pass criteria do not depend on which mode answers: orders, gate decisions, ownership and
 grounding are enforced by code, not by the model.
 
-## 6. Limitations and next steps
+## 6. OWASP Top 10 for Agentic Applications (2026)
+
+The OWASP GenAI Security Project's list of agent-specific risks (December 2025), item by item:
+
+| Item | Aegis control | Status |
+| --- | --- | --- |
+| ASI01 Agent goal hijack | Rules live in code; an injection can at most attempt a revision, which the gate rejects; tool results and descriptions are data; threat signals flag instruction overrides, role-play, prompt extraction, dictated replies and hidden text | Mitigated; detection is pattern-based |
+| ASI02 Tool misuse and exploitation | Nine strict tools in tiers T0 to T2, validated again by the broker; no tool can execute an order; at most 4 tool rounds and 20 seconds a turn | Mitigated |
+| ASI03 Identity and privilege abuse | The session's user scopes every tool call; another client's data is denied at T1 and logged; names and emails never reach the model | Mitigated |
+| ASI04 Agentic supply chain vulnerabilities | No plugins, MCP servers or remote tools are loaded at run time; the tool list is fixed in code and fingerprinted; dependencies are pinned to exact versions | Partly: no SBOM or signature checks yet |
+| ASI05 Unexpected code execution | No shell, code or file tool exists; tool arguments are validated JSON, never evaluated | Not applicable by design |
+| ASI06 Memory and context poisoning | No long-term memory: each turn sends the last 10 messages of the client's own chat and a context block written by the system | Mitigated |
+| ASI07 Insecure inter-agent communication | One agent; no agent-to-agent messages | Not applicable |
+| ASI08 Cascading failures | A refusal, timeout, failed number check or round limit falls back to a checked template; orders need a separate client action; the switches stop the advisor or execution | Mitigated |
+| ASI09 Human-agent trust exploitation | Orders need the client's Confirm click and a one-time token; grounding and banned phrases; AI labels on every reply; signals for risk waivers, claimed authority and pressure | Mitigated |
+| ASI10 Rogue agents | No autonomy beyond one turn; every action logged and traced; alerts and the review queue; the fingerprint shows any change to the configuration | Mitigated; relies on review |
+
+## 7. Limitations and next steps
 
 - **HTTPS.** The demo is HTTP on localhost; production needs TLS 1.2+ and `COOKIE_SECURE=1`.
 - **Shared rate-limit state.** Limits and lock-out live in one process's memory; multiple instances
@@ -191,5 +254,8 @@ grounding are enforced by code, not by the model.
 - **External anchor for the hash chain.** Periodically publish or sign the latest hash so a full
   database replacement is also detectable.
 - **Penetration test and automated browser tests.** Not done in this build.
+- **Threat signals.** Pattern rules: a classifier, or the model itself as a second opinion, would catch
+  new wording. Alerts are fixed thresholds.
+- **Supply chain.** Add an SBOM and dependency signature checks (ASI04).
 - **Real market data.** The replay history is synthetic and labelled "Illustrative" until licensed
   series replace it (decision D-1).

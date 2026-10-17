@@ -1,7 +1,9 @@
 """Execution evidence (deliverable 6): run Scenarios 1, 4, 5 and 3 on a fresh sandbox and export the operation log.
 
 Scenario 5 is an addition: the compliance officer watches the AI in the Control
-Room, suspends it and halts execution by hand, then exports the model disclosure.
+Room, reviews a flagged turn, suspends the advisor and halts execution by hand,
+then exports the model disclosure. Scenario 1 also shows the v2 additions: How to
+fix after a rejection, the AI label on a reply, a goal projection and the briefing.
 
 Writes evidence/operation_log.json and .csv (exported by the compliance officer,
 as in Scenario 3), evidence/scenario_run.json (each step, its result and its
@@ -134,6 +136,11 @@ def main() -> None:
     run.steps[-1]["note"] = "gate REJECT: " + ", ".join(
         r["id"] for r in v2["gate"]["rules"] if r["result"] == "fail" and r["type"] == "hard"
     )
+    fix = run.step("Rina", "ask How to fix", rina.get(f"/api/proposals/{v2['id']}/remedy"))
+    run.steps[-1]["note"] = (
+        f"computed by code: gate {fix['gate_before']} -> {fix['gate_after']}, fixes {', '.join(fix['fixed_rule_ids'])} "
+        f"in {len(fix['changes'])} changes"
+    )
     original = {i["product_code"]: i["weight_pct"] for i in prop["items"]}
     v3 = run.step(
         "Rina",
@@ -145,15 +152,13 @@ def main() -> None:
         201,
     )
     run.steps[-1]["note"] = f"gate {v3['gate']['decision']}"
-    chat = run.step(
-        "Rina",
-        "ask 'Why this bond fund?'",
-        rina.post("/api/chat", json={"message": "Why this bond fund?", "proposal_id": v3["id"]}),
-    )
+    asked = rina.post("/api/chat", json={"message": "Why this bond fund?", "proposal_id": v3["id"]})
+    chat = run.step("Rina", "ask 'Why this bond fund?'", asked)
     run.steps[-1]["note"] = (
         f"{chat['mode']} reply; tools: "
         + ", ".join(t["tool"] for t in chat["tool_calls"])
         + f"; cards: {', '.join(c['type'] for c in chat['cards'])}; {len(chat['number_sources'])} figures traced"
+        + f"; labelled '{asked.headers.get('X-AI-Label')}', reply sha256 {asked.headers.get('X-AI-Content-SHA256', '')[:12]}..."
     )
     position = (-v3["id"]) % 3
     run.step(
@@ -171,6 +176,23 @@ def main() -> None:
         f"{len(executed['orders'])} orders, cash after CNY {executed['cash_after']:,.2f}, record #{executed['record_id']}"
     )
     record = rina.get(f"/api/records/{executed['record_id']}").json()
+    goal = {"name": "Home deposit", "target_amount": 260000, "horizon_years": 8, "monthly_contribution": 500}
+    run.step("Rina", "set a goal: CNY 260,000 in 8 years, CNY 500 a month", rina.put("/api/goals/current", json=goal))
+    proj = run.step(
+        "Rina",
+        "project the goal on the executed proposal",
+        rina.post(
+            "/api/projections", json={**{k: goal[k] for k in goal if k != "name"}, "basis": "proposal", "proposal_id": v3["id"]}
+        ),
+    )
+    need = {r["confidence_pct"]: r["monthly"] for r in proj["required_monthly"] or []}
+    run.steps[-1]["note"] = (
+        f"{proj['probability_target_pct']}% of {proj['paths']} illustrative paths reach the target; "
+        f"P10 CNY {proj['end']['p10']:,.0f}, median CNY {proj['end']['p50']:,.0f}, P90 CNY {proj['end']['p90']:,.0f}; "
+        f"CNY {need.get(75, 0):,.0f} a month for a 75% chance"
+    )
+    brief = run.step("Rina", "read the briefing", rina.get("/api/insights"))
+    run.steps[-1]["note"] = f"{len(brief['items'])} insights computed by code: " + ", ".join(i["id"] for i in brief["items"])
 
     # Scenario 4: a prompt-injection attempt is blocked (Chen, a second client).
     chen = make()
@@ -229,6 +251,26 @@ def main() -> None:
         f"{k['denied_tool_calls']} blocked by the broker; {k['agent_proposals_rejected']} of {k['agent_proposals']} AI proposals "
         f"rejected by the gate; {k['figures_traced']} figures traced; {k['orders_by_agent']} orders by the AI"
     )
+    queue = run.step("Officer", "open the review queue", officer.get("/api/compliance/reviews?status=open"))
+    run.steps[-1]["note"] = f"{queue['counts']['open']} AI turns flagged for a person: " + "; ".join(
+        f"{i['client']} ({i['severity']}): {', '.join(f['text'] for f in i['flags'])}" for i in queue["items"]
+    )
+    attack = next(i for i in queue["items"] if any(f["kind"] == "threat" for f in i["flags"]))
+    turn = run.step("Officer", "inspect the injection turn", officer.get(f"/api/compliance/turns/{attack['log_id']}"))
+    run.steps[-1]["note"] = (
+        "signals: "
+        + ", ".join(f"{s['label']} ({s['owasp']}, {s['severity']})" for s in turn["signals"])
+        + f"; {len(turn['trace'])} trace spans; configuration {turn['config_fingerprint'][:12]}..."
+    )
+    decided = run.step(
+        "Officer",
+        "escalate it with a note",
+        officer.post(
+            f"/api/compliance/reviews/{attack['log_id']}",
+            json={"decision": "escalated", "note": "Evidence run: injection attempt, the gate held"},
+        ),
+    )
+    run.steps[-1]["note"] = f"status {decided['status']} by {decided['decided_by']}, kept as an append-only log entry"
     run.step(
         "Officer",
         "suspend the AI advisor",

@@ -88,14 +88,41 @@ def main() -> None:
         ("GET", "/api/replay/E1?amount=200000", {}),
         ("GET", "/api/controls", {}),
         ("GET", "/api/compliance/regulations", {}),
+        # v2: goal projection (1,000 paths, plus the same goal under all five tiers), the what-if dry run,
+        # How to fix, the briefing and live-portfolio analytics.
+        ("POST", "/api/projections", {"json": {"basis": "proposal", "proposal_id": pid, "target_amount": 150000}}),
+        (
+            "POST",
+            "/api/projections",
+            {
+                "json": {
+                    "basis": "tier",
+                    "amount": 100000,
+                    "horizon_years": 30,
+                    "monthly_contribution": 2000,
+                    "target_amount": 2000000,
+                }
+            },
+        ),
+        (
+            "POST",
+            f"/api/proposals/{pid}/preview",
+            {"json": {"items": [{"product_code": i["product_code"], "weight_pct": i["weight_pct"]} for i in proposal["items"]]}},
+        ),
+        ("GET", f"/api/proposals/{pid}/remedy", {}),
+        ("GET", "/api/insights", {}),
+        ("GET", "/api/sandbox/analytics", {}),
     ]
     results = []
 
     def measure(method: str, path: str, kwargs: dict) -> None:
         samples = [timed(c, method, path, **kwargs) for _ in range(20)]
+        label = path if "amount=" in path else path.split("?")[0]
+        if path == "/api/projections":
+            label += " (30 years, all tiers)" if kwargs["json"].get("horizon_years") == 30 else " (proposal, all tiers)"
         results.append(
             {
-                "endpoint": f"{method} {path if 'amount=' in path else path.split('?')[0]}",
+                "endpoint": f"{method} {label}",
                 "calls": 20,
                 "p95_ms": round(p95(samples) * 1000, 1),
                 "median_ms": round(statistics.median(samples) * 1000, 1),
@@ -109,8 +136,10 @@ def main() -> None:
     chat_mode = c.request("GET", "/api/health").json()["llm"]
     # The compliance Control Room's live view and the model disclosure, as the officer.
     c.request("POST", "/api/auth/login", json={"email": "officer@example.com", "password": PASSWORD}).raise_for_status()
-    for path in ("/api/compliance/overview", "/api/compliance/model-card"):
+    for path in ("/api/compliance/overview", "/api/compliance/model-card", "/api/compliance/reviews?status=all"):
         measure("GET", path, {})
+    latest_turn = c.request("GET", "/api/compliance/overview").json()["turns"][0]["log_id"]
+    measure("GET", f"/api/compliance/turns/{latest_turn}", {})
     report = {
         "run_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "target": "deterministic p95 < 2 s; chat < 10 s (NFR-1.1, NFR-1.2)",

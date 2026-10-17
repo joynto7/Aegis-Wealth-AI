@@ -1,6 +1,6 @@
 {
   "report": "Aegis Wealth AI: AI model and asset-allocation logic disclosure",
-  "generated_at": "2026-10-16T04:41:48Z",
+  "generated_at": "2026-10-16T18:47:42Z",
   "advisor": {
     "provider": "Anthropic",
     "model": "claude-opus-5-5",
@@ -10,8 +10,8 @@
     "timeout_seconds": 20.0,
     "max_tool_rounds": 4,
     "history_messages": 10,
-    "system_prompt_sha256": "7ae2b60b94c33fdc1b967fca2ea1b13934b2b70502f0740121bfc752830365b0",
-    "tools_sha256": "d163fe5a2ade7e12a93291ff18920de4dea6c525f1392023dc26fcab2df4beb6",
+    "system_prompt_sha256": "a1b1db1f2793bbb04cdc66ec7412d35a69d7950a41463993ee1fa5952c008295",
+    "tools_sha256": "4b9a1c28c4db1823d2a8066a8812f09cae93f47a6a56479bb34ffd075ec24263",
     "data_sent": "Each turn: the client's tier, capacity and willingness scores, maximum acceptable loss, profile status, current proposal number and status, the last 10 chat messages, and the results of the tools it calls.",
     "data_never_sent": "Names, email addresses, passwords, session or confirmation tokens, and other clients' data."
   },
@@ -40,6 +40,16 @@
       "name": "get_proposal",
       "tier": "T1",
       "description": "Return one of the client's own proposals: items with the reason each was chosen, risk metrics, the three hypothetical stress results and the compliance-gate result with every rule."
+    },
+    {
+      "name": "project_goal",
+      "tier": "T1",
+      "description": "Project the client's own proposal (or, with no proposal, their tier's mix for an amount) over a horizon: 1,000 illustrative paths resampled from history, net of fees. Returns the chance of reaching a target, the bad (P10), typical (P50) and good (P90) end values, the chance of ending below the money paid in, and the monthly contribution needed for a 50%, 75% or 90% chance. Illustrative, not a forecast. Optional inputs are null."
+    },
+    {
+      "name": "suggest_fix",
+      "tier": "T1",
+      "description": "How to fix one of the client's own proposals: the smallest change, computed by code, that gets it through the compliance gate, with each change and the rule it fixes. Read-only: the client applies it with the Apply button on the card, and the gate checks the new version again. Null means the latest open proposal."
     },
     {
       "name": "create_proposal",
@@ -349,19 +359,19 @@
   "controls": {
     "advisor": {
       "state": "active",
-      "changed_at": "2026-10-16T04:41:48Z",
+      "changed_at": "2026-10-16T18:47:42Z",
       "reason": "Evidence run finished",
       "changed_by": "Amara (Compliance)"
     },
     "execution": {
       "state": "open",
-      "changed_at": "2026-10-16T04:41:48Z",
+      "changed_at": "2026-10-16T18:47:42Z",
       "reason": "Evidence run finished",
       "changed_by": "Amara (Compliance)"
     }
   },
   "regulations": {
-    "version": "reg-2026-10",
+    "version": "reg-2026-10-v2",
     "note": "Mapping prepared by the team for this sandbox. It shows which requirement each control is designed to meet; it is not legal advice.",
     "frameworks": [
       {
@@ -399,6 +409,36 @@
         "short": "Aegis policy",
         "title": "Internal control set by the Aegis team",
         "jurisdiction": "Internal"
+      },
+      {
+        "id": "CN-AIGC-LABEL",
+        "short": "CN AI Labelling Measures",
+        "title": "Measures for Labelling AI-Generated Synthetic Content (CAC, MIIT, MPS and NRTA, 2025)",
+        "jurisdiction": "China"
+      },
+      {
+        "id": "CN-CSRC-FT",
+        "short": "CSRC FinTech Plan 2026-2030",
+        "title": "Capital Market FinTech Development Plan 2026-2030 (CSRC, 2026)",
+        "jurisdiction": "China"
+      },
+      {
+        "id": "HK-SFC-GENAI",
+        "short": "HK SFC GenAI circular",
+        "title": "Circular to licensed corporations on the use of generative AI language models (SFC, 2024)",
+        "jurisdiction": "Hong Kong"
+      },
+      {
+        "id": "US-FINRA-2026",
+        "short": "FINRA 2026 report",
+        "title": "2026 Annual Regulatory Oversight Report: generative AI and AI agents (FINRA, 2025)",
+        "jurisdiction": "United States"
+      },
+      {
+        "id": "OWASP-ASI",
+        "short": "OWASP Agentic Top 10",
+        "title": "OWASP Top 10 for Agentic Applications (2026)",
+        "jurisdiction": "Industry standard"
       }
     ],
     "ai_controls": [
@@ -483,12 +523,122 @@
         "note": "Applied as good practice: investment advice is not on the Act's high-risk list."
       },
       {
+        "id": "AIA-50",
+        "framework": "EU AI Act",
+        "title": "Artificial Intelligence Act (Regulation (EU) 2024/1689)",
+        "ref": "Art. 50(1) and 50(2)",
+        "requirement": "Tell people they are interacting with an AI system, and mark AI-generated content in a machine-readable way.",
+        "control": "The chat opens with an AI notice, every reply carries its label, and its provenance travels with it and in X-AI-* response headers.",
+        "check": "built_in",
+        "note": "Applies since 2 August 2026."
+      },
+      {
         "id": "MIFID-25-6",
         "framework": "MiFID II",
         "title": "Markets in Financial Instruments Directive (Directive 2014/65/EU)",
         "ref": "Art. 25(6)",
         "requirement": "Before the transaction, give a retail client a statement on how the advice suits them.",
         "control": "A hash-chained advice record holds the proposal, the gate result, the disclosures and the quiz.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "LABEL-EXPLICIT",
+        "framework": "CN AI Labelling Measures",
+        "title": "Measures for Labelling AI-Generated Synthetic Content (CAC, MIIT, MPS and NRTA, 2025)",
+        "ref": "Art. 4 (explicit labels)",
+        "requirement": "Add explicit labels that users can see to AI-generated text, in the content or the interface.",
+        "control": "Each reply is labelled AI-generated, Automated template (checked) or System notice where the client reads it.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "LABEL-IMPLICIT",
+        "framework": "CN AI Labelling Measures",
+        "title": "Measures for Labelling AI-Generated Synthetic Content (CAC, MIIT, MPS and NRTA, 2025)",
+        "ref": "Art. 5 (implicit labels)",
+        "requirement": "Add implicit labels to the metadata of AI-generated content.",
+        "control": "Each reply's provenance (label, serving model, configuration fingerprint, SHA-256 of the text) is stored with it and sent as response headers.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "CSRC-FILING",
+        "framework": "CSRC FinTech Plan 2026-2030",
+        "title": "Capital Market FinTech Development Plan 2026-2030 (CSRC, 2026)",
+        "ref": "Robo-advice: algorithm filing",
+        "requirement": "File the advisory algorithm and disclose how it works.",
+        "control": "The model disclosure states the configuration fingerprint that every reply records, so a filing can be matched to the answers it produced.",
+        "check": "report",
+        "note": null
+      },
+      {
+        "id": "CSRC-HUMAN",
+        "framework": "CSRC FinTech Plan 2026-2030",
+        "title": "Capital Market FinTech Development Plan 2026-2030 (CSRC, 2026)",
+        "ref": "'Human + AI' advisory model",
+        "requirement": "Combine human oversight with AI advice.",
+        "control": "The review queue: AI turns flagged by code are cleared or escalated by the compliance officer, and only the client's own click executes.",
+        "check": "reviews",
+        "note": null
+      },
+      {
+        "id": "SFC-HIGHRISK",
+        "framework": "HK SFC GenAI circular",
+        "title": "Circular to licensed corporations on the use of generative AI language models (SFC, 2024)",
+        "ref": "High-risk use: investment advice",
+        "requirement": "For AI investment advice, keep management oversight, human review of output and continuous monitoring.",
+        "control": "The Control Room's live feed and alerts, and human review of every flagged turn.",
+        "check": "reviews",
+        "note": "Applied as good practice: Aegis is a sandbox, not a licensed corporation."
+      },
+      {
+        "id": "FINRA-AGENTS",
+        "framework": "FINRA 2026 report",
+        "title": "2026 Annual Regulatory Oversight Report: generative AI and AI agents (FINRA, 2025)",
+        "ref": "Generative AI: AI agents",
+        "requirement": "Track agent actions and decisions, keep prompt and output logs, and record which model version was used and when.",
+        "control": "Each turn's trace (model calls, tool calls, the number check), stored with the reply, the serving model and the configuration fingerprint.",
+        "check": "built_in",
+        "note": "Applied as good practice."
+      },
+      {
+        "id": "ASI01",
+        "framework": "OWASP Agentic Top 10",
+        "title": "OWASP Top 10 for Agentic Applications (2026)",
+        "ref": "ASI01 Agent goal hijack",
+        "requirement": "Detect and contain attempts to redirect the agent's goals.",
+        "control": "Threat signals on every message for the review queue; the broker and the gate stop the attempt whatever the model writes.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "ASI02",
+        "framework": "OWASP Agentic Top 10",
+        "title": "OWASP Top 10 for Agentic Applications (2026)",
+        "ref": "ASI02 Tool misuse and exploitation",
+        "requirement": "Constrain what each tool can do and validate its inputs.",
+        "control": "Nine strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "ASI03",
+        "framework": "OWASP Agentic Top 10",
+        "title": "OWASP Top 10 for Agentic Applications (2026)",
+        "ref": "ASI03 Identity and privilege abuse",
+        "requirement": "Scope every agent action to the user's own identity and privileges.",
+        "control": "The session's user id limits every query; a request for another client's data is refused by the broker and logged.",
+        "check": "built_in",
+        "note": null
+      },
+      {
+        "id": "ASI09",
+        "framework": "OWASP Agentic Top 10",
+        "title": "OWASP Top 10 for Agentic Applications (2026)",
+        "ref": "ASI09 Human-agent trust exploitation",
+        "requirement": "Keep a human in control of consequential actions and stop the agent overstating itself.",
+        "control": "Orders need the client's Confirm click and a one-time token; promise words and unsupported figures never reach the client.",
         "check": "built_in",
         "note": null
       }
@@ -502,9 +652,125 @@
     "rules": "rules-2026-10",
     "disclosures": "disc-2026-10",
     "episodes": "ep-2026-10",
-    "regulations": "reg-2026-10",
+    "regulations": "reg-2026-10-v2",
     "products_as_of": "2026-09-30",
     "history": "Illustrative, as of 2026-09-30"
   },
-  "content_sha256": "edcc3f751ca41e875909d15e4f4a7898c1eae1acff0b1b531b77591cb059185f"
+  "governance": {
+    "config_fingerprint": "e1e58f73f2c692200856a13ff7cb38cb126b72660ea7190387a7b1dc01a9c9d1",
+    "config_components": {
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium",
+      "max_tokens": 16000,
+      "system_prompt_sha256": "a1b1db1f2793bbb04cdc66ec7412d35a69d7950a41463993ee1fa5952c008295",
+      "tools_sha256": "4b9a1c28c4db1823d2a8066a8812f09cae93f47a6a56479bb34ffd075ec24263",
+      "tool_tiers": {
+        "compare_products": "T0",
+        "create_proposal": "T2",
+        "explain_rule": "T0",
+        "get_profile_summary": "T1",
+        "get_proposal": "T1",
+        "project_goal": "T1",
+        "revise_proposal": "T2",
+        "search_products": "T0",
+        "suggest_fix": "T1"
+      },
+      "grounding_policy": "grounding-2026-10: every number traced to a tool result or the client's message; banned phrases blocked",
+      "data_versions": {
+        "assumptions": "as-2026-10",
+        "disclosures": "disc-2026-10",
+        "episodes": "ep-2026-10",
+        "model_portfolios": "mp-2026-10",
+        "questionnaire": "q-2026-10",
+        "regulations": "reg-2026-10-v2",
+        "rules": "rules-2026-10",
+        "scenarios": "sc-2026-10"
+      }
+    },
+    "labelling": "Every reply carries a visible label (AI-generated, automated template or system notice) and machine-readable provenance: the serving model, the configuration fingerprint and the SHA-256 of the text, also sent as X-AI-* response headers. The chat opens with a notice that the client is talking to an AI system.",
+    "threat_signals": [
+      {
+        "id": "goal_hijack",
+        "label": "Instruction override",
+        "severity": "high",
+        "owasp": "ASI01"
+      },
+      {
+        "id": "prompt_extraction",
+        "label": "Prompt extraction",
+        "severity": "medium",
+        "owasp": "ASI01"
+      },
+      {
+        "id": "execution_request",
+        "label": "Execution request",
+        "severity": "medium",
+        "owasp": "ASI02"
+      },
+      {
+        "id": "cross_client",
+        "label": "Another client's data",
+        "severity": "high",
+        "owasp": "ASI03"
+      },
+      {
+        "id": "tier_claim",
+        "label": "Unverified tier claim",
+        "severity": "medium",
+        "owasp": "ASI09"
+      },
+      {
+        "id": "role_play",
+        "label": "Role-play jailbreak",
+        "severity": "medium",
+        "owasp": "ASI01"
+      },
+      {
+        "id": "authority_claim",
+        "label": "Claimed authority",
+        "severity": "medium",
+        "owasp": "ASI09"
+      },
+      {
+        "id": "output_control",
+        "label": "Dictated reply",
+        "severity": "medium",
+        "owasp": "ASI01"
+      },
+      {
+        "id": "risk_waiver",
+        "label": "Waiver of suitability",
+        "severity": "medium",
+        "owasp": "ASI09"
+      },
+      {
+        "id": "concentration",
+        "label": "Large single weight",
+        "severity": "low",
+        "owasp": "ASI09"
+      },
+      {
+        "id": "pressure",
+        "label": "Pressure or urgency",
+        "severity": "low",
+        "owasp": "ASI09"
+      },
+      {
+        "id": "return_promise",
+        "label": "Promised returns",
+        "severity": "low",
+        "owasp": "ASI09"
+      }
+    ],
+    "review_triggers": [
+      "A medium or high threat signal on the client's message",
+      "A tool call the permission broker blocked",
+      "A proposal by the AI that the gate rejected",
+      "A reply rewritten, or replaced by a template, after the number check",
+      "A reply the client marked as unhelpful"
+    ],
+    "tracing": "Each turn is recorded as spans named after the OpenTelemetry GenAI semantic conventions (invoke_agent, chat, execute_tool) plus aegis.grounding and aegis.template, with durations, tiers, decisions and token use. Prompts and tool arguments are not captured."
+  },
+  "content_sha256": "5821953062d53368d921f23fb385d4e547170a9fbfaea58334dac41a891e7968"
 }

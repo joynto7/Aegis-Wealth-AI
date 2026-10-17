@@ -4,6 +4,9 @@ Deliverable 01: system architecture, core algorithms and security design, as bui
 API contract and screen specifications are in the project documentation (Chapters 1 to 3); this
 document describes the implementation and the decisions taken while building it.
 
+The formal version of this document, with UML diagrams, a traceability appendix and references, is
+[Aegis_Technical_Documentation.pdf](Aegis_Technical_Documentation.pdf), built from [report/](report/).
+
 ## 1. System architecture
 
 Aegis is a web application with two services and one database.

@@ -50,6 +50,12 @@ What makes it different:
 
 ## Run it
 
+**Live demo:** <https://aegis-wealth-ai.onrender.com>, using the demo accounts below. It is a free instance:
+the first visit after a quiet spell takes about a minute to wake it, and the data is shared by all visitors
+and starts fresh on each restart (see [Hosting the live demo](#hosting-the-live-demo)).
+
+To run it yourself:
+
 ```bash
 docker compose up --build
 ```
@@ -260,8 +266,8 @@ To host it on [Render](https://render.com) for free:
 
 1. Sign in to Render with GitHub.
 2. Choose **New > Blueprint**, then pick this repository. Render reads `render.yaml`.
-3. Apply. The first build takes several minutes, then the site is at `https://aegis-wealth-ai.onrender.com`
-   (Render adds a suffix if the name is taken).
+3. Apply. The first build takes several minutes, then the site is at `https://<name>.onrender.com`. This
+   repository's own instance is <https://aegis-wealth-ai.onrender.com>.
 
 What to know about the hosted demo:
 

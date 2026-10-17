@@ -18,7 +18,10 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     rules: {
-      "*.css": {
+      // Tailwind's custom loader is only for the global stylesheet. Let
+      // Turbopack handle *.module.css natively so CSS Module class exports
+      // remain available to components.
+      "globals.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },

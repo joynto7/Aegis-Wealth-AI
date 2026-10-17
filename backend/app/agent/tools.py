@@ -1,9 +1,15 @@
-"""The agent's nine tools (Section 2.5.6 plus two additions), tiers T0-T2. There is no T3 (execution) tool.
+"""The agent's eleven tools (Section 2.5.6 plus four additions), tiers T0-T2. There is no T3 (execution) tool.
 
 Additions: project_goal (a seeded Monte Carlo projection of the client's own
 proposal or tier mix) and suggest_fix (How to fix: the smallest change that
 passes the gate). Both are T1 and read-only; a fix is applied only by the
 client's Apply click, as an ordinary revision the gate checks again.
+
+The monitoring loop adds check_drift (T1, read-only: the client's drift from
+their executed mix and the trades a rebalancing would place) and
+propose_rebalance (T2: a new proposal version with those trades, checked by
+the gate). Executing a rebalancing still needs the client's quiz, Confirm
+click and one-time token, which no tool can reach.
 
 Schemas are strict (`strict: true`, `additionalProperties: false`, every
 property required; optional inputs are nullable). Strict mode does not carry
@@ -22,7 +28,7 @@ from app.core.errors import ApiError
 from app.engines.catalog import thaw
 from app.engines.fees import compare_products
 from app.models import Profile, User
-from app.services import planning, profiles, proposals
+from app.services import monitoring, planning, profiles, proposals
 from app.services.context import AppContext
 
 PRODUCT_TYPES = [
@@ -135,6 +141,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "input_schema": _schema({"proposal_id": _nullable({"type": "integer"})}),
     },
     {
+        "name": "check_drift",
+        "description": (
+            "Check how far the client's own invested portfolio has drifted from the mix they last agreed to (their latest "
+            "executed proposal), at the simulated market's current prices: each asset class's target and live weight, the "
+            "drift in percentage points against the band, rules the live holdings now fail, and the trades a rebalancing "
+            "would place. Read-only: nothing is saved or traded. Prices are simulated from illustrative history."
+        ),
+        "strict": True,
+        "input_schema": _schema({}),
+    },
+    {
         "name": "create_proposal",
         "description": (
             "Create a new proposal from an amount (CNY), a horizon in whole years and the amount needed within 2 years. "
@@ -162,6 +179,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             }
         ),
     },
+    {
+        "name": "propose_rebalance",
+        "description": (
+            "Propose a rebalancing of the client's own portfolio back to their latest executed mix: saves a new proposal "
+            "version with the trades, and the compliance gate always runs on it. Nothing is executed: the client opens it, "
+            "takes the quiz and presses Confirm. Returns the open rebalancing if one is already priced at today's prices."
+        ),
+        "strict": True,
+        "input_schema": _schema({}),
+    },
 ]
 
 TOOL_TIERS: dict[str, str] = {
@@ -172,8 +199,10 @@ TOOL_TIERS: dict[str, str] = {
     "get_proposal": "T1",
     "project_goal": "T1",
     "suggest_fix": "T1",
+    "check_drift": "T1",
     "create_proposal": "T2",
     "revise_proposal": "T2",
+    "propose_rebalance": "T2",
 }
 
 
@@ -215,6 +244,7 @@ def proposal_view(doc: dict[str, Any]) -> dict[str, Any]:
         "quiz_passed": doc["quiz_passed"],
         "notes": doc["notes"],
         "data_label": doc["data_label"],
+        "kind": "rebalance" if doc.get("rebalance") else "new",
     }
 
 
@@ -347,7 +377,39 @@ def suggest_fix(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     problem = profiles.t2_error(tc.profile, tc.ctx)
     if problem is not None:
         raise problem
+    monitoring.ensure_current(tc.db, proposal)
     return proposals.remedy(tc.ctx, proposal, tc.profile)
+
+
+def check_drift(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    view = monitoring.client_view(tc.db, tc.ctx, tc.user)
+    preview = view["rebalance"]
+    return {
+        "status": view["status"],
+        "market_month": view["market"]["month"],
+        "market_as_of": view["market"]["as_of"],
+        "target_proposal_id": view["target_proposal_id"],
+        "total_value": view["total_value"],
+        "band_pp": view["band_pp"],
+        "classes": view["classes"],
+        "largest": view["largest"],
+        "portfolio_drift_pct": view["portfolio_drift_pct"],
+        "outside_band": view["outside_band"],
+        "rules_failing": [{k: f[k] for k in ("id", "name", "type", "detail", "new")} for f in view["rules_failing"]],
+        "trades": [{k: t[k] for k in ("product_code", "side", "amount")} for t in preview["trades"]] if preview else [],
+        "sell_total": preview["sell_total"] if preview else None,
+        "buy_total": preview["buy_total"] if preview else None,
+        "turnover_pct": preview["turnover_pct"] if preview else None,
+        "open_rebalance": view["open_rebalance"],
+        "data_label": view["data_label"],
+    }
+
+
+def propose_rebalance(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    proposal = monitoring.propose(tc.db, tc.ctx, tc.user, tc.profile, actor="agent")
+    doc = proposals.to_schema(proposal, tc.ctx)
+    keys = ("source_proposal_id", "market_as_of", "portfolio_value", "trades", "sell_total", "buy_total", "turnover_pct")
+    return {**proposal_view(doc), "rebalance": {k: doc["rebalance"][k] for k in keys}}
 
 
 def create_proposal(tc: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
@@ -379,8 +441,10 @@ RUNNERS: dict[str, Callable[[ToolContext, dict[str, Any]], dict[str, Any]]] = {
     "get_proposal": get_proposal,
     "project_goal": project_goal,
     "suggest_fix": suggest_fix,
+    "check_drift": check_drift,
     "create_proposal": create_proposal,
     "revise_proposal": revise_proposal,
+    "propose_rebalance": propose_rebalance,
 }
 
 __all__ = ["RUNNERS", "TOOL_DEFINITIONS", "TOOL_TIERS", "ApiError", "ToolContext", "ToolInputError", "proposal_view"]

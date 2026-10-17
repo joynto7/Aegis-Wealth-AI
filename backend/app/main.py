@@ -15,7 +15,7 @@ from app.core.database import Base, make_engine, make_session_factory
 from app.core.errors import error_body, install_error_handlers
 from app.engines.catalog import load_catalog
 from app.models import add_missing_columns
-from app.routers import audit, auth, chat, oversight, planning, products, profile, proposals
+from app.routers import audit, auth, chat, monitoring, oversight, planning, products, profile, proposals
 from app.seed import seed_if_empty
 from app.services.context import AppContext
 
@@ -76,7 +76,7 @@ def create_app(settings: Settings | None = None, llm: Any | None = None) -> Fast
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
-    for module in (auth, profile, products, proposals, planning, chat, audit, oversight):
+    for module in (auth, profile, products, proposals, planning, chat, audit, oversight, monitoring):
         app.include_router(module.router, prefix="/api")
 
     @app.get("/", include_in_schema=False)

@@ -5065,6 +5065,476 @@
           }
         }
       }
+    },
+    "/api/compliance/market": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Market",
+        "description": "The simulated market clock: its date, the history month it replayed last and the moves by asset class.",
+        "operationId": "get_market_api_compliance_market_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/market/advance": {
+      "post": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Advance Market",
+        "description": "Move the simulated market 1 to 12 months forward, with a reason (logged as market_advanced). Nothing trades.",
+        "operationId": "advance_market_api_compliance_market_advance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketAdvanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compliance/monitoring": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Monitoring Overview",
+        "description": "Every client's drift from the mix they agreed to, rules their live holdings fail, and open rebalancings.",
+        "operationId": "get_monitoring_overview_api_compliance_monitoring_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringOverview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/monitoring": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Monitoring",
+        "description": "The client's live portfolio against their latest executed proposal, and the trades a rebalancing would place.",
+        "operationId": "get_monitoring_api_monitoring_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioMonitoring"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/proposals/rebalance": {
+      "post": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Propose Rebalance",
+        "description": "Propose a rebalancing back to the latest executed mix: a new version the gate checks. Nothing is executed.\n\nReturns the open rebalancing instead when one is already priced at today's prices.",
+        "operationId": "propose_rebalance_api_proposals_rebalance_post",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED or INVALID_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDATION_ERROR; details.fields lists each field and problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5671,6 +6141,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/RemedyCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DriftCard"
                     }
                   ],
                   "discriminator": {
@@ -5678,6 +6151,7 @@
                     "mapping": {
                       "blocked": "#/components/schemas/BlockedCard",
                       "comparison": "#/components/schemas/ComparisonCard",
+                      "drift": "#/components/schemas/DriftCard",
                       "products": "#/components/schemas/ProductsCard",
                       "profile": "#/components/schemas/ProfileCard",
                       "projection": "#/components/schemas/ProjectionCard",
@@ -5816,6 +6290,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/RemedyCard"
+                },
+                {
+                  "$ref": "#/components/schemas/DriftCard"
                 }
               ],
               "discriminator": {
@@ -5823,6 +6300,7 @@
                 "mapping": {
                   "blocked": "#/components/schemas/BlockedCard",
                   "comparison": "#/components/schemas/ComparisonCard",
+                  "drift": "#/components/schemas/DriftCard",
                   "products": "#/components/schemas/ProductsCard",
                   "profile": "#/components/schemas/ProfileCard",
                   "projection": "#/components/schemas/ProjectionCard",
@@ -5952,6 +6430,86 @@
           "equity"
         ],
         "title": "ClassWeights"
+      },
+      "ClientMonitoring": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "client": {
+            "type": "string",
+            "title": "Client"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "on_target",
+              "drifted",
+              "rule_breach"
+            ],
+            "title": "Status"
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value"
+          },
+          "target_proposal_id": {
+            "type": "integer",
+            "title": "Target Proposal Id"
+          },
+          "largest": {
+            "$ref": "#/components/schemas/DriftLargest"
+          },
+          "portfolio_drift_pct": {
+            "type": "number",
+            "title": "Portfolio Drift Pct"
+          },
+          "outside_band": {
+            "type": "boolean",
+            "title": "Outside Band"
+          },
+          "rules_failing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rules Failing"
+          },
+          "new_failures": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "New Failures"
+          },
+          "open_rebalance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenRebalance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "client",
+          "status",
+          "total_value",
+          "target_proposal_id",
+          "largest",
+          "portfolio_drift_pct",
+          "outside_band",
+          "rules_failing",
+          "new_failures",
+          "open_rebalance"
+        ],
+        "title": "ClientMonitoring"
       },
       "CompareItem": {
         "properties": {
@@ -6300,6 +6858,257 @@
         ],
         "title": "Disclosure"
       },
+      "DriftCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "drift",
+            "title": "Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "on_target",
+              "drifted",
+              "rule_breach"
+            ],
+            "title": "Status"
+          },
+          "market_month": {
+            "type": "integer",
+            "title": "Market Month"
+          },
+          "market_as_of": {
+            "type": "string",
+            "title": "Market As Of"
+          },
+          "target_proposal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Proposal Id"
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value"
+          },
+          "band_pp": {
+            "type": "number",
+            "title": "Band Pp"
+          },
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/DriftClass"
+            },
+            "type": "array",
+            "title": "Classes"
+          },
+          "largest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DriftLargest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "portfolio_drift_pct": {
+            "type": "number",
+            "title": "Portfolio Drift Pct"
+          },
+          "outside_band": {
+            "type": "boolean",
+            "title": "Outside Band"
+          },
+          "rules_failing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rules Failing"
+          },
+          "sell_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Total"
+          },
+          "turnover_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Pct"
+          },
+          "open_rebalance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Rebalance Id"
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "status",
+          "market_month",
+          "market_as_of",
+          "target_proposal_id",
+          "total_value",
+          "band_pp",
+          "classes",
+          "largest",
+          "portfolio_drift_pct",
+          "outside_band",
+          "rules_failing",
+          "sell_total",
+          "turnover_pct",
+          "open_rebalance_id",
+          "data_label"
+        ],
+        "title": "DriftCard",
+        "description": "Addition: the check_drift tool's result; the client proposes a rebalancing with one click."
+      },
+      "DriftClass": {
+        "properties": {
+          "asset_class": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "bond",
+              "gold",
+              "equity"
+            ],
+            "title": "Asset Class"
+          },
+          "target_pct": {
+            "type": "number",
+            "title": "Target Pct"
+          },
+          "current_pct": {
+            "type": "number",
+            "title": "Current Pct"
+          },
+          "drift_pp": {
+            "type": "number",
+            "title": "Drift Pp",
+            "description": "Live weight minus target, in percentage points."
+          },
+          "outside_band": {
+            "type": "boolean",
+            "title": "Outside Band",
+            "description": "True when |drift_pp| is more than the band (rules.json drift_band_pp)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_class",
+          "target_pct",
+          "current_pct",
+          "drift_pp",
+          "outside_band"
+        ],
+        "title": "DriftClass",
+        "description": "Addition: one asset class's live weight against its target."
+      },
+      "DriftLargest": {
+        "properties": {
+          "asset_class": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "bond",
+              "gold",
+              "equity"
+            ],
+            "title": "Asset Class"
+          },
+          "drift_pp": {
+            "type": "number",
+            "title": "Drift Pp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_class",
+          "drift_pp"
+        ],
+        "title": "DriftLargest"
+      },
+      "DriftProduct": {
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "title": "Product Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "asset_class": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "bond",
+              "gold",
+              "equity"
+            ],
+            "title": "Asset Class"
+          },
+          "target_pct": {
+            "type": "number",
+            "title": "Target Pct"
+          },
+          "current_pct": {
+            "type": "number",
+            "title": "Current Pct"
+          },
+          "drift_pp": {
+            "type": "number",
+            "title": "Drift Pp"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_code",
+          "name",
+          "asset_class",
+          "target_pct",
+          "current_pct",
+          "drift_pp",
+          "value"
+        ],
+        "title": "DriftProduct"
+      },
       "ExecuteResponse": {
         "properties": {
           "proposal_id": {
@@ -6596,7 +7405,14 @@
           },
           "data_as_of": {
             "type": "string",
-            "title": "Data As Of"
+            "title": "Data As Of",
+            "description": "The products' NAV date: the simulated market's date once it has moved (addition)."
+          },
+          "market_month": {
+            "type": "integer",
+            "title": "Market Month",
+            "description": "Addition: months the simulated market has moved; 0 is the data date.",
+            "default": 0
           }
         },
         "type": "object",
@@ -6714,6 +7530,56 @@
           "generated_at"
         ],
         "title": "Insights"
+      },
+      "LiveRuleFailure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "soft"
+            ],
+            "title": "Type"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "description": "True when the rule passed when the client confirmed the mix."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "message",
+          "detail",
+          "new"
+        ],
+        "title": "LiveRuleFailure"
       },
       "LogEntry": {
         "properties": {
@@ -6856,6 +7722,149 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "MarketAdvanceRequest": {
+        "properties": {
+          "months": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Months",
+            "default": 1
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 5,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "MarketAdvanceRequest"
+      },
+      "MarketState": {
+        "properties": {
+          "month": {
+            "type": "integer",
+            "title": "Month",
+            "description": "Months replayed so far; 0 is the data as of start_date."
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of",
+            "description": "The simulated date: the last day of the current month."
+          },
+          "replayed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replayed",
+            "description": "The history month whose returns were applied last."
+          },
+          "next_replay": {
+            "type": "string",
+            "title": "Next Replay",
+            "description": "The history month the next advance applies."
+          },
+          "last_returns_pct": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassWeights"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Each asset class's return in the last month applied."
+          },
+          "since_start_pct": {
+            "$ref": "#/components/schemas/ClassWeights",
+            "description": "Each asset class's growth since start_date."
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "replay_from": {
+            "type": "string",
+            "title": "Replay From"
+          },
+          "max_months_per_advance": {
+            "type": "integer",
+            "title": "Max Months Per Advance"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By",
+            "description": "Shown to the compliance role only."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Shown to the compliance role only."
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "as_of",
+          "replayed",
+          "next_replay",
+          "last_returns_pct",
+          "since_start_pct",
+          "start_date",
+          "replay_from",
+          "max_months_per_advance",
+          "changed_at",
+          "changed_by",
+          "reason",
+          "data_label",
+          "note"
+        ],
+        "title": "MarketState",
+        "description": "Addition: the simulated market clock. Illustrative: it replays the synthetic monthly history."
       },
       "ModelCard": {
         "properties": {
@@ -7232,6 +8241,64 @@
         ],
         "title": "ModelCardTool"
       },
+      "MonitoringCounts": {
+        "properties": {
+          "on_target": {
+            "type": "integer",
+            "title": "On Target"
+          },
+          "drifted": {
+            "type": "integer",
+            "title": "Drifted"
+          },
+          "rule_breach": {
+            "type": "integer",
+            "title": "Rule Breach"
+          }
+        },
+        "type": "object",
+        "required": [
+          "on_target",
+          "drifted",
+          "rule_breach"
+        ],
+        "title": "MonitoringCounts"
+      },
+      "MonitoringOverview": {
+        "properties": {
+          "market": {
+            "$ref": "#/components/schemas/MarketState"
+          },
+          "band_pp": {
+            "type": "number",
+            "title": "Band Pp"
+          },
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/ClientMonitoring"
+            },
+            "type": "array",
+            "title": "Clients"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/MonitoringCounts"
+          },
+          "policy": {
+            "type": "string",
+            "title": "Policy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market",
+          "band_pp",
+          "clients",
+          "counts",
+          "policy"
+        ],
+        "title": "MonitoringOverview",
+        "description": "Addition: every client's drift for the compliance officer, with the market clock."
+      },
       "NumberSource": {
         "properties": {
           "start": {
@@ -7295,6 +8362,52 @@
         "title": "NumberSource",
         "description": "Addition: where one figure in the reply came from, by its character span in the reply."
       },
+      "OpenRebalance": {
+        "properties": {
+          "proposal_id": {
+            "type": "integer",
+            "title": "Proposal Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "rejected",
+              "warning",
+              "acknowledged",
+              "passed",
+              "executed",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "gate_decision": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "WARNING",
+              "REJECT"
+            ],
+            "title": "Gate Decision"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "version",
+          "status",
+          "gate_decision",
+          "stale"
+        ],
+        "title": "OpenRebalance"
+      },
       "Order": {
         "properties": {
           "id": {
@@ -7329,6 +8442,16 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "description": "Addition: sell for the sales of a rebalancing.",
+            "default": "buy"
           }
         },
         "type": "object",
@@ -7578,6 +8701,154 @@
           "data_label"
         ],
         "title": "PortfolioAnalytics"
+      },
+      "PortfolioMonitoring": {
+        "properties": {
+          "market": {
+            "$ref": "#/components/schemas/MarketState"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "on_target",
+              "drifted",
+              "rule_breach"
+            ],
+            "title": "Status"
+          },
+          "target_proposal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Proposal Id"
+          },
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Version"
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value"
+          },
+          "band_pp": {
+            "type": "number",
+            "title": "Band Pp"
+          },
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/DriftClass"
+            },
+            "type": "array",
+            "title": "Classes"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/DriftProduct"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "largest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DriftLargest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "portfolio_drift_pct": {
+            "type": "number",
+            "title": "Portfolio Drift Pct"
+          },
+          "outside_band": {
+            "type": "boolean",
+            "title": "Outside Band"
+          },
+          "live_gate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "PASS",
+                  "WARNING",
+                  "REJECT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Gate",
+            "description": "The gate's verdict on the live weights, with today's profile."
+          },
+          "rules_failing": {
+            "items": {
+              "$ref": "#/components/schemas/LiveRuleFailure"
+            },
+            "type": "array",
+            "title": "Rules Failing"
+          },
+          "rebalance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RebalancePreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_rebalance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenRebalance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_label": {
+            "type": "string",
+            "title": "Data Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market",
+          "status",
+          "target_proposal_id",
+          "target_version",
+          "total_value",
+          "band_pp",
+          "classes",
+          "products",
+          "largest",
+          "portfolio_drift_pct",
+          "outside_band",
+          "live_gate",
+          "rules_failing",
+          "rebalance",
+          "open_rebalance",
+          "data_label"
+        ],
+        "title": "PortfolioMonitoring",
+        "description": "Addition: the client's live portfolio against the mix they last agreed to (the latest executed proposal)."
       },
       "Position": {
         "properties": {
@@ -8638,6 +9909,17 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "rebalance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalRebalance"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Addition: the trades of a rebalancing proposal; null for an ordinary proposal."
           }
         },
         "type": "object",
@@ -8724,6 +10006,16 @@
           "data_label": {
             "type": "string",
             "title": "Data Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "new",
+              "rebalance"
+            ],
+            "title": "Kind",
+            "description": "Addition: rebalance for a rebalancing proposal.",
+            "default": "new"
           }
         },
         "type": "object",
@@ -8923,6 +10215,85 @@
         "title": "ProposalPreview",
         "description": "A dry run of a revision: the same engines and gate, nothing saved."
       },
+      "ProposalRebalance": {
+        "properties": {
+          "source_proposal_id": {
+            "type": "integer",
+            "title": "Source Proposal Id",
+            "description": "The executed proposal whose mix it restores."
+          },
+          "market_month": {
+            "type": "integer",
+            "title": "Market Month"
+          },
+          "market_as_of": {
+            "type": "string",
+            "title": "Market As Of"
+          },
+          "portfolio_value": {
+            "type": "number",
+            "title": "Portfolio Value"
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/RebalanceTrade"
+            },
+            "type": "array",
+            "title": "Trades"
+          },
+          "sell_total": {
+            "type": "number",
+            "title": "Sell Total"
+          },
+          "buy_total": {
+            "type": "number",
+            "title": "Buy Total"
+          },
+          "net_cash": {
+            "type": "number",
+            "title": "Net Cash"
+          },
+          "turnover_pct": {
+            "type": "number",
+            "title": "Turnover Pct",
+            "description": "Sales as a share of the portfolio's value."
+          },
+          "drift_before": {
+            "items": {
+              "$ref": "#/components/schemas/DriftClass"
+            },
+            "type": "array",
+            "title": "Drift Before"
+          },
+          "band_pp": {
+            "type": "number",
+            "title": "Band Pp",
+            "description": "The drift band when it was priced (rules.json drift_band_pp)."
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "description": "True once prices or holdings have changed since it was priced: it can no longer execute."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_proposal_id",
+          "market_month",
+          "market_as_of",
+          "portfolio_value",
+          "trades",
+          "sell_total",
+          "buy_total",
+          "net_cash",
+          "turnover_pct",
+          "drift_before",
+          "band_pp",
+          "stale"
+        ],
+        "title": "ProposalRebalance",
+        "description": "Addition: what a rebalancing proposal trades, priced at one market month and one set of holdings."
+      },
       "ProposalSummary": {
         "properties": {
           "id": {
@@ -8965,6 +10336,16 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "new",
+              "rebalance"
+            ],
+            "title": "Kind",
+            "description": "Addition: rebalance for a rebalancing proposal.",
+            "default": "new"
           }
         },
         "type": "object",
@@ -9264,6 +10645,109 @@
           "answers"
         ],
         "title": "QuizSubmit"
+      },
+      "RebalancePreview": {
+        "properties": {
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/RebalanceTrade"
+            },
+            "type": "array",
+            "title": "Trades"
+          },
+          "sell_total": {
+            "type": "number",
+            "title": "Sell Total"
+          },
+          "buy_total": {
+            "type": "number",
+            "title": "Buy Total"
+          },
+          "net_cash": {
+            "type": "number",
+            "title": "Net Cash"
+          },
+          "turnover_pct": {
+            "type": "number",
+            "title": "Turnover Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trades",
+          "sell_total",
+          "buy_total",
+          "net_cash",
+          "turnover_pct"
+        ],
+        "title": "RebalancePreview",
+        "description": "The trades a rebalancing would place at today's simulated prices. Nothing is saved."
+      },
+      "RebalanceTrade": {
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "title": "Product Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "asset_class": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "bond",
+              "gold",
+              "equity"
+            ],
+            "title": "Asset Class"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "units": {
+            "type": "number",
+            "title": "Units"
+          },
+          "nav": {
+            "type": "number",
+            "title": "Nav"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "from_pct": {
+            "type": "number",
+            "title": "From Pct",
+            "description": "The product's live weight before the trade."
+          },
+          "to_pct": {
+            "type": "number",
+            "title": "To Pct",
+            "description": "Its target weight."
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_code",
+          "name",
+          "asset_class",
+          "side",
+          "units",
+          "nav",
+          "amount",
+          "from_pct",
+          "to_pct"
+        ],
+        "title": "RebalanceTrade",
+        "description": "Addition: one order of a rebalancing, priced at the current simulated NAV."
       },
       "RecordList": {
         "properties": {

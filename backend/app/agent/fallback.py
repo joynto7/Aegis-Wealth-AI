@@ -9,6 +9,11 @@ the red-team groups (Section 2.8.4) on their own terms: execution requests and
 prompt extraction are declined, requests for other clients' data go through
 the broker (which denies them), and rule-breaking changes are attempted as a
 revision so the gate can reject them in the open (Scenario 4).
+
+The monitoring loop (addition) adds two intents: a drift question runs
+check_drift (T1), and a request to rebalance runs propose_rebalance (T2),
+which saves a proposal for the gate and the client's own Confirm; a request to
+rebalance *and execute* is an execution request and is declined.
 """
 
 from __future__ import annotations
@@ -44,6 +49,12 @@ FIX = re.compile(
     r"how (do|can|could|should) i (fix|pass|get (it|this) (to )?pass)|\bfix (it|this|that|my|the)\b|make (it|this) pass|"
     r"what (should|do) i change|how to (fix|pass)|suggest a fix|smallest change"
 )
+REBALANCE_ASK = re.compile(
+    r"(propose|prepare|create|make|draft|build|start|set up|do)( me| a| the| my)* rebalanc|"
+    r"\brebalance (it|my|the|me|now|please)\b|please rebalance|(can|could|would) you rebalance|"
+    r"(want|like|need) to rebalance|let'?s rebalance"
+)
+DRIFT = re.compile(r"\bdrift|rebalanc|off[- ]target|back to (the |my )?target|out of balance|still on target|on target\?")
 GOAL = re.compile(
     r"\b(goal|reach|on track|chances?|probab\w*|likely|will i have|how much will|enough (money|to)|retire\w*|afford|target)\b"
 )
@@ -106,6 +117,10 @@ def detect_intent(message: str) -> str:
         return "explain_item"
     if FIX.search(m):
         return "fix_request"
+    if REBALANCE_ASK.search(m):
+        return "rebalance_request"
+    if DRIFT.search(m):
+        return "drift_check"
     if GOAL.search(m):
         return "goal_projection"
     for name, pattern in INTENTS:
@@ -289,6 +304,48 @@ def _goal(broker: PermissionBroker, pid: int | None, m: str) -> str:
     )
 
 
+def _drift(broker: PermissionBroker) -> str:
+    r = broker.run("check_drift", {}).result
+    if r is None:
+        return "I couldn't check your portfolio's drift right now. The Risk and goal tab of your account shows it."
+    if r["status"] == "none":
+        return (
+            "You don't hold an invested portfolio yet, so there is no drift to check. Next step: confirm a proposal; "
+            "after that, every simulated market move is measured against its mix."
+        )
+    largest = r["largest"]
+    cls = next(c for c in r["classes"] if c["asset_class"] == largest["asset_class"])
+    head = (
+        f"At the simulated prices of {r['market_as_of']}, your {cls['asset_class']} share is {cls['current_pct']:g}% against "
+        f"your {cls['target_pct']:g}% target ({cls['drift_pp']:+g} points; the band is {r['band_pp']:g})."
+    )
+    hard = [f for f in r["rules_failing"] if f["type"] == "hard"]
+    if hard:
+        head += f" {' and '.join(f['id'] for f in hard)} now fail{'s' if len(hard) == 1 else ''} on what you hold."
+    if r["outside_band"] or hard:
+        return (
+            f"{head} Rebalancing would sell about {format_money(r['sell_total'] or 0)}. Ask me to propose it, or press "
+            "Propose rebalancing on the card; the gate checks it and nothing trades until you confirm."
+        )
+    return f"{head} That is within the band, so there is nothing to rebalance yet."
+
+
+def _rebalance(broker: PermissionBroker) -> str:
+    outcome = broker.run("propose_rebalance", {})
+    r = outcome.result
+    if r is None:
+        if outcome.decision == "denied":
+            return "I can't prepare a rebalancing until your risk profile is current. Next step: retake the risk profile."
+        problem = (outcome.error or "").split(": ", 1)[-1].rstrip(".")
+        return f"I couldn't prepare a rebalancing: {problem[:1].lower()}{problem[1:]}."
+    reb = r["rebalance"]
+    return (
+        f"I prepared rebalancing proposal #{r['id']} (version {r['version']}), back to the mix of proposal "
+        f"#{reb['source_proposal_id']}: it sells {format_money(reb['sell_total'])} and buys {format_money(reb['buy_total'])}, "
+        f"and the gate's verdict is {r['gate']['decision']}. I can't place it: open it, pass the quiz and press Confirm."
+    )
+
+
 def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> str:
     m = message.lower()
     intent = detect_intent(message)
@@ -372,6 +429,12 @@ def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> s
 
     if intent == "goal_projection":
         return _goal(broker, _current_proposal_id(broker, proposal_id), m)
+
+    if intent == "drift_check":
+        return _drift(broker)
+
+    if intent == "rebalance_request":
+        return _rebalance(broker)
 
     if intent == "explain_tier":
         s = broker.run("get_profile_summary", {}).result or {}

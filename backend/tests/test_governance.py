@@ -191,7 +191,7 @@ def test_the_disclosure_lists_the_governance_policies(officer):
     gov = card["governance"]
     assert {"goal_hijack", "cross_client", "execution_request"} <= {s["id"] for s in gov["threat_signals"]}
     assert len(gov["review_triggers"]) == 5 and "OpenTelemetry" in gov["tracing"]
-    assert gov["config_components"]["data_versions"]["regulations"] == "reg-2026-10-v2"
+    assert gov["config_components"]["data_versions"]["regulations"] == "reg-2026-10-v3"
     regs = officer.get("/api/compliance/regulations").json()
     assert "OWASP Agentic Top 10" in {f["short"] for f in regs["frameworks"]}
     assert {"reviews", "built_in", "controls", "report"} == {c["check"] for c in regs["ai_controls"]}

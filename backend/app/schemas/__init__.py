@@ -35,6 +35,8 @@ ChatGrounding = Literal["passed", "regenerated", "fallback"]
 LogActor = Literal["client", "agent", "system", "compliance"]
 LogDecision = Literal["allowed", "denied"]
 OrderStatus = Literal["filled"]
+OrderSide = Literal["buy", "sell"]  # addition: a rebalancing sells as well as buys
+ProposalKind = Literal["new", "rebalance"]  # addition
 ToolTier = Literal["T0", "T1", "T2"]
 LogTier = Literal["T0", "T1", "T2", "T3"]
 
@@ -304,6 +306,47 @@ class GateResult(BaseModel):
     acknowledged_rule_ids: list[str]
 
 
+class DriftClass(BaseModel):
+    """Addition: one asset class's live weight against its target."""
+
+    asset_class: AssetClass
+    target_pct: float
+    current_pct: float
+    drift_pp: float = Field(description="Live weight minus target, in percentage points.")
+    outside_band: bool = Field(description="True when |drift_pp| is more than the band (rules.json drift_band_pp).")
+
+
+class RebalanceTrade(BaseModel):
+    """Addition: one order of a rebalancing, priced at the current simulated NAV."""
+
+    product_code: str
+    name: str
+    asset_class: AssetClass
+    side: OrderSide
+    units: float
+    nav: float
+    amount: float
+    from_pct: float = Field(description="The product's live weight before the trade.")
+    to_pct: float = Field(description="Its target weight.")
+
+
+class ProposalRebalance(BaseModel):
+    """Addition: what a rebalancing proposal trades, priced at one market month and one set of holdings."""
+
+    source_proposal_id: int = Field(description="The executed proposal whose mix it restores.")
+    market_month: int
+    market_as_of: str
+    portfolio_value: float
+    trades: list[RebalanceTrade]
+    sell_total: float
+    buy_total: float
+    net_cash: float
+    turnover_pct: float = Field(description="Sales as a share of the portfolio's value.")
+    drift_before: list[DriftClass]
+    band_pp: float = Field(description="The drift band when it was priced (rules.json drift_band_pp).")
+    stale: bool = Field(description="True once prices or holdings have changed since it was priced: it can no longer execute.")
+
+
 class Proposal(BaseModel):
     id: int
     version: int
@@ -323,6 +366,9 @@ class Proposal(BaseModel):
     data_label: str
     data_as_of: str
     created_at: str
+    rebalance: ProposalRebalance | None = Field(
+        default=None, description="Addition: the trades of a rebalancing proposal; null for an ordinary proposal."
+    )
 
 
 class ProposalSummary(BaseModel):
@@ -333,6 +379,7 @@ class ProposalSummary(BaseModel):
     tier: int
     gate_decision: GateDecision
     created_at: str
+    kind: ProposalKind = Field(default="new", description="Addition: rebalance for a rebalancing proposal.")
 
 
 class ProposalList(BaseModel):
@@ -647,6 +694,7 @@ class ProposalCard(BaseModel):
     gate_decision: GateDecision
     failed_rules: list[FailedRule]
     data_label: str
+    kind: ProposalKind = Field(default="new", description="Addition: rebalance for a rebalancing proposal.")
 
 
 class RuleCard(BaseModel):
@@ -729,8 +777,37 @@ class RemedyCard(BaseModel):
     data_label: str
 
 
+class DriftLargest(BaseModel):
+    asset_class: AssetClass
+    drift_pp: float
+
+
+MonitoringStatus = Literal["none", "on_target", "drifted", "rule_breach"]
+
+
+class DriftCard(BaseModel):
+    """Addition: the check_drift tool's result; the client proposes a rebalancing with one click."""
+
+    type: Literal["drift"]
+    status: MonitoringStatus
+    market_month: int
+    market_as_of: str
+    target_proposal_id: int | None
+    total_value: float
+    band_pp: float
+    classes: list[DriftClass]
+    largest: DriftLargest | None
+    portfolio_drift_pct: float
+    outside_band: bool
+    rules_failing: list[str]
+    sell_total: float | None
+    turnover_pct: float | None
+    open_rebalance_id: int | None
+    data_label: str
+
+
 ChatCard = Annotated[
-    ProductsCard | ComparisonCard | ProposalCard | RuleCard | ProfileCard | BlockedCard | ProjectionCard | RemedyCard,
+    ProductsCard | ComparisonCard | ProposalCard | RuleCard | ProfileCard | BlockedCard | ProjectionCard | RemedyCard | DriftCard,
     Field(discriminator="type"),
 ]
 
@@ -812,6 +889,7 @@ class Order(BaseModel):
     cost: float
     status: OrderStatus
     created_at: str
+    side: OrderSide = Field(default="buy", description="Addition: sell for the sales of a rebalancing.")
 
 
 class OrderList(BaseModel):
@@ -938,7 +1016,8 @@ class HealthStatus(BaseModel):
     status: Literal["ok"]
     db: Literal["ok"]
     llm: Literal["ok", "fallback"]
-    data_as_of: str
+    data_as_of: str = Field(description="The products' NAV date: the simulated market's date once it has moved (addition).")
+    market_month: int = Field(default=0, description="Addition: months the simulated market has moved; 0 is the data date.")
 
 
 # --- Compliance controls and oversight (additions) ---------------------------------------
@@ -1236,3 +1315,116 @@ class ModelCard(BaseModel):
     data_versions: dict[str, str]
     governance: ModelCardGovernance
     content_sha256: str = Field(description="SHA-256 of this report without this field, for the record.")
+
+
+# --- Monitoring loop (additions) ---------------------------------------------------
+class MarketState(BaseModel):
+    """Addition: the simulated market clock. Illustrative: it replays the synthetic monthly history."""
+
+    month: int = Field(description="Months replayed so far; 0 is the data as of start_date.")
+    as_of: str = Field(description="The simulated date: the last day of the current month.")
+    replayed: str | None = Field(description="The history month whose returns were applied last.")
+    next_replay: str = Field(description="The history month the next advance applies.")
+    last_returns_pct: ClassWeights | None = Field(description="Each asset class's return in the last month applied.")
+    since_start_pct: ClassWeights = Field(description="Each asset class's growth since start_date.")
+    start_date: str
+    replay_from: str
+    max_months_per_advance: int
+    changed_at: str | None
+    changed_by: str | None = Field(description="Shown to the compliance role only.")
+    reason: str | None = Field(description="Shown to the compliance role only.")
+    data_label: str
+    note: str
+
+
+class MarketAdvanceRequest(RequestBody):
+    months: int = Field(default=1, ge=1, le=12)
+    reason: str = Field(min_length=5, max_length=300)
+
+
+class DriftProduct(BaseModel):
+    product_code: str
+    name: str
+    asset_class: AssetClass
+    target_pct: float
+    current_pct: float
+    drift_pp: float
+    value: float
+
+
+class LiveRuleFailure(BaseModel):
+    id: str
+    name: str
+    type: RuleType
+    message: str | None
+    detail: str
+    new: bool = Field(description="True when the rule passed when the client confirmed the mix.")
+
+
+class RebalancePreview(BaseModel):
+    """The trades a rebalancing would place at today's simulated prices. Nothing is saved."""
+
+    trades: list[RebalanceTrade]
+    sell_total: float
+    buy_total: float
+    net_cash: float
+    turnover_pct: float
+
+
+class OpenRebalance(BaseModel):
+    proposal_id: int
+    version: int
+    status: ProposalStatus
+    gate_decision: GateDecision
+    stale: bool
+
+
+class PortfolioMonitoring(BaseModel):
+    """Addition: the client's live portfolio against the mix they last agreed to (the latest executed proposal)."""
+
+    market: MarketState
+    status: MonitoringStatus
+    target_proposal_id: int | None
+    target_version: int | None
+    total_value: float
+    band_pp: float
+    classes: list[DriftClass]
+    products: list[DriftProduct]
+    largest: DriftLargest | None
+    portfolio_drift_pct: float
+    outside_band: bool
+    live_gate: GateDecision | None = Field(description="The gate's verdict on the live weights, with today's profile.")
+    rules_failing: list[LiveRuleFailure]
+    rebalance: RebalancePreview | None
+    open_rebalance: OpenRebalance | None
+    data_label: str
+
+
+class ClientMonitoring(BaseModel):
+    user_id: int
+    client: str
+    status: MonitoringStatus
+    total_value: float
+    target_proposal_id: int
+    largest: DriftLargest
+    portfolio_drift_pct: float
+    outside_band: bool
+    rules_failing: list[str]
+    new_failures: list[str]
+    open_rebalance: OpenRebalance | None
+
+
+class MonitoringCounts(BaseModel):
+    on_target: int
+    drifted: int
+    rule_breach: int
+
+
+class MonitoringOverview(BaseModel):
+    """Addition: every client's drift for the compliance officer, with the market clock."""
+
+    market: MarketState
+    band_pp: float
+    clients: list[ClientMonitoring]
+    counts: MonitoringCounts
+    policy: str

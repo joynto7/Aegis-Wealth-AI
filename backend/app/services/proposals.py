@@ -1,7 +1,8 @@
 """Proposals (Sections 2.5.3-2.5.5, 2.5.9): build, gate, revise, acknowledge, quiz.
 
 The gate runs inside this service, so no path that creates or changes a
-proposal can skip it (Section 2.8.1, T2).
+proposal can skip it (Section 2.8.1, T2). A rebalancing (addition) is a
+proposal too: services/monitoring.py builds it through persist() below.
 """
 
 from __future__ import annotations
@@ -55,6 +56,8 @@ def item_dicts(proposal: Proposal) -> list[dict[str, Any]]:
 
 
 def to_schema(proposal: Proposal, ctx: AppContext) -> dict[str, Any]:
+    from app.services import monitoring  # a rebalancing's trades, and whether they are still current
+
     items = item_dicts(proposal)
     gate = proposal.gate
     return {
@@ -76,6 +79,7 @@ def to_schema(proposal: Proposal, ctx: AppContext) -> dict[str, Any]:
         "data_label": DATA_LABEL,
         "data_as_of": ctx.catalog.products_as_of,
         "created_at": iso(proposal.created_at),
+        "rebalance": monitoring.rebalance_doc(proposal, ctx),
     }
 
 
@@ -88,6 +92,7 @@ def summary(proposal: Proposal) -> dict[str, Any]:
         "tier": proposal.tier,
         "gate_decision": proposal.gate.decision,
         "created_at": iso(proposal.created_at),
+        "kind": "rebalance" if proposal.rebalance is not None else "new",
     }
 
 
@@ -114,7 +119,7 @@ def latest_open(db: Session, user: User) -> Proposal | None:
     ).first()
 
 
-def _persist(
+def persist(
     db: Session,
     ctx: AppContext,
     *,
@@ -211,7 +216,7 @@ def create(
         model_portfolios=ctx.catalog.model_portfolios,
         products=ctx.catalog.products,
     )
-    proposal = _persist(
+    proposal = persist(
         db,
         ctx,
         user=user,
@@ -286,13 +291,16 @@ def revise(
     *,
     actor: str = "client",
 ) -> Proposal:
+    from app.services import monitoring
+
     if parent.status not in OPEN_STATUSES:
         raise ApiError(409, "STATE_CONFLICT", f"This proposal is {parent.status} and can no longer be revised.")
+    monitoring.ensure_current(db, parent)
     total = sum(float(i["weight_pct"]) for i in raw_items)
     if abs(total - 100) > float(ctx.catalog.thresholds["allocation_total_tolerance_pct"]):
         raise validation_error("Weights must add up to 100%.", [{"field": "items", "problem": f"weights total {total:g}"}])
     items = _revised_items(parent, raw_items, ctx, actor)
-    proposal = _persist(
+    proposal = persist(
         db,
         ctx,
         user=user,
@@ -304,6 +312,7 @@ def revise(
         notes=[],
         parent=parent,
     )
+    monitoring.carry_over(db, ctx, parent, proposal)
     parent.status = "superseded"
     logs.add(
         db,

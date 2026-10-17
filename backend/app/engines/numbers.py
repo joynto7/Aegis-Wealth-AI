@@ -7,7 +7,7 @@ examples in Section 2.6.5 expect (S2: -6.725% -> -6.73%).
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 
 def round_half(value: float, decimals: int = 0) -> float:
@@ -26,6 +26,11 @@ def round1(value: float) -> float:
 
 def round4(value: float) -> float:
     return round_half(value, 4)
+
+
+def units_for(amount: float, nav: float) -> float:
+    """Fund units an amount buys at a NAV: floor(amount / NAV x 10,000) / 10,000, in exact decimals."""
+    return float((Decimal(repr(amount)) / Decimal(repr(nav)) * 10_000).to_integral_value(rounding=ROUND_FLOOR) / 10_000)
 
 
 def format_money(value: float, cents: bool = False) -> str:

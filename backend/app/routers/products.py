@@ -15,7 +15,7 @@ from app.engines.fees import compare_products
 from app.models import User
 from app.routers.common import ERRORS
 from app.schemas import CompareRequest, CompareResult, Product, ProductList, ProductType
-from app.services import profiles
+from app.services import market, profiles
 from app.services.context import AppContext, get_ctx
 
 router = APIRouter(prefix="/products", tags=["products"], responses=ERRORS)
@@ -28,7 +28,9 @@ def _tier_of(db: Session, user: User) -> int | None:
     return profile.tier if profile else None
 
 
-def product_schema(p: ProductSpec, tier: int | None) -> dict[str, Any]:
+def product_schema(p: ProductSpec, tier: int | None, navs: dict[str, tuple[float, str]] | None = None) -> dict[str, Any]:
+    """A product with its current NAV: the simulated market (addition) moves it from the catalog's value."""
+    nav, nav_date = (navs or {}).get(p.code, (p.nav, p.nav_date))
     return {
         "code": p.code,
         "name": p.name,
@@ -39,8 +41,8 @@ def product_schema(p: ProductSpec, tier: int | None) -> dict[str, Any]:
         "liquidity_days": p.liquidity_days,
         "lockup_months": p.lockup_months,
         "min_investment": p.min_investment,
-        "nav": p.nav,
-        "nav_date": p.nav_date,
+        "nav": nav,
+        "nav_date": nav_date,
         "volatility_pct": p.volatility_pct,
         "max_drawdown_pct": p.max_drawdown_pct,
         "description": p.description,
@@ -59,9 +61,10 @@ def list_products(
     ctx: AppContext = Depends(get_ctx),
 ) -> dict:
     tier = _tier_of(db, user)
+    navs = market.nav_dates_now(db)
     needle = (q or "").strip().lower()
     items = [
-        product_schema(p, tier)
+        product_schema(p, tier, navs)
         for p in ctx.catalog.products
         if (type is None or p.type == type)
         and (max_risk is None or p.risk_level <= max_risk)
@@ -80,7 +83,7 @@ def get_product(
     product = ctx.catalog.product(product_id)
     if product is None:
         raise ApiError(404, "NOT_FOUND", "There is no product with this code.")
-    return product_schema(product, _tier_of(db, user))
+    return product_schema(product, _tier_of(db, user), market.nav_dates_now(db))
 
 
 @router.post("/compare", response_model=CompareResult)

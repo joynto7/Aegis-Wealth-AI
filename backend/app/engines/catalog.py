@@ -89,6 +89,7 @@ class Catalog:
     regulations: Mapping[str, Any] = field(default_factory=dict)
     versions: Mapping[str, str] = field(default_factory=dict)
     events_label: str = ""
+    market: Mapping[str, Any] = field(default_factory=dict)  # addition: the simulated market (market.json)
 
     def product(self, code: str) -> ProductSpec | None:
         return self.by_code.get(code)
@@ -198,6 +199,7 @@ def load_catalog(data_dir: Path) -> Catalog:
     episodes = _read_json(data_dir / "episodes.json")
     meta = _read_json(data_dir / "data_meta.json")
     regulations = _read_json(data_dir / "regulations.json")
+    market = _read_json(data_dir / "market.json")
 
     return Catalog(
         products=products,
@@ -232,7 +234,9 @@ def load_catalog(data_dir: Path) -> Catalog:
                 "disclosures": disclosures["version"],
                 "episodes": episodes["version"],
                 "regulations": regulations["version"],
+                "market": market["version"],
             }
         ),
         events_label=episodes.get("events_label", ""),
+        market=_freeze(market),
     )

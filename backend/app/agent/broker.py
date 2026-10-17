@@ -73,6 +73,13 @@ def _summary(tool: str, args: dict[str, Any], result: dict[str, Any] | None) -> 
         )
     if tool == "suggest_fix" and result:
         return f"How to fix #{result['proposal_id']}: {result['gate_before']} to {result['gate_after']}"
+    if tool == "check_drift" and result:
+        largest = result["largest"]
+        if largest is None:
+            return "Checked drift: no invested portfolio yet"
+        return f"Checked drift: {largest['asset_class']} {largest['drift_pp']:+g} points from target"
+    if tool == "propose_rebalance" and result:
+        return f"Proposed rebalancing #{result['id']}: gate {result['gate']['decision']}"
     if tool == "create_proposal" and result:
         return f"Created proposal #{result['id']}: gate {result['gate']['decision']}"
     if tool == "revise_proposal" and result:
@@ -152,7 +159,7 @@ class PermissionBroker:
         except (KeyError, TypeError, ValueError) as exc:
             return self._record(ToolOutcome(tool, tier, "allowed", f"Rejected input for {tool}", error=f"INVALID_INPUT: {exc}"))
         detail = {}
-        if result and "id" in result and tool in ("create_proposal", "revise_proposal", "get_proposal"):
+        if result and "id" in result and tool in ("create_proposal", "revise_proposal", "get_proposal", "propose_rebalance"):
             detail["proposal_id"] = result["id"]
         if result and tool == "suggest_fix":
             detail["proposal_id"] = result["proposal_id"]

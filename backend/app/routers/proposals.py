@@ -24,7 +24,7 @@ from app.schemas import (
     Remedy,
     ReviseRequest,
 )
-from app.services import execution, logs, profiles, proposals
+from app.services import execution, logs, monitoring, profiles, proposals
 from app.services.context import AppContext, get_ctx
 
 router = APIRouter(prefix="/proposals", tags=["proposals"], responses=ERRORS)
@@ -113,6 +113,7 @@ def remedy(
     proposal = proposals.get_owned(db, user, proposal_id)
     if proposal.status not in proposals.OPEN_STATUSES:
         raise ApiError(409, "STATE_CONFLICT", f"This proposal is {proposal.status} and can no longer change.")
+    monitoring.ensure_current(db, proposal)
     profile = profiles.latest(db, user.id)
     problem = profiles.t2_error(profile, ctx)
     if problem is not None:

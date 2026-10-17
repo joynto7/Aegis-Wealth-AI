@@ -36,6 +36,7 @@ def _proposal_card(result: dict[str, Any], catalog: Catalog) -> dict[str, Any]:
             if r["result"] == "fail"
         ],
         "data_label": result["data_label"],
+        "kind": result.get("kind", "new"),
     }
 
 
@@ -89,6 +90,33 @@ def _remedy_card(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _drift_card(result: dict[str, Any]) -> dict[str, Any]:
+    pending = result["open_rebalance"]
+    return {
+        "type": "drift",
+        **{
+            k: result[k]
+            for k in (
+                "status",
+                "market_month",
+                "market_as_of",
+                "target_proposal_id",
+                "total_value",
+                "band_pp",
+                "classes",
+                "largest",
+                "portfolio_drift_pct",
+                "outside_band",
+                "sell_total",
+                "turnover_pct",
+                "data_label",
+            )
+        },
+        "rules_failing": [f["id"] for f in result["rules_failing"]],
+        "open_rebalance_id": pending["proposal_id"] if pending else None,
+    }
+
+
 def card_for(outcome: ToolOutcome, catalog: Catalog) -> dict[str, Any] | None:
     if outcome.decision == "denied":
         reason = outcome.detail.get("reason") or (outcome.error or "").removeprefix("PERMISSION_DENIED: ")
@@ -130,8 +158,10 @@ def card_for(outcome: ToolOutcome, catalog: Catalog) -> dict[str, Any] | None:
                 for k in ("tier", "tier_label", "capacity_score", "willingness_score", "max_acceptable_loss_pct", "status")
             },
         }
-    if outcome.tool in ("get_proposal", "create_proposal", "revise_proposal"):
+    if outcome.tool in ("get_proposal", "create_proposal", "revise_proposal", "propose_rebalance"):
         return _proposal_card(result, catalog)
+    if outcome.tool == "check_drift":
+        return _drift_card(result)
     if outcome.tool == "project_goal":
         return _projection_card(result)
     if outcome.tool == "suggest_fix":

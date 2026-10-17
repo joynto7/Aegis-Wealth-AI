@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import client_user, compliance_user, current_user
 from app.core.database import get_db
 from app.engines.catalog import thaw
+from app.engines.market import market_date
 from app.models import User
 from app.routers.common import ERRORS
 from app.schemas import (
@@ -26,7 +27,7 @@ from app.schemas import (
     VerifyRequest,
     VerifyResult,
 )
-from app.services import logs, records, sandbox
+from app.services import logs, market, records, sandbox
 from app.services.context import AppContext, get_ctx
 
 router = APIRouter(responses=ERRORS)
@@ -103,9 +104,11 @@ def rules(_user: User = Depends(current_user), ctx: AppContext = Depends(get_ctx
 @router.get("/health", response_model=HealthStatus, tags=["health"])
 def health(db: Session = Depends(get_db), ctx: AppContext = Depends(get_ctx)) -> dict:
     db.execute(text("SELECT 1"))
+    month = market.current_month(db)
     return {
         "status": "ok",
         "db": "ok",
         "llm": "ok" if ctx.llm is not None else "fallback",
-        "data_as_of": ctx.catalog.products_as_of,
+        "data_as_of": market_date(str(ctx.catalog.market["start_date"]), month),
+        "market_month": month,
     }

@@ -13,7 +13,9 @@ Additions: alerts derived from the log (repeated broker denials, AI proposals
 the gate rejected, number-check fallbacks, high-severity threat signals, turns
 awaiting review, a stopped advisor or execution), the review counts, and a
 governance section in the disclosure (configuration fingerprint, labelling,
-threat signals, review triggers, tracing).
+threat signals, review triggers, tracing). The monitoring loop adds an alert
+for each client whose live portfolio drifted beyond the band or now fails a
+rule (services/monitoring.py).
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ from app.core.timeutil import iso, utcnow
 from app.engines.catalog import ASSET_CLASSES, thaw
 from app.models import Control, OperationLog, User
 from app.schemas import ModelCard
-from app.services import controls, reviews
+from app.services import controls, monitoring, reviews
 from app.services.context import AppContext
 
 ALLOCATION_STEPS = [
@@ -111,9 +113,9 @@ def _turn(row: OperationLog, annotation: tuple[list[dict[str, str]], str | None]
     }
 
 
-def alerts(db: Session, turns: list[OperationLog], open_reviews: int) -> list[dict[str, Any]]:
+def alerts(db: Session, ctx: AppContext, turns: list[OperationLog], open_reviews: int) -> list[dict[str, Any]]:
     now = utcnow()
-    out: list[dict[str, Any]] = []
+    out: list[dict[str, Any]] = monitoring.alerts(db, ctx)
     recent = now - timedelta(minutes=15)
     denials = db.execute(
         select(OperationLog.user_id, func.count(), func.min(OperationLog.ts))
@@ -237,7 +239,7 @@ def overview(db: Session, ctx: AppContext, viewer: User, limit: int) -> dict[str
         "config_fingerprint": config_fingerprint(ctx),
         "controls": controls.snapshot(db, viewer),
         "kpis": kpis,
-        "alerts": alerts(db, list(turns), queue["counts"]["open"]),
+        "alerts": alerts(db, ctx, list(turns), queue["counts"]["open"]),
         "turns": [_turn(t, annotations.get(t.id)) for t in turns[:limit]],
     }
 

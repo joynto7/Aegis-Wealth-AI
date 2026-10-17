@@ -4,12 +4,15 @@ The agent has no route here: no tool issues or uses a confirmation token.
 Execute claims the token with a compare-and-set update, so two concurrent
 calls with the same token cannot both place orders. While compliance has
 execution halted (addition), neither a token nor an order goes through.
+
+A rebalancing (addition) places its stored trades: the sales first, then the
+purchases they fund. It is refused at Confirm and at Execute once the market
+has moved or the holdings have changed since it was priced.
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
-from decimal import ROUND_FLOOR, Decimal
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -20,9 +23,20 @@ from app.core.security import new_confirm_token, sha256_hex
 from app.core.timeutil import iso, utcnow
 from app.engines.chain import GENESIS_HASH, items_hash, next_hash
 from app.engines.gate import failed_rule_ids
-from app.engines.numbers import round2, round4
-from app.models import AdviceRecord, ConfirmToken, Order, Position, Proposal, QuizAttempt, SandboxAccount, User
-from app.services import controls, logs, profiles, proposals
+from app.engines.numbers import round2, round4, units_for
+from app.models import (
+    AdviceRecord,
+    ConfirmToken,
+    Order,
+    Position,
+    Product,
+    Proposal,
+    QuizAttempt,
+    RebalancePlan,
+    SandboxAccount,
+    User,
+)
+from app.services import controls, logs, monitoring, profiles, proposals
 from app.services.context import AppContext
 
 TOKEN_TTL = timedelta(minutes=5)
@@ -55,6 +69,8 @@ def confirm(db: Session, ctx: AppContext, user: User, proposal: Proposal) -> dic
         raise _deny(db, user, proposal, "token_issued", "WARNINGS_NOT_ACKNOWLEDGED", 409, "Tick every warning before confirming.")
     if proposal.status not in proposals.CONFIRMABLE:
         raise _deny(db, user, proposal, "token_issued", "STATE_CONFLICT", 409, f"This proposal is {proposal.status}.")
+    if proposal.rebalance is not None and monitoring.is_stale(db, proposal.rebalance, user.id):
+        raise _deny(db, user, proposal, "token_issued", "STATE_CONFLICT", 409, monitoring.STALE)
     if not proposal.quiz_passed:
         raise _deny(db, user, proposal, "token_issued", "QUIZ_REQUIRED", 409, "Pass the comprehension quiz first.")
     token = new_confirm_token()
@@ -80,11 +96,6 @@ def confirm(db: Session, ctx: AppContext, user: User, proposal: Proposal) -> dic
     return {"confirm_token": token, "expires_at": iso(expires_at)}
 
 
-def _units(amount: float, nav: float) -> float:
-    """units = floor(amount / NAV x 10,000) / 10,000, exactly."""
-    return float((Decimal(repr(amount)) / Decimal(repr(nav)) * 10_000).to_integral_value(rounding=ROUND_FLOOR) / 10_000)
-
-
 def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token: str | None) -> dict[str, Any]:
     action = "orders_executed"
     if controls.execution_halted(db):
@@ -102,8 +113,12 @@ def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token:
     current = items_hash((it.product.code, it.weight_pct) for it in proposal.items)
     if current != row.items_hash or proposal.status not in proposals.CONFIRMABLE:
         raise _deny(db, user, proposal, action, "STATE_CONFLICT", 409, "This proposal changed or closed since you confirmed it.")
+    plan = proposal.rebalance
+    if plan is not None and monitoring.is_stale(db, plan, user.id):
+        raise _deny(db, user, proposal, action, "STATE_CONFLICT", 409, monitoring.STALE)
     account = db.scalars(select(SandboxAccount).where(SandboxAccount.user_id == user.id)).first()
-    if account is None or account.cash < proposal.amount:
+    need = plan.totals["buy_total"] - plan.totals["sell_total"] if plan is not None else proposal.amount
+    if account is None or account.cash < need:
         raise _deny(db, user, proposal, action, "INSUFFICIENT_CASH", 409, "Your sandbox account no longer holds enough cash.")
 
     # Single use: only one caller can flip used_at from NULL.
@@ -114,33 +129,13 @@ def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token:
         db.rollback()
         raise _deny(db, user, proposal, action, "TOKEN_USED", 409, "This confirmation token was already used.")
 
-    orders: list[Order] = []
-    for it in proposal.items:
-        units = _units(it.amount, it.product.nav)
-        cost = round2(units * it.product.nav)
-        orders.append(
-            Order(
-                account_id=account.id,
-                proposal_id=proposal.id,
-                product=it.product,
-                amount=it.amount,
-                units=units,
-                nav=it.product.nav,
-                cost=cost,
-                status="filled",
-                created_at=now,
-            )
-        )
-        position = db.scalars(
-            select(Position).where(Position.account_id == account.id, Position.product_id == it.product.id)
-        ).first()
-        if position is None:
-            db.add(Position(account_id=account.id, product_id=it.product.id, units=units, avg_nav=it.product.nav))
-        else:
-            total_units = position.units + units
-            position.avg_nav = (position.units * position.avg_nav + units * it.product.nav) / total_units
-            position.units = round4(total_units)
-        account.cash = round2(account.cash - cost)
+    if plan is None:
+        orders = [
+            _fill(db, account, proposal, it.product, "buy", it.amount, units_for(it.amount, it.product.nav), now)
+            for it in proposal.items
+        ]
+    else:
+        orders = _rebalance(db, account, proposal, plan, now)
     db.add_all(orders)
     proposal.status = "executed"
     db.flush()
@@ -154,7 +149,12 @@ def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token:
         action=action,
         tier="T3",
         decision="allowed",
-        detail={"proposal_id": proposal.id, "order_ids": [o.id for o in orders], "cash_after": account.cash},
+        detail={
+            "proposal_id": proposal.id,
+            "order_ids": [o.id for o in orders],
+            "cash_after": account.cash,
+            "rebalance": plan is not None,
+        },
     )
     logs.add(db, user_id=user.id, actor="system", action="record_created", detail={"record_id": record.id, "hash": record.hash})
     db.commit()
@@ -167,6 +167,56 @@ def execute(db: Session, ctx: AppContext, user: User, proposal: Proposal, token:
     }
 
 
+def _fill(
+    db: Session,
+    account: SandboxAccount,
+    proposal: Proposal,
+    product: Product,
+    side: str,
+    amount: float,
+    units: float,
+    now: datetime,
+) -> Order:
+    """One filled order at the product's current NAV: a purchase adds units and spends cash, a sale does the reverse."""
+    nav = product.nav
+    cost = round2(units * nav)
+    position = db.scalars(select(Position).where(Position.account_id == account.id, Position.product_id == product.id)).first()
+    if side == "sell":
+        position.units = round4(max(0.0, position.units - units))
+        account.cash = round2(account.cash + cost)
+    elif position is None:
+        db.add(Position(account_id=account.id, product_id=product.id, units=units, avg_nav=nav))
+        account.cash = round2(account.cash - cost)
+    else:
+        total_units = position.units + units
+        position.avg_nav = (position.units * position.avg_nav + units * nav) / total_units
+        position.units = round4(total_units)
+        account.cash = round2(account.cash - cost)
+    return Order(
+        account_id=account.id,
+        proposal_id=proposal.id,
+        product=product,
+        amount=amount,
+        units=units,
+        nav=nav,
+        cost=cost,
+        status="filled",
+        side=side,
+        created_at=now,
+    )
+
+
+def _rebalance(db: Session, account: SandboxAccount, proposal: Proposal, plan: RebalancePlan, now: datetime) -> list[Order]:
+    """The stored trades, sales first: they fund the purchases."""
+    codes = [t["product_code"] for t in plan.trades]
+    products = {p.code: p for p in db.scalars(select(Product).where(Product.code.in_(codes)))}
+    ordered = sorted(plan.trades, key=lambda t: t["side"] != "sell")
+    return [
+        _fill(db, account, proposal, products[t["product_code"]], t["side"], float(t["amount"]), float(t["units"]), now)
+        for t in ordered
+    ]
+
+
 def order_schema(order: Order) -> dict[str, Any]:
     return {
         "id": order.id,
@@ -177,6 +227,7 @@ def order_schema(order: Order) -> dict[str, Any]:
         "cost": order.cost,
         "status": order.status,
         "created_at": iso(order.created_at),
+        "side": order.side or "buy",
     }
 
 

@@ -85,7 +85,7 @@ def _proposals_made(broker: PermissionBroker) -> list[dict[str, Any]]:
     return [
         {"tool": o.tool, "proposal_id": o.result["id"], "gate": o.result["gate"]["decision"]}
         for o in broker.outcomes
-        if o.tool in ("create_proposal", "revise_proposal") and o.result is not None
+        if o.tool in ("create_proposal", "revise_proposal", "propose_rebalance") and o.result is not None
     ]
 
 

@@ -1,12 +1,13 @@
 {
-  "version": "rules-2026-10",
+  "version": "rules-2026-10-v2",
   "thresholds": {
     "allocation_total_tolerance_pct": 0.01,
     "max_single_product_pct": 40,
     "short_horizon_years": 3,
     "short_horizon_equity_gold_cap_pct": 20,
     "max_weighted_fee_pct": 1,
-    "profile_max_age_days": 365
+    "profile_max_age_days": 365,
+    "drift_band_pp": 5
   },
   "rules": [
     {

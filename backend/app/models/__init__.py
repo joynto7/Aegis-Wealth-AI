@@ -1,4 +1,4 @@
-"""The 16 tables of Section 3.5, plus `controls` and `goals` (additions).
+"""The 16 tables of Section 3.5, plus `controls`, `goals`, `market_clock` and `rebalance_plans` (additions).
 
 Ids are integer keys; JSON columns hold structures from Section 2.6.
 """
@@ -123,6 +123,10 @@ class Proposal(Base):
         back_populates="proposal", order_by="ProposalItem.position", cascade="all, delete-orphan"
     )
     gate: Mapped[GateResult] = relationship(back_populates="proposal", uselist=False, cascade="all, delete-orphan")
+    # Addition: a rebalancing proposal's trades; None for an ordinary proposal.
+    rebalance: Mapped[RebalancePlan | None] = relationship(
+        foreign_keys="RebalancePlan.proposal_id", uselist=False, cascade="all, delete-orphan", lazy="joined"
+    )
 
 
 class ProposalItem(Base):
@@ -191,6 +195,7 @@ class Order(Base):
     nav: Mapped[float] = mapped_column(Float)
     cost: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(10), default="filled")
+    side: Mapped[str] = mapped_column(String(4), default="buy")  # addition: buy | sell (a rebalancing sells)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     product: Mapped[Product] = relationship(lazy="joined")
@@ -268,6 +273,36 @@ class Goal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class MarketClock(Base):
+    """The simulated market (addition): how many months of the illustrative history have been replayed.
+
+    One row, kept per database; no row means month 0. Only the compliance role moves it, always with a reason.
+    """
+
+    __tablename__ = "market_clock"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # always 1
+    month: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(300))
+    updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RebalancePlan(Base):
+    """A rebalancing proposal's trades (addition), priced at one market month against the holdings of that moment."""
+
+    __tablename__ = "rebalance_plans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"), unique=True)
+    source_proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"))  # the executed proposal it restores
+    market_month: Mapped[int] = mapped_column(Integer)
+    holdings_hash: Mapped[str] = mapped_column(String(64))
+    portfolio_value: Mapped[float] = mapped_column(Float)
+    trades: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    totals: Mapped[dict[str, float]] = mapped_column(JSON)  # sell_total, buy_total, net_cash, turnover_pct
+    drift: Mapped[dict[str, Any]] = mapped_column(JSON)  # the drift that prompted it
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Control(Base):
     """Compliance switches (addition): one row per control; no row means the default (advisor active, execution open)."""
 
@@ -289,6 +324,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "number_sources": "JSON NOT NULL DEFAULT '[]'",
         "provenance": "JSON",
     },
+    "orders": {"side": "VARCHAR(4) NOT NULL DEFAULT 'buy'"},
 }
 
 

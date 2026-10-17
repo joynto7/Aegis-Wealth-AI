@@ -22,7 +22,7 @@ from app.engines.projection import DATA_LABEL as PROJECTION_LABEL
 from app.engines.projection import METHOD, project
 from app.engines.stress import compute_stress, worst_scenario
 from app.models import Goal, Proposal, User
-from app.services import logs, profiles, proposals, sandbox
+from app.services import logs, monitoring, profiles, proposals, sandbox
 from app.services.context import AppContext
 
 # The allocation engine picks products by minimum investment; below this the mix of a tier is judged at this size.
@@ -416,6 +416,13 @@ def insights(db: Session, ctx: AppContext, user: User) -> dict[str, Any]:
                 "Replay another crisis",
             )
         )
+
+    # Addition (monitoring loop): drift from the executed mix once the simulated market has moved. A drift or a broken
+    # rule leads the briefing; a portfolio still on target follows the goal.
+    drift = monitoring.insight(db, ctx, user)
+    if drift is not None:
+        lead = drift["tone"] == "attention"
+        items.insert(0 if lead else int(bool(items) and items[0]["id"] == "goal"), drift)
 
     total = float(acct["total_value"])
     executed = doc is not None and doc["status"] == "executed"

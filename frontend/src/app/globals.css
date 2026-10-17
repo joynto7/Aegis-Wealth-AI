@@ -55,6 +55,7 @@
 }
 
 :root {
+  color-scheme: light;
   /* Surfaces (contrast on --surface: text 17.9:1, muted 6.3:1) */
   --bg: #f4f6fb;
   --surface: #ffffff;
@@ -162,6 +163,7 @@
  * --primary 6.9:1.
  */
 .dark {
+  color-scheme: dark;
   --bg: #070b17;
   --surface: #0e1528;
   --surface-2: #121a30;
@@ -209,7 +211,6 @@
   --muted: #172038;
   --primary-foreground: #0b1020;
   --sidebar-primary-foreground: #0b1020;
-  color-scheme: dark;
 }
 
 @layer base {

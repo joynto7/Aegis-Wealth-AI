@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Calculator, Eye, FlaskConical, Lock, Scale, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, FlaskConical, Lock, Scale, ShieldCheck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,69 +30,46 @@ const DEMO_ACCOUNTS = [
 ];
 const DEMO_PASSWORD = "password123";
 
-const PROOF_POINTS = [
-  { icon: Calculator, title: "Every number computed by tested code", text: "The AI explains; it never invents a figure." },
-  { icon: Lock, title: "The AI cannot place an order", text: "Only your own click creates a one-time token." },
-  { icon: ShieldCheck, title: "Every recommendation sealed", text: "Hash-chained records and an append-only log." },
-  { icon: Eye, title: "Every AI reply labelled, traced and reviewable", text: "Provenance on each answer; a human reviews what code flags." },
-];
-
-const TRUST_CHIPS = [
-  "Compliance gate · 9 rules",
-  "Red-team · 30 of 30 blocked",
-  "OWASP Agentic Top 10 mapped",
-  "Sandbox only · no real money",
-];
-
 function BrandPanel() {
   return (
-    <aside className="bg-ink relative hidden overflow-hidden lg:flex lg:w-[52%] lg:flex-col lg:justify-between lg:p-14">
+    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-violet-50 lg:flex lg:w-[52%] lg:flex-col lg:justify-between lg:p-14 dark:from-[#0a1330] dark:via-[#0f1a45] dark:to-[#0a1330]">
       <div className="pointer-events-none absolute -left-24 top-1/3 size-[28rem] rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -right-20 bottom-0 size-[24rem] rounded-full bg-[#a855f7]/20 blur-3xl" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        className="pointer-events-none absolute inset-0 opacity-[0.12] dark:opacity-[0.07]"
         style={{
-          backgroundImage: "linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)",
+          backgroundImage: "linear-gradient(rgba(79,70,229,.24) 1px, transparent 1px), linear-gradient(90deg, rgba(79,70,229,.24) 1px, transparent 1px)",
           backgroundSize: "44px 44px",
           maskImage: "radial-gradient(ellipse at 30% 40%, black 30%, transparent 75%)",
         }}
         aria-hidden
       />
       <div className="relative">
-        <AegisWordmark />
+        <AegisWordmark subtle />
       </div>
-      <div className="relative max-w-xl">
-        <p className="text-eyebrow text-[#c7d2fe]">AI as a financial participant</p>
-        <h1 className="mt-4 font-display text-[44px] font-extrabold leading-[1.08] tracking-tight text-white">
-          AI wealth advice
+      <div className="relative max-w-lg">
+        <p className="text-eyebrow text-indigo-700 dark:text-[#c7d2fe]">Aegis Wealth AI</p>
+        <h1 className="mt-4 font-display text-[42px] font-extrabold leading-[1.08] tracking-tight text-(--text)">
+          Clear guidance.
           <br />
-          <span className="text-ai">you can audit.</span>
+          <span className="text-ai">Your decision.</span>
         </h1>
-        <p className="mt-5 max-w-md text-[16px] leading-relaxed text-(--ink-muted)">
-          Aegis profiles your risk, builds a compliant portfolio and explains every choice, inside limits a regulator can
-          inspect.
+        <p className="mt-5 max-w-md text-[16px] leading-relaxed text-(--text-muted)">
+          Explore a transparent wealth-advice sandbox, with explanations and safeguards at every step.
         </p>
-        <ul className="mt-10 space-y-5">
-          {PROOF_POINTS.map(({ icon: Icon, title, text }) => (
-            <li key={title} className="flex items-start gap-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-[#c7d2fe]">
-                <Icon className="size-[18px]" aria-hidden />
-              </span>
-              <div>
-                <p className="text-[15px] font-semibold text-white">{title}</p>
-                <p className="text-body text-(--ink-muted)">{text}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-8 flex max-w-md items-start gap-3 rounded-2xl border border-indigo-100 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.05]">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-white/[0.08] dark:text-[#c7d2fe]">
+            <ShieldCheck className="size-[18px]" aria-hidden />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-(--text)">You stay in control</p>
+            <p className="mt-1 text-caption leading-relaxed text-(--text-muted)">The AI can explain a plan. Only you can confirm a simulated action.</p>
+          </div>
+        </div>
       </div>
-      <ul className="relative flex flex-wrap gap-2">
-        {TRUST_CHIPS.map((chip) => (
-          <li key={chip} className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-caption text-(--ink-text)">
-            {chip}
-          </li>
-        ))}
-      </ul>
+      <p className="relative inline-flex w-fit items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50/80 px-3.5 py-2 text-caption text-(--text-muted) dark:border-white/10 dark:bg-white/[0.04]">
+        <Lock className="size-3.5" aria-hidden /> Simulated accounts · no real money
+      </p>
     </aside>
   );
 }
@@ -118,12 +95,13 @@ function LoginForm() {
       // Only same-origin paths ("/x", never "//host" or "https://host"), so
       // the link can't send someone to another site after they log in.
       const raw = params.get("next");
-      const next = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : null;
+      const requested = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : null;
+      const next = requested === "/" ? "/dashboard" : requested;
       const complianceOnly = !!next && (next.startsWith("/console") || next.startsWith("/control-room"));
       if (next && ((user.role === "client" && !complianceOnly) || (user.role === "compliance" && complianceOnly))) {
         router.replace(next);
       } else {
-        router.replace(user.role === "compliance" ? "/control-room" : "/");
+        router.replace(user.role === "compliance" ? "/control-room" : "/dashboard");
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === "RATE_LIMITED") {

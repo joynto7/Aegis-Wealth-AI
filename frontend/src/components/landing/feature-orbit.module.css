@@ -1,0 +1,368 @@
+.orbitStage {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+  pointer-events: none;
+}
+
+.orbitRing {
+  --orbit-radius: min(30vw, 420px);
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  animation: orbit-ring 12s linear infinite;
+  transform: scaleY(0.68) rotate(0deg);
+}
+
+.orbitNode {
+  position: absolute;
+  width: min(320px, calc(100vw - 2rem));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.orbitFace {
+  width: 100%;
+  transform-origin: 50% 50%;
+  animation: orbit-face 12s linear infinite;
+  pointer-events: auto;
+}
+
+.orbitNode[data-orbit="risk"] {
+  top: 50%;
+  left: calc(50% + var(--orbit-radius));
+}
+
+.orbitNode[data-orbit="replay"] {
+  top: calc(50% - var(--orbit-radius));
+  left: 50%;
+}
+
+.orbitNode[data-orbit="proposal"] {
+  top: 50%;
+  left: calc(50% - var(--orbit-radius));
+}
+
+.orbitNode[data-orbit="advisor"] {
+  top: calc(50% + var(--orbit-radius));
+  left: 50%;
+}
+
+@keyframes orbit-ring {
+  from {
+    transform: scaleY(0.68) rotate(0deg);
+  }
+
+  to {
+    transform: scaleY(0.68) rotate(360deg);
+  }
+}
+
+@keyframes orbit-face {
+  from {
+    transform: rotate(0deg) scaleY(1.470588);
+  }
+
+  to {
+    transform: rotate(-360deg) scaleY(1.470588);
+  }
+}
+
+.typingDot {
+  animation: aegis-typing 900ms ease-in-out infinite;
+}
+
+.messageReveal {
+  animation: message-reveal 360ms ease-out both;
+}
+
+.riskPulse {
+  animation: risk-pulse 1100ms ease-in-out 1800ms infinite alternate;
+}
+
+.proposalPass {
+  animation: proposal-pass 1200ms ease-in-out infinite;
+}
+
+@keyframes aegis-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes message-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes risk-pulse {
+  from {
+    filter: drop-shadow(0 0 0 rgba(165, 180, 252, 0));
+  }
+
+  to {
+    filter: drop-shadow(0 0 6px rgba(165, 180, 252, 0.7));
+  }
+}
+
+@keyframes proposal-pass {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(110, 231, 183, 0);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 12px rgba(110, 231, 183, 0.2);
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbitRing,
+  .orbitFace {
+    animation: none;
+  }
+
+  .orbitRing {
+    transform: scaleY(0.68) rotate(0deg);
+  }
+
+  .orbitFace {
+    transform: rotate(0deg) scaleY(1.470588);
+  }
+
+  .typingDot,
+  .messageReveal,
+  .riskPulse,
+  .proposalPass {
+    animation: none;
+  }
+}
+.landing {
+  --orbit-bg: #f7f8fd;
+  --orbit-text: #111a33;
+  --orbit-muted: #64708a;
+  --orbit-panel: #f0f3fb;
+  --orbit-panel-strong: #ffffff;
+  --orbit-panel-text: #17213b;
+  --orbit-border: #dce3f0;
+  --orbit-border-active: rgba(79, 70, 229, 0.42);
+  --orbit-track: rgba(23, 33, 59, 0.1);
+  --orbit-grid: rgba(23, 33, 59, 0.1);
+  --orbit-bubble: rgba(23, 33, 59, 0.07);
+  --orbit-answer: rgba(99, 102, 241, 0.07);
+  --orbit-answer-border: rgba(99, 102, 241, 0.2);
+  --orbit-accent: #5b5ce2;
+  --orbit-soft: #eceeff;
+  --orbit-soft-text: #46527a;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--orbit-bg);
+  color: var(--orbit-text);
+}
+
+:global(.dark) .landing {
+  --orbit-bg: #08122e;
+  --orbit-text: #ffffff;
+  --orbit-muted: rgba(224, 231, 255, 0.62);
+  --orbit-panel: #0b1534;
+  --orbit-panel-strong: #101a3a;
+  --orbit-panel-text: #eef1ff;
+  --orbit-border: rgba(255, 255, 255, 0.1);
+  --orbit-border-active: rgba(165, 180, 252, 0.45);
+  --orbit-track: rgba(255, 255, 255, 0.1);
+  --orbit-grid: rgba(255, 255, 255, 0.08);
+  --orbit-bubble: rgba(255, 255, 255, 0.09);
+  --orbit-answer: rgba(167, 139, 250, 0.09);
+  --orbit-answer-border: rgba(196, 181, 253, 0.15);
+  --orbit-accent: #a5b4fc;
+  --orbit-soft: rgba(199, 210, 254, 0.1);
+  --orbit-soft-text: #e0e7ff;
+}
+
+.glowOne,
+.glowTwo {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(100px);
+}
+
+.glowOne {
+  top: -15rem;
+  right: -12rem;
+  width: 34rem;
+  height: 34rem;
+  background: rgba(99, 102, 241, 0.13);
+}
+
+.glowTwo {
+  bottom: -18rem;
+  left: -14rem;
+  width: 34rem;
+  height: 34rem;
+  background: rgba(168, 85, 247, 0.1);
+}
+
+:global(.dark) .glowOne {
+  background: rgba(79, 70, 229, 0.15);
+}
+
+:global(.dark) .glowTwo {
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.previewPanel {
+  background: var(--orbit-panel);
+  color: var(--orbit-panel-text);
+}
+
+.previewText {
+  color: var(--orbit-panel-text);
+}
+
+.previewMuted {
+  color: var(--orbit-muted);
+}
+
+.demoCard {
+  border: 1px solid var(--orbit-border);
+  background: color-mix(in srgb, var(--orbit-panel-strong) 94%, transparent);
+  color: var(--orbit-text);
+  box-shadow: 0 16px 44px -30px rgba(38, 54, 102, 0.28);
+}
+
+.demoCardActive {
+  transform: scale(1.025);
+  border-color: var(--orbit-border-active);
+  box-shadow: 0 20px 60px -28px rgba(99, 102, 241, 0.38);
+}
+
+.demoCardIdle {
+  opacity: 0.84;
+}
+
+.cardEyebrow {
+  color: #5b5ce2;
+}
+
+.cardTitle {
+  color: var(--orbit-text);
+}
+
+.previewBadge {
+  background: var(--orbit-soft);
+  color: var(--orbit-soft-text);
+}
+
+.brandOrb {
+  border-color: var(--orbit-border);
+  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.14), rgba(255, 255, 255, 0.96) 72%);
+  box-shadow: 0 0 90px -34px rgba(79, 70, 229, 0.34);
+}
+
+.brandOrbInner {
+  border-color: rgba(30, 41, 80, 0.08);
+}
+
+.brandName {
+  color: var(--orbit-text);
+}
+
+.brandTagline,
+.activeDescription,
+.supportingText {
+  color: var(--orbit-muted);
+}
+
+.loginLink {
+  border-color: var(--orbit-border);
+  background: color-mix(in srgb, var(--orbit-panel-strong) 85%, transparent);
+  color: var(--orbit-text);
+}
+
+.loginLink:hover {
+  background: var(--orbit-panel-strong);
+}
+
+.primaryAction {
+  background: #17234a;
+  color: #ffffff;
+}
+
+:global(.dark) .primaryAction {
+  background: #ffffff;
+  color: #17224b;
+}
+
+.featureDot {
+  background: rgba(71, 85, 105, 0.23);
+}
+
+.featureDot:hover {
+  background: rgba(71, 85, 105, 0.42);
+}
+
+.featureDotActive {
+  background: #514fe3;
+}
+
+.featureChip {
+  border-color: var(--orbit-border);
+  color: var(--orbit-muted);
+}
+
+.featureChipActive {
+  border-color: rgba(79, 70, 229, 0.34);
+  background: rgba(79, 70, 229, 0.09);
+  color: #3730a3;
+}
+
+:global(.dark) .featureChipActive {
+  border-color: rgba(199, 210, 254, 0.4);
+  background: rgba(199, 210, 254, 0.1);
+  color: #ffffff;
+}
+
+.cardSelect:focus-visible,
+.featureControl:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+}
+
+.featureControl {
+  border-radius: 9999px;
+}
+
+:global(.dark) .brandOrb {
+  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.22), rgba(8, 18, 46, 0.5) 68%);
+  box-shadow: 0 0 90px -28px rgba(139, 147, 255, 0.45);
+}
+
+:global(.dark) .brandOrbInner {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+:global(.dark) .cardEyebrow {
+  color: rgba(199, 210, 254, 0.7);
+}

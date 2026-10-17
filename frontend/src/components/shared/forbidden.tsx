@@ -12,7 +12,7 @@ export function Forbidden() {
         This page is restricted to a different role. If you think this is wrong, contact your administrator.
       </p>
       <Button asChild className="mt-1">
-        <Link href="/">Back home</Link>
+        <Link href="/dashboard">Back to dashboard</Link>
       </Button>
     </div>
   );

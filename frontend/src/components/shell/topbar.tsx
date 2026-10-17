@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { DataLabel } from "@/components/shared/data-label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTopBarTitle } from "@/components/shell/page-title";
-import { useLogout } from "@/lib/queries";
+import { useHealth, useLogout } from "@/lib/queries";
+import { formatDate } from "@/lib/format";
 import { usePrivacy } from "@/lib/privacy";
 import type { User } from "@/lib/types";
 import {
@@ -45,6 +46,7 @@ export function TopBar({
   const title = useTopBarTitle();
   const { resolvedTheme, setTheme } = useTheme();
   const { hidden, toggle } = usePrivacy();
+  const health = useHealth();
   const router = useRouter();
   const logout = useLogout();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -97,7 +99,11 @@ export function TopBar({
         >
           {resolvedTheme === "dark" ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
         </IconToggle>
-        <DataLabel label="Sample data" asOf="NAV 30 Sep 2026" className="mx-2 hidden xl:inline-flex" />
+        <DataLabel
+          label={health.data?.market_month ? "Simulated market" : "Sample data"}
+          asOf={`NAV ${formatDate(health.data?.data_as_of ?? "2026-09-30")}`}
+          className="mx-2 hidden xl:inline-flex"
+        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

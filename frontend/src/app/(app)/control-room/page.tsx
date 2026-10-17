@@ -41,6 +41,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { usePageTitle } from "@/components/shell/page-title";
 import { Segmented } from "@/components/shared/segmented";
 import { FlagList, SEVERITY_CHIP, STATUS_CHIP, TurnInspector } from "@/components/oversight/turn-inspector";
+import { MonitoringRoom } from "@/components/monitoring/monitoring-room";
 import { downloadModelCard, useOversight, useRegulations, useReviews, useSetControl } from "@/lib/queries";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -329,7 +330,7 @@ function TurnRow({ turn, onOpen }: { turn: AgentTurn; onOpen: (logId: number) =>
 
 const ALERT_ICON: Record<Alert["severity"], typeof Info> = { high: AlertOctagon, medium: ShieldAlert, info: Info };
 
-function Alerts({ alerts, onOpenReviews }: { alerts: Alert[]; onOpenReviews: () => void }) {
+function Alerts({ alerts, onOpenReviews, onOpenMonitoring }: { alerts: Alert[]; onOpenReviews: () => void; onOpenMonitoring: () => void }) {
   if (!alerts.length) {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-(--border) bg-(--surface) px-5 py-3.5 shadow-card">
@@ -367,6 +368,10 @@ function Alerts({ alerts, onOpenReviews }: { alerts: Alert[]; onOpenReviews: () 
             {a.id === "reviews" || a.id === "threats" ? (
               <Button variant="outline" size="sm" onClick={onOpenReviews}>
                 Review
+              </Button>
+            ) : a.id.startsWith("drift-") ? (
+              <Button variant="outline" size="sm" onClick={onOpenMonitoring}>
+                Monitoring
               </Button>
             ) : null}
           </div>
@@ -500,8 +505,8 @@ function ModelCardPanel({ view }: { view: Oversight }) {
           <div>
             <dt className="text-caption text-(--text-muted)">Tools</dt>
             <dd className="text-(--text)">
-              9 tools: 3 read the shelf (T0), 4 read the client&apos;s own data (T1: profile, proposal, goal projection, how to
-              fix), 2 propose (T2). No tool can execute.
+              11 tools: 3 read the shelf (T0), 5 read the client&apos;s own data (T1: profile, proposal, goal projection, how to
+              fix, drift), 3 propose (T2: a proposal, a revision, a rebalancing). No tool can execute.
             </dd>
           </div>
         </dl>
@@ -645,7 +650,7 @@ function RegulatoryChecklist({ view }: { view: Oversight }) {
   );
 }
 
-type RoomTab = "live" | "reviews" | "governance";
+type RoomTab = "live" | "reviews" | "monitoring" | "governance";
 
 function ControlRoomContent() {
   usePageTitle("AI Control Room");
@@ -704,13 +709,14 @@ function ControlRoomContent() {
             options={[
               { value: "live", label: "Live" },
               { value: "reviews", label: "Review queue", count: view.kpis.reviews_open },
+              { value: "monitoring", label: "Monitoring", count: view.alerts.filter((a) => a.id.startsWith("drift-")).length },
               { value: "governance", label: "Governance" },
             ]}
           />
 
           {tab === "live" ? (
             <div className="space-y-6">
-              <Alerts alerts={view.alerts} onOpenReviews={() => setTab("reviews")} />
+              <Alerts alerts={view.alerts} onOpenReviews={() => setTab("reviews")} onOpenMonitoring={() => setTab("monitoring")} />
               <div className="grid gap-4 lg:grid-cols-2">
                 <SwitchCard name="advisor" state={view.controls.advisor} onChange={() => setTarget("advisor")} />
                 <SwitchCard name="execution" state={view.controls.execution} onChange={() => setTarget("execution")} />
@@ -741,6 +747,8 @@ function ControlRoomContent() {
           ) : null}
 
           {tab === "reviews" ? <ReviewQueue onOpen={setInspect} /> : null}
+
+          {tab === "monitoring" ? <MonitoringRoom /> : null}
 
           {tab === "governance" ? (
             <div className="space-y-6">

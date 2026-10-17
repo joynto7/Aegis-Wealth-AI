@@ -13,15 +13,18 @@ repository root; see the [root README](../README.md).
 | Against the real backend | `NEXT_PUBLIC_API_MOCK=0 API_BASE_URL=http://localhost:8000 npm run dev` | FastAPI in `../backend`, through the `/api/*` rewrite in `next.config.ts` |
 | Mock-first (no backend) | `npm run dev` | [MSW](https://mswjs.io) in the browser (`src/mocks/`) |
 
-Mock mode follows the "mock-first frontend" rule in Section 2.10.3. The mock implements all 49
-operations (the 32 contract endpoints, streaming chat, oversight, planning and what-if), with the
-same shapes and error envelope. Its engines (`src/mocks/engines/`) are ports of the backend's, so the
+Mock mode follows the "mock-first frontend" rule in Section 2.10.3. The mock implements all 54
+operations (the 32 contract endpoints, streaming chat, oversight, planning, what-if and the monitoring
+loop), with the same shapes and error envelope. Its engines (`src/mocks/engines/`) are ports of the backend's, so the
 numbers, item reasons and gate details match; `scripts/verify.ts` checks both against the
 documentation's worked examples. The version 2 ports give the backend's exact results: the goal
 projection shares its random generator (mulberry32, the same seed) and rounding (`numbers.ts`, half
 away from zero on the written digits), How to fix matched the Python engine on 400 random proposals,
-and the threat signals on 36 test messages. Screens never import from `src/mocks`, so switching modes
-needs no screen change.
+and the threat signals on 36 test messages. The monitoring-loop ports (`market.ts`, `drift.ts`,
+`rebalance.ts`) give the backend's NAVs, drift and trades unit for unit: the mock's monthly history is
+checked against `../backend/data/history_monthly.csv` value for value, and units are floored in exact
+decimals (`unitsFor`), as the backend's `Decimal` does. Screens never import from `src/mocks`, so
+switching modes needs no screen change.
 
 | Variable | Effect |
 | --- | --- |
@@ -71,7 +74,7 @@ npm run start            # serve the production build
 npm run lint             # ESLint
 npm run typecheck        # tsc --noEmit
 npm run gen:types        # regenerate src/lib/api-types.ts from ../backend/openapi.json
-npx tsx scripts/verify.ts  # 39 checks: mock engines against the worked examples and the backend's results, mock data against ../backend/data (exits 1 on a mismatch)
+npx tsx scripts/verify.ts  # 50 checks: mock engines against the worked examples and the backend's results, mock data against ../backend/data (exits 1 on a mismatch)
 ```
 
 ## API types are generated (NFR-5.2)
@@ -98,18 +101,23 @@ src/
     shared/            StatusBadge, TierBadge, SuitabilityBadge, DecisionLabel, DataLabel, Money,
                        Percent, PageHeader, Stepper, RegulationChips, AnimatedMoney and AnimatedNumber
                        (figure.tsx), AiLabel and AiNotice, AskAbout, InsightCard, Segmented, ...
-    chat/              ChatCards (tool results as cards, incl. projection and How to fix) and ReplyText
+    chat/              ChatCards (tool results as cards, incl. projection, How to fix and drift) and ReplyText
                        (figures linked to their sources)
     charts/            AllocationDonut, ReplayLine, ReplayPlayer (the month-by-month replay), StressBars, FeeBars,
                        FanChart, ProbabilityRing, TierBars, Sparkline, TraceWaterfall
-    proposal/          WhatIfLab (sliders with a live gate), FixPanel (How to fix), ProjectionPanel
+    proposal/          WhatIfLab (sliders with a live gate), FixPanel (How to fix), ProjectionPanel,
+                       RebalancePanel (a rebalancing's trades, and the banner when its prices are stale)
+    monitoring/        DriftPanel (the account's drift from the agreed mix), DriftChart (band, target and
+                       today's weight per class), TradesTable and SideChip, MonitoringRoom (the Control
+                       Room's Monitoring tab: the market clock, the advance dialog, every client's drift)
     oversight/         TurnInspector (the Control Room's side sheet: provenance, signals, trace, decision)
     shell/             Sidebar, TopBar (with the light/dark toggle), ChatDrawer, DockedChat, CommandPalette
   lib/                 api-types.ts (generated), types.ts, api-client.ts (incl. streamChat),
                        queries.ts (TanStack Query hooks), labels.ts, disclosures.ts, format.ts,
                        chart-theme.ts, use-debounced.ts
-  mocks/               the MSW mock API: data, engines (incl. projection, remedy, threats, numbers),
-                       services (incl. planning, reviews), db.ts, handlers.ts
+  mocks/               the MSW mock API: data, engines (incl. projection, remedy, threats, numbers,
+                       market, drift, rebalance), services (incl. planning, reviews, monitoring), db.ts,
+                       handlers.ts
 ```
 
 ## Design system

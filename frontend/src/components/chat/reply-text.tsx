@@ -15,6 +15,8 @@ export const TOOL_LABEL: Record<string, string> = {
   revise_proposal: "Revised proposal",
   project_goal: "Goal projection",
   suggest_fix: "How to fix",
+  check_drift: "Drift check",
+  propose_rebalance: "Rebalancing proposal",
 };
 
 export function sourceLabel(source: NumberSource): string {

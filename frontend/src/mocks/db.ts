@@ -16,6 +16,10 @@ import type {
 } from "@/lib/types";
 import { SEED_USERS } from "@/mocks/data/users";
 import { findProduct } from "@/mocks/data/products";
+import { navsAt } from "@/mocks/engines/market";
+import type { Trade } from "@/mocks/engines/rebalance";
+import type { DriftResult } from "@/mocks/engines/drift";
+import { round2, round4 } from "@/mocks/engines/numbers";
 
 /**
  * Mock "database" — there is no real backend in this build, so this stands
@@ -61,6 +65,25 @@ interface ControlRow {
 
 const CONTROL_DEFAULTS: Record<ControlName, ControlStateValue> = { advisor: "active", execution: "open" };
 
+/** The simulated market clock (addition): months replayed so far. No row means month 0. */
+export interface MarketRow {
+  month: number;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
+}
+
+/** A rebalancing proposal's trades (addition), priced at one market month against the holdings of that moment. */
+export interface RebalanceRow {
+  source_proposal_id: number;
+  market_month: number;
+  holdings_key: string;
+  portfolio_value: number;
+  trades: Trade[];
+  totals: { sell_total: number; buy_total: number; net_cash: number; turnover_pct: number };
+  drift: Pick<DriftResult, "classes" | "largest" | "portfolio_drift_pct" | "outside_band" | "band_pp">;
+}
+
 interface QuizAttemptState {
   proposalId: number;
   answers: Record<string, string>;
@@ -87,6 +110,10 @@ class MockDb {
   controls = new Map<ControlName, ControlRow>();
   /** Saved goals per client (addition); the latest is the current one. */
   goals = new Map<number, Goal[]>();
+  /** The simulated market clock and the rebalancing proposals' trades, by proposal id (monitoring loop). */
+  market: MarketRow | null = null;
+  rebalances = new Map<number, RebalanceRow>();
+  private navCache: { month: number; navs: Record<string, number> } | null = null;
 
   private ids = { proposal: 100, log: 1, message: 1, order: 1, record: 1, session: 1, profile: 1, goal: 1 };
 
@@ -113,6 +140,8 @@ class MockDb {
         replayReactions: [...this.replayReactions].map(([id, episodes]) => [id, [...episodes]]),
         controls: [...this.controls],
         goals: [...this.goals],
+        market: this.market,
+        rebalances: [...this.rebalances],
       };
       window.sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
     } catch {
@@ -147,6 +176,8 @@ class MockDb {
         (s.replayReactions as [number, string[]][]).map(([id, episodes]) => [id, new Set(episodes)])
       );
       this.controls = new Map(s.controls ?? []);
+      this.market = s.market ?? null;
+      this.rebalances = new Map(s.rebalances ?? []);
     } catch {
       // A snapshot from an older build or a corrupt one: start fresh.
       window.sessionStorage.removeItem(SNAPSHOT_KEY);
@@ -258,6 +289,26 @@ class MockDb {
     this.orders.set(userId, list);
   }
 
+  // --- the simulated market (addition) ---------------------------------------
+  marketMonth(): number {
+    return this.market?.month ?? 0;
+  }
+
+  /** Every product's NAV at the current simulated month (engines/market.ts), computed once per month. */
+  navs(): Record<string, number> {
+    const month = this.marketMonth();
+    if (this.navCache?.month !== month) this.navCache = { month, navs: navsAt(month) };
+    return this.navCache.navs;
+  }
+
+  /** A rebalancing's sale: fewer units, more cash. */
+  applySale(userId: number, productCode: string, units: number, proceeds: number) {
+    const sandbox = this.sandboxFor(userId);
+    const existing = sandbox.positions.get(productCode);
+    if (existing) existing.units = round4(Math.max(0, existing.units - units));
+    sandbox.cash = round2(sandbox.cash + proceeds);
+  }
+
   applyOrder(userId: number, productCode: string, units: number, nav: number, cost: number) {
     const sandbox = this.sandboxFor(userId);
     sandbox.cash = round2(sandbox.cash - cost);
@@ -272,8 +323,10 @@ class MockDb {
     }
   }
 
+  /** Positions valued at the current simulated NAV (addition: the market clock moves it). */
   positionsFor(userId: number): Position[] {
     const sandbox = this.sandboxFor(userId);
+    const navs = this.navs();
     const out: Position[] = [];
     for (const [code, pos] of sandbox.positions.entries()) {
       const product = findProduct(code);
@@ -284,7 +337,7 @@ class MockDb {
         asset_class: product.asset_class,
         units: round4(pos.units),
         avg_nav: round4(pos.avg_nav),
-        value: round2(pos.units * product.nav),
+        value: round2(pos.units * navs[code]),
       });
     }
     return out;
@@ -376,13 +429,6 @@ class MockDb {
     list.push(Date.now());
     this.chatTimestamps.set(userId, list);
   }
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
-function round4(n: number) {
-  return Math.round(n * 10000) / 10000;
 }
 
 // `Date.now()`/`new Date()` are fine here — this is runtime mock-server

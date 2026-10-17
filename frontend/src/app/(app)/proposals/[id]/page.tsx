@@ -42,6 +42,7 @@ import { AllocationBar } from "@/components/shared/allocation-bar";
 import { WhatIfLab } from "@/components/proposal/what-if-lab";
 import { FixPanel } from "@/components/proposal/fix-panel";
 import { ProjectionPanel } from "@/components/proposal/projection-panel";
+import { RebalancePanel } from "@/components/proposal/rebalance-panel";
 import { useComplianceRules, useProposal, useProposals } from "@/lib/queries";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { useAssetColors } from "@/lib/asset-colors";
@@ -297,8 +298,10 @@ function ProposalDetail({ id }: { id: number }) {
     proposal.status === "superseded"
       ? proposals.data?.items.find((p) => p.id > proposal.id && p.status !== "superseded")
       : undefined;
-  const canContinue = proposal.status === "passed" || proposal.status === "warning" || proposal.status === "acknowledged";
-  const editable = proposal.status !== "executed" && proposal.status !== "superseded";
+  // A rebalancing priced before the market moved can no longer go ahead; the client proposes a fresh one.
+  const stale = proposal.rebalance?.stale ?? false;
+  const canContinue = !stale && (proposal.status === "passed" || proposal.status === "warning" || proposal.status === "acknowledged");
+  const editable = !stale && proposal.status !== "executed" && proposal.status !== "superseded";
 
   return (
     <div className="flex items-start gap-6">
@@ -310,10 +313,10 @@ function ProposalDetail({ id }: { id: number }) {
           <div className="relative flex flex-wrap items-start justify-between gap-6">
             <div className="min-w-0">
               <p className="text-eyebrow text-[#c7d2fe]">
-                Proposal #{proposal.id} · version {proposal.version}
+                {proposal.rebalance ? "Rebalancing" : "Proposal"} #{proposal.id} · version {proposal.version}
                 {proposal.parent_id ? (
                   <>
-                    {" "}· revised from{" "}
+                    {" "}· {proposal.rebalance && proposal.parent_id === proposal.rebalance.source_proposal_id ? "restores" : "revised from"}{" "}
                     <Link href={`/proposals/${proposal.parent_id}`} className="underline underline-offset-2 hover:text-white">
                       #{proposal.parent_id}
                     </Link>
@@ -356,7 +359,9 @@ function ProposalDetail({ id }: { id: number }) {
           </div>
         </section>
 
-        <FixPanel proposal={proposal} />
+        {stale ? null : <FixPanel proposal={proposal} />}
+
+        {proposal.rebalance ? <RebalancePanel rebalance={proposal.rebalance} /> : null}
 
         {proposal.status === "superseded" ? (
           <Alert>

@@ -31,6 +31,8 @@ import {
 import { DISCLOSURES } from "@/lib/disclosures";
 import { ApiError } from "@/lib/api-client";
 import type { ExecuteResponse, Proposal } from "@/lib/types";
+import { SideChip } from "@/components/monitoring/trades-table";
+import { StaleRebalance } from "@/components/proposal/rebalance-panel";
 
 function SuccessView({ result }: { result: ExecuteResponse }) {
   return (
@@ -44,8 +46,9 @@ function SuccessView({ result }: { result: ExecuteResponse }) {
           </span>
           <h1 className="font-display text-[28px] font-bold text-white">Orders filled</h1>
           <p className="max-w-md text-body text-(--ink-muted)">
-            {result.orders.length} simulated orders filled in your sandbox account, and advice record #{result.record_id} was sealed with
-            SHA-256 and chained to your last one.
+            {result.orders.length} simulated orders filled in your sandbox account
+            {result.orders.some((o) => o.side === "sell") ? `, sales first (${result.orders.filter((o) => o.side === "sell").length} sold)` : ""}, and advice
+            record #{result.record_id} was sealed with SHA-256 and chained to your last one.
           </p>
           <p className="text-body text-(--ink-text)">
             Cash remaining: <Money value={result.cash_after} className="font-semibold text-white" />
@@ -58,6 +61,7 @@ function SuccessView({ result }: { result: ExecuteResponse }) {
           <table className="w-full text-left text-body">
             <thead className="border-b border-(--border) text-caption text-(--text-muted)">
               <tr>
+                <th className="py-2 font-medium">Trade</th>
                 <th className="py-2 font-medium">Product</th>
                 <th className="py-2 text-right font-medium">Units</th>
                 <th className="py-2 text-right font-medium">NAV</th>
@@ -67,6 +71,9 @@ function SuccessView({ result }: { result: ExecuteResponse }) {
             <tbody>
               {result.orders.map((o) => (
                 <tr key={o.id} className="border-b border-(--border) last:border-0">
+                  <td className="py-2.5">
+                    <SideChip side={o.side} />
+                  </td>
                   <td className="py-2.5 font-medium text-(--text)">{o.product_code}</td>
                   <td className="py-2.5 text-right tabular-nums">{o.units.toFixed(4)}</td>
                   <td className="py-2.5 text-right tabular-nums">{o.nav.toFixed(4)}</td>
@@ -156,28 +163,53 @@ function OrderSummary({
   onConfirm: () => void;
 }) {
   const colors = useAssetColors();
+  const rebalance = proposal.rebalance;
   return (
     <section className="overflow-hidden rounded-2xl border border-(--border) bg-(--surface) shadow-raised">
       <div className="bg-ink px-6 py-5">
-        <p className="text-eyebrow text-[#c7d2fe]">Order summary · proposal #{proposal.id}</p>
+        <p className="text-eyebrow text-[#c7d2fe]">
+          {rebalance ? "Rebalancing" : "Order summary"} · proposal #{proposal.id}
+        </p>
         <p className="mt-1.5 font-display text-[30px] font-bold leading-tight text-white">
           <Money value={proposal.amount} />
         </p>
         <div className="mt-2 flex items-center gap-2">
           <StatusBadge decision={proposal.gate.decision} className="px-2 py-0.5 text-caption [&_svg]:size-3.5" />
-          <span className="text-caption text-(--ink-muted)">{proposal.items.length} products · tier {proposal.tier}</span>
+          <span className="text-caption text-(--ink-muted)">
+            {rebalance ? `${rebalance.trades.length} trades` : `${proposal.items.length} products`} · tier {proposal.tier}
+          </span>
         </div>
       </div>
       <div className="space-y-5 p-6">
-        <ul className="space-y-2.5">
-          {proposal.items.map((item) => (
-            <li key={item.product_code} className="flex items-center gap-2.5 text-body">
-              <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[item.asset_class] }} aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-(--text)">{item.name}</span>
-              <span className="font-semibold tabular-nums text-(--text)">{item.weight_pct}%</span>
-            </li>
-          ))}
-        </ul>
+        {rebalance ? (
+          <div className="space-y-2.5">
+            <ul className="space-y-2.5">
+              {rebalance.trades.map((t) => (
+                <li key={`${t.side}-${t.product_code}`} className="flex items-center gap-2.5 text-body">
+                  <SideChip side={t.side} className="px-1.5" />
+                  <span className="min-w-0 flex-1 truncate text-(--text)">{t.name}</span>
+                  <span className="font-semibold text-(--text)">
+                    <Money value={t.amount} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-caption text-(--text-muted)">
+              Sales of <Money value={rebalance.sell_total} /> fund purchases of <Money value={rebalance.buy_total} />, back to the mix of
+              proposal #{rebalance.source_proposal_id}.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-2.5">
+            {proposal.items.map((item) => (
+              <li key={item.product_code} className="flex items-center gap-2.5 text-body">
+                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[item.asset_class] }} aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-(--text)">{item.name}</span>
+                <span className="font-semibold tabular-nums text-(--text)">{item.weight_pct}%</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul className="space-y-2 border-t border-(--border) pt-4">
           {checks.map((c) => (
             <li key={c.label} className={cn("flex items-center gap-2 text-body", c.done ? "text-(--text)" : "text-(--text-muted)")}>
@@ -324,7 +356,8 @@ function ConfirmContent({ id }: { id: number }) {
 
   const effectiveAcknowledged = !needsAck || allAcked || proposal.status === "acknowledged";
   const quizPassed = quizResult?.passed ?? proposal.quiz_passed;
-  const canConfirm = effectiveAcknowledged && disclosuresRead && quizPassed;
+  const stale = proposal.rebalance?.stale ?? false;
+  const canConfirm = effectiveAcknowledged && disclosuresRead && quizPassed && !stale;
 
   let n = 0;
   return (
@@ -335,6 +368,8 @@ function ConfirmContent({ id }: { id: number }) {
         title="Review and confirm"
         description="Three short checks, then one click. Nothing is bought before it."
       />
+
+      {stale ? <StaleRebalance /> : null}
 
       {halted ? (
         <Alert>

@@ -12,7 +12,10 @@ import type {
   Goal,
   GoalInput,
   Insights,
+  MarketState,
+  MonitoringOverview,
   PortfolioAnalytics,
+  PortfolioMonitoring,
   Projection,
   ProjectionRequest,
   ProposalPreview,
@@ -227,6 +230,7 @@ export function useReviseProposal(proposalId: number) {
       qc.invalidateQueries({ queryKey: ["proposals"] });
       qc.invalidateQueries({ queryKey: ["insights"] });
       qc.invalidateQueries({ queryKey: ["remedy"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
       toast.success(`Version ${proposal.version} saved. The gate returned ${proposal.gate.decision}.`);
     },
   });
@@ -279,6 +283,7 @@ export function useExecuteProposal(proposalId: number) {
       qc.invalidateQueries({ queryKey: ["sandbox"] });
       qc.invalidateQueries({ queryKey: ["records"] });
       qc.invalidateQueries({ queryKey: ["insights"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
     },
   });
 }
@@ -487,6 +492,69 @@ export function useSetControl() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The monitoring loop (additions): the simulated market, drift and rebalancing
+// ---------------------------------------------------------------------------
+
+/** The client's live portfolio against their latest executed mix, with the trades a rebalancing would place. */
+export function useMonitoring(enabled = true) {
+  return useQuery<PortfolioMonitoring>({
+    queryKey: ["monitoring"],
+    queryFn: () => api.get<PortfolioMonitoring>("/monitoring"),
+    refetchInterval: 15_000,
+    enabled,
+  });
+}
+
+/** Proposes a rebalancing back to the latest executed mix: a new version the gate checks. Nothing trades. */
+export function useProposeRebalance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Proposal>("/proposals/rebalance", {}),
+    onSuccess: (proposal) => {
+      qc.setQueryData(["proposals", proposal.id], proposal);
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["monitoring"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      toast.success(`Rebalancing proposal #${proposal.id} is ready. The gate returned ${proposal.gate.decision}.`);
+    },
+  });
+}
+
+/** The simulated market clock, for the compliance officer. */
+export function useMarket(enabled = true) {
+  return useQuery<MarketState>({
+    queryKey: ["market"],
+    queryFn: () => api.get<MarketState>("/compliance/market"),
+    enabled,
+  });
+}
+
+export function useAdvanceMarket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { months: number; reason: string }) => api.post<MarketState>("/compliance/market/advance", body),
+    onSuccess: (state) => {
+      qc.setQueryData(["market"], state);
+      qc.invalidateQueries({ queryKey: ["monitoring-overview"] });
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      qc.invalidateQueries({ queryKey: ["logs"] });
+      qc.invalidateQueries({ queryKey: ["health"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast.success(`The simulated market moved to ${state.as_of}. The change is in the operation log.`);
+    },
+  });
+}
+
+/** Every client's drift for the compliance officer, refreshed every 5 s. */
+export function useMonitoringOverview() {
+  return useQuery<MonitoringOverview>({
+    queryKey: ["monitoring-overview"],
+    queryFn: () => api.get<MonitoringOverview>("/compliance/monitoring"),
+    refetchInterval: 5_000,
+  });
+}
+
 /** The Control Room's live view: counts and the latest agent turns, refreshed every 3 s. */
 export function useOversight() {
   return useQuery<Oversight>({
@@ -549,8 +617,9 @@ export async function downloadModelCard(): Promise<ModelCard> {
   return card;
 }
 
+/** Health, and (addition) the products' NAV date, which the simulated market moves; checked every 30 s. */
 export function useHealth() {
-  return useQuery<HealthStatus>({ queryKey: ["health"], queryFn: () => api.get("/health") });
+  return useQuery<HealthStatus>({ queryKey: ["health"], queryFn: () => api.get("/health"), refetchInterval: 30_000 });
 }
 
 export async function downloadLogsExport(format: "json" | "csv") {

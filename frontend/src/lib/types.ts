@@ -138,3 +138,24 @@ export type ReviewQueue = Schemas["ReviewQueue"];
 export type ReviewStatus = Schemas["ReviewItem"]["status"];
 export type TurnDetail = Schemas["TurnDetail"];
 export type Alert = Schemas["Alert"];
+
+// ---------------------------------------------------------------------------
+// Additions: the monitoring loop (simulated market, drift, rebalancing)
+// ---------------------------------------------------------------------------
+
+export type OrderSide = NonNullable<Schemas["Order"]["side"]>;
+export type MarketState = Schemas["MarketState"];
+export type MarketAdvanceRequest = Schemas["MarketAdvanceRequest"];
+export type DriftClass = Schemas["DriftClass"];
+export type DriftProduct = Schemas["DriftProduct"];
+export type DriftLargest = Schemas["DriftLargest"];
+export type RebalanceTrade = Schemas["RebalanceTrade"];
+export type RebalancePreview = Schemas["RebalancePreview"];
+export type ProposalRebalance = Schemas["ProposalRebalance"];
+export type LiveRuleFailure = Schemas["LiveRuleFailure"];
+export type OpenRebalance = Schemas["OpenRebalance"];
+export type MonitoringStatus = Schemas["PortfolioMonitoring"]["status"];
+export type PortfolioMonitoring = Schemas["PortfolioMonitoring"];
+export type ClientMonitoring = Schemas["ClientMonitoring"];
+export type MonitoringOverview = Schemas["MonitoringOverview"];
+export type DriftCard = Schemas["DriftCard"];

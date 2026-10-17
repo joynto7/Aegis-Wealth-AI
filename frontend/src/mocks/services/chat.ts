@@ -15,11 +15,11 @@ import { PRODUCTS } from "@/mocks/data/products";
 import { findRule } from "@/mocks/data/rules";
 import { compareProducts } from "@/mocks/engines/fees";
 import { numberSources } from "@/mocks/engines/grounding";
-import { reviseProposal } from "@/mocks/services/proposals";
 import { projectionFor } from "@/mocks/services/planning";
 import { suggestFix, type RemedyResult } from "@/mocks/engines/remedy";
 import { formatMoney } from "@/lib/format";
 import { tierLabel } from "@/mocks/engines/scoring";
+import { MonitoringError, clientView, present, proposeRebalance, reviseWithRebalance } from "@/mocks/services/monitoring";
 
 /**
  * The AI advisor agent (Section 2.5.6/2.5.8). This build has no model
@@ -41,11 +41,19 @@ type Intent =
   | "override_attempt"
   | "fix_request"
   | "goal_projection"
+  | "execution_request"
+  | "drift_check"
+  | "rebalance_request"
   | "other";
 
 // Ported from backend/app/agent/fallback.py (v2 intents).
 const FIX =
   /how (do|can|could|should) i (fix|pass|get (it|this) (to )?pass)|\bfix (it|this|that|my|the)\b|make (it|this) pass|what (should|do) i change|how to (fix|pass)|suggest a fix|smallest change/;
+// Monitoring loop (port of the backend's REBALANCE_ASK, DRIFT and EXECUTION patterns).
+const EXECUTION = /execut|place (the |an |my )?orders?|order placed|confirm and|confirm it|confirmation token|skip the (comprehension )?quiz/;
+const REBALANCE_ASK =
+  /(propose|prepare|create|make|draft|build|start|set up|do)( me| a| the| my)* rebalanc|\brebalance (it|my|the|me|now|please)\b|please rebalance|(can|could|would) you rebalance|(want|like|need) to rebalance|let'?s rebalance/;
+const DRIFT = /\bdrift|rebalanc|off[- ]target|back to (the |my )?target|out of balance|still on target|on target\?/;
 const GOAL = /\b(goal|reach|on track|chances?|probab\w*|likely|will i have|how much will|enough (money|to)|retire\w*|afford|target)\b/;
 const MONTHLY = /(?:cny\s?)?([\d,]+(?:\.\d+)?)\s*(k)?\s*(?:a|per|each|every)\s*month/;
 const MONEY = /cny\s?([\d,]+(?:\.\d+)?)\s*(k|m)?|\b([\d,]{5,}(?:\.\d+)?)\b|\b(\d+(?:\.\d+)?)\s*(k|m)\b/g;
@@ -58,7 +66,10 @@ function detectIntent(message: string): Intent {
   if (/(ignore (your|all) rules|override|put everything|all[- ]in|sell everything and buy|max(imum|) out)/.test(m)) {
     return "override_attempt";
   }
+  if (EXECUTION.test(m)) return "execution_request";
   if (FIX.test(m)) return "fix_request";
+  if (REBALANCE_ASK.test(m)) return "rebalance_request";
+  if (DRIFT.test(m)) return "drift_check";
   if (GOAL.test(m)) return "goal_projection";
   if (/(reject|failed|rule|why not)/.test(m)) return "explain_rejection";
   if (/(compare|cheaper|fee|cost)/.test(m)) return "compare";
@@ -138,6 +149,7 @@ function proposalCard(p: Proposal): ChatCard {
       .filter((r) => r.result === "fail")
       .map((r) => ({ id: r.id, name: findRule(r.id)?.name ?? r.id, type: r.type, detail: r.detail })),
     data_label: p.data_label,
+    kind: db.rebalances.has(p.id) ? "rebalance" : "new",
   };
 }
 
@@ -179,6 +191,69 @@ function remedyCard(proposal: Proposal, r: RemedyResult): ChatCard {
       rule_ids: c.rule_ids,
     })),
   };
+}
+
+const g = (n: number) => String(Number(n.toPrecision(6)));
+const signed = (n: number) => (n >= 0 ? `+${g(n)}` : g(n));
+
+/** The check_drift tool's result, as the backend's tool returns it. */
+function driftResult(userId: number) {
+  const view = clientView(userId);
+  const preview = view.rebalance;
+  return {
+    status: view.status,
+    market_month: view.market.month,
+    market_as_of: view.market.as_of,
+    target_proposal_id: view.target_proposal_id,
+    total_value: view.total_value,
+    band_pp: view.band_pp,
+    classes: view.classes,
+    largest: view.largest,
+    portfolio_drift_pct: view.portfolio_drift_pct,
+    outside_band: view.outside_band,
+    rules_failing: view.rules_failing.map((f) => ({ id: f.id, name: f.name, type: f.type, detail: f.detail, new: f.new })),
+    trades: preview ? preview.trades.map((t) => ({ product_code: t.product_code, side: t.side, amount: t.amount })) : [],
+    sell_total: preview?.sell_total ?? null,
+    buy_total: preview?.buy_total ?? null,
+    turnover_pct: preview?.turnover_pct ?? null,
+    open_rebalance: view.open_rebalance,
+    data_label: view.data_label,
+  };
+}
+
+function driftCard(r: ReturnType<typeof driftResult>): ChatCard {
+  return {
+    type: "drift",
+    status: r.status,
+    market_month: r.market_month,
+    market_as_of: r.market_as_of,
+    target_proposal_id: r.target_proposal_id,
+    total_value: r.total_value,
+    band_pp: r.band_pp,
+    classes: r.classes,
+    largest: r.largest,
+    portfolio_drift_pct: r.portfolio_drift_pct,
+    outside_band: r.outside_band,
+    sell_total: r.sell_total,
+    turnover_pct: r.turnover_pct,
+    data_label: r.data_label,
+    rules_failing: r.rules_failing.map((f) => f.id),
+    open_rebalance_id: r.open_rebalance?.proposal_id ?? null,
+  };
+}
+
+function driftReply(r: ReturnType<typeof driftResult>): string {
+  if (r.status === "none" || !r.largest) {
+    return "You don't hold an invested portfolio yet, so there is no drift to check. Next step: confirm a proposal; after that, every simulated market move is measured against its mix.";
+  }
+  const cls = r.classes.find((c) => c.asset_class === r.largest!.asset_class)!;
+  let head = `At the simulated prices of ${r.market_as_of}, your ${cls.asset_class} share is ${g(cls.current_pct)}% against your ${g(cls.target_pct)}% target (${signed(cls.drift_pp)} points; the band is ${g(r.band_pp)}).`;
+  const hard = r.rules_failing.filter((f) => f.type === "hard");
+  if (hard.length) head += ` ${hard.map((f) => f.id).join(" and ")} now fail${hard.length === 1 ? "s" : ""} on what you hold.`;
+  if (r.outside_band || hard.length) {
+    return `${head} Rebalancing would sell about ${formatMoney(r.sell_total ?? 0)}. Ask me to propose it, or press Propose rebalancing on the card; the gate checks it and nothing trades until you confirm.`;
+  }
+  return `${head} That is within the band, so there is nothing to rebalance yet.`;
 }
 
 function cardKey(card: ChatCard): string {
@@ -332,7 +407,37 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
     );
   };
 
-  if (intent === "override_attempt") {
+  if (intent === "execution_request") {
+    reply =
+      "I can't place orders, issue a confirmation token or skip the quiz: I have no tool that can. Only your own click on Confirm and Execute places orders, after the quiz." +
+      (proposal ? ` Your proposal is ${proposal.status}. Next step: ${nextStepFor(proposal.status)}` : "");
+  } else if (intent === "drift_check") {
+    const r = driftResult(userId);
+    const summary = r.largest ? `Checked drift: ${r.largest.asset_class} ${signed(r.largest.drift_pp)} points from target` : "Checked drift: no invested portfolio yet";
+    addTool("check_drift", "T1", "allowed", summary, { value: r, card: driftCard(r) });
+    reply = driftReply(r);
+  } else if (intent === "rebalance_request") {
+    if (t2Denial || !profile) {
+      addTool("propose_rebalance", "T2", "denied", t2Denial ?? "PROFILE_REQUIRED");
+      reply = "I can't prepare a rebalancing until your risk profile is current. Next step: retake the risk profile.";
+    } else {
+      try {
+        const made = present(proposeRebalance(userId, profile, "agent"), userId);
+        const reb = made.rebalance!;
+        addTool("propose_rebalance", "T2", "allowed", `Proposed rebalancing #${made.id}: gate ${made.gate.decision}`, {
+          value: { ...made, rebalance: reb },
+          card: proposalCard(made),
+        });
+        proposalsMade.push({ tool: "propose_rebalance", proposal_id: made.id, gate: made.gate.decision });
+        reply = `I prepared rebalancing proposal #${made.id} (version ${made.version}), back to the mix of proposal #${reb.source_proposal_id}: it sells ${formatMoney(reb.sell_total)} and buys ${formatMoney(reb.buy_total)}, and the gate's verdict is ${made.gate.decision}. I can't place it: open it, pass the quiz and press Confirm.`;
+      } catch (e) {
+        if (!(e instanceof MonitoringError)) throw e;
+        addTool("propose_rebalance", "T2", "allowed", `propose_rebalance failed: ${e.code}`);
+        const problem = e.message.replace(/\.$/, "");
+        reply = `I couldn't prepare a rebalancing: ${problem.charAt(0).toLowerCase()}${problem.slice(1)}.`;
+      }
+    }
+  } else if (intent === "override_attempt") {
     if (t2Denial) {
       addTool("revise_proposal", "T2", "denied", t2Denial);
       reply =
@@ -356,7 +461,7 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
         { product_code: thematic.code, weight_pct: 60 },
         ...others.map((i) => ({ product_code: i.product_code, weight_pct: Math.round((i.weight_pct / scale) * remaining) })),
       ];
-      const result = reviseProposal(userId, proposal, profile!, rawItems);
+      const result = reviseWithRebalance(userId, proposal, profile!, rawItems);
       if (result.proposal) {
         addTool("revise_proposal", "T2", "allowed", `Saved version ${result.proposal.version} as #${result.proposal.id}: gate ${result.proposal.gate.decision}`, {
           value: result.proposal,

@@ -830,6 +830,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/compliance/market": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Market
+         * @description The simulated market clock: its date, the history month it replayed last and the moves by asset class.
+         */
+        get: operations["get_market_api_compliance_market_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/market/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Advance Market
+         * @description Move the simulated market 1 to 12 months forward, with a reason (logged as market_advanced). Nothing trades.
+         */
+        post: operations["advance_market_api_compliance_market_advance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/compliance/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Monitoring Overview
+         * @description Every client's drift from the mix they agreed to, rules their live holdings fail, and open rebalancings.
+         */
+        get: operations["get_monitoring_overview_api_compliance_monitoring_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Monitoring
+         * @description The client's live portfolio against their latest executed proposal, and the trades a rebalancing would place.
+         */
+        get: operations["get_monitoring_api_monitoring_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Rebalance
+         * @description Propose a rebalancing back to the latest executed mix: a new version the gate checks. Nothing is executed.
+         *
+         *     Returns the open rebalancing instead when one is already priced at today's prices.
+         */
+        post: operations["propose_rebalance_api_proposals_rebalance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1031,7 +1133,7 @@ export interface components {
             /** Citations */
             citations?: components["schemas"]["Citation"][] | null;
             /** Cards */
-            cards?: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"] | components["schemas"]["ProjectionCard"] | components["schemas"]["RemedyCard"])[] | null;
+            cards?: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"] | components["schemas"]["ProjectionCard"] | components["schemas"]["RemedyCard"] | components["schemas"]["DriftCard"])[] | null;
             /** Number Sources */
             number_sources?: components["schemas"]["NumberSource"][] | null;
             provenance?: components["schemas"]["Provenance"] | null;
@@ -1064,7 +1166,7 @@ export interface components {
              * Cards
              * @description Addition: the tool results behind the reply, as cards.
              */
-            cards: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"] | components["schemas"]["ProjectionCard"] | components["schemas"]["RemedyCard"])[];
+            cards: (components["schemas"]["ProductsCard"] | components["schemas"]["ComparisonCard"] | components["schemas"]["ProposalCard"] | components["schemas"]["RuleCard"] | components["schemas"]["ProfileCard"] | components["schemas"]["BlockedCard"] | components["schemas"]["ProjectionCard"] | components["schemas"]["RemedyCard"] | components["schemas"]["DriftCard"])[];
             /**
              * Number Sources
              * @description Addition: the source of each figure in the reply.
@@ -1101,6 +1203,32 @@ export interface components {
             gold: number;
             /** Equity */
             equity: number;
+        };
+        /** ClientMonitoring */
+        ClientMonitoring: {
+            /** User Id */
+            user_id: number;
+            /** Client */
+            client: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "on_target" | "drifted" | "rule_breach";
+            /** Total Value */
+            total_value: number;
+            /** Target Proposal Id */
+            target_proposal_id: number;
+            largest: components["schemas"]["DriftLargest"];
+            /** Portfolio Drift Pct */
+            portfolio_drift_pct: number;
+            /** Outside Band */
+            outside_band: boolean;
+            /** Rules Failing */
+            rules_failing: string[];
+            /** New Failures */
+            new_failures: string[];
+            open_rebalance: components["schemas"]["OpenRebalance"] | null;
         };
         /** CompareItem */
         CompareItem: {
@@ -1228,6 +1356,104 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * DriftCard
+         * @description Addition: the check_drift tool's result; the client proposes a rebalancing with one click.
+         */
+        DriftCard: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "drift";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "on_target" | "drifted" | "rule_breach";
+            /** Market Month */
+            market_month: number;
+            /** Market As Of */
+            market_as_of: string;
+            /** Target Proposal Id */
+            target_proposal_id: number | null;
+            /** Total Value */
+            total_value: number;
+            /** Band Pp */
+            band_pp: number;
+            /** Classes */
+            classes: components["schemas"]["DriftClass"][];
+            largest: components["schemas"]["DriftLargest"] | null;
+            /** Portfolio Drift Pct */
+            portfolio_drift_pct: number;
+            /** Outside Band */
+            outside_band: boolean;
+            /** Rules Failing */
+            rules_failing: string[];
+            /** Sell Total */
+            sell_total: number | null;
+            /** Turnover Pct */
+            turnover_pct: number | null;
+            /** Open Rebalance Id */
+            open_rebalance_id: number | null;
+            /** Data Label */
+            data_label: string;
+        };
+        /**
+         * DriftClass
+         * @description Addition: one asset class's live weight against its target.
+         */
+        DriftClass: {
+            /**
+             * Asset Class
+             * @enum {string}
+             */
+            asset_class: "cash" | "bond" | "gold" | "equity";
+            /** Target Pct */
+            target_pct: number;
+            /** Current Pct */
+            current_pct: number;
+            /**
+             * Drift Pp
+             * @description Live weight minus target, in percentage points.
+             */
+            drift_pp: number;
+            /**
+             * Outside Band
+             * @description True when |drift_pp| is more than the band (rules.json drift_band_pp).
+             */
+            outside_band: boolean;
+        };
+        /** DriftLargest */
+        DriftLargest: {
+            /**
+             * Asset Class
+             * @enum {string}
+             */
+            asset_class: "cash" | "bond" | "gold" | "equity";
+            /** Drift Pp */
+            drift_pp: number;
+        };
+        /** DriftProduct */
+        DriftProduct: {
+            /** Product Code */
+            product_code: string;
+            /** Name */
+            name: string;
+            /**
+             * Asset Class
+             * @enum {string}
+             */
+            asset_class: "cash" | "bond" | "gold" | "equity";
+            /** Target Pct */
+            target_pct: number;
+            /** Current Pct */
+            current_pct: number;
+            /** Drift Pp */
+            drift_pp: number;
+            /** Value */
+            value: number;
+        };
         /** ExecuteResponse */
         ExecuteResponse: {
             /** Proposal Id */
@@ -1353,8 +1579,17 @@ export interface components {
              * @enum {string}
              */
             llm: "ok" | "fallback";
-            /** Data As Of */
+            /**
+             * Data As Of
+             * @description The products' NAV date: the simulated market's date once it has moved (addition).
+             */
             data_as_of: string;
+            /**
+             * Market Month
+             * @description Addition: months the simulated market has moved; 0 is the data date.
+             * @default 0
+             */
+            market_month: number;
         };
         /** Insight */
         Insight: {
@@ -1386,6 +1621,27 @@ export interface components {
             source: string;
             /** Generated At */
             generated_at: string;
+        };
+        /** LiveRuleFailure */
+        LiveRuleFailure: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft";
+            /** Message */
+            message: string | null;
+            /** Detail */
+            detail: string;
+            /**
+             * New
+             * @description True when the rule passed when the client confirmed the mix.
+             */
+            new: boolean;
         };
         /** LogEntry */
         LogEntry: {
@@ -1426,6 +1682,68 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** MarketAdvanceRequest */
+        MarketAdvanceRequest: {
+            /**
+             * Months
+             * @default 1
+             */
+            months: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * MarketState
+         * @description Addition: the simulated market clock. Illustrative: it replays the synthetic monthly history.
+         */
+        MarketState: {
+            /**
+             * Month
+             * @description Months replayed so far; 0 is the data as of start_date.
+             */
+            month: number;
+            /**
+             * As Of
+             * @description The simulated date: the last day of the current month.
+             */
+            as_of: string;
+            /**
+             * Replayed
+             * @description The history month whose returns were applied last.
+             */
+            replayed: string | null;
+            /**
+             * Next Replay
+             * @description The history month the next advance applies.
+             */
+            next_replay: string;
+            /** @description Each asset class's return in the last month applied. */
+            last_returns_pct: components["schemas"]["ClassWeights"] | null;
+            /** @description Each asset class's growth since start_date. */
+            since_start_pct: components["schemas"]["ClassWeights"];
+            /** Start Date */
+            start_date: string;
+            /** Replay From */
+            replay_from: string;
+            /** Max Months Per Advance */
+            max_months_per_advance: number;
+            /** Changed At */
+            changed_at: string | null;
+            /**
+             * Changed By
+             * @description Shown to the compliance role only.
+             */
+            changed_by: string | null;
+            /**
+             * Reason
+             * @description Shown to the compliance role only.
+             */
+            reason: string | null;
+            /** Data Label */
+            data_label: string;
+            /** Note */
+            note: string;
         };
         /** ModelCard */
         ModelCard: {
@@ -1574,6 +1892,29 @@ export interface components {
             /** Description */
             description: string;
         };
+        /** MonitoringCounts */
+        MonitoringCounts: {
+            /** On Target */
+            on_target: number;
+            /** Drifted */
+            drifted: number;
+            /** Rule Breach */
+            rule_breach: number;
+        };
+        /**
+         * MonitoringOverview
+         * @description Addition: every client's drift for the compliance officer, with the market clock.
+         */
+        MonitoringOverview: {
+            market: components["schemas"]["MarketState"];
+            /** Band Pp */
+            band_pp: number;
+            /** Clients */
+            clients: components["schemas"]["ClientMonitoring"][];
+            counts: components["schemas"]["MonitoringCounts"];
+            /** Policy */
+            policy: string;
+        };
         /**
          * NumberSource
          * @description Addition: where one figure in the reply came from, by its character span in the reply.
@@ -1597,6 +1938,25 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** OpenRebalance */
+        OpenRebalance: {
+            /** Proposal Id */
+            proposal_id: number;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "rejected" | "warning" | "acknowledged" | "passed" | "executed" | "superseded";
+            /**
+             * Gate Decision
+             * @enum {string}
+             */
+            gate_decision: "PASS" | "WARNING" | "REJECT";
+            /** Stale */
+            stale: boolean;
+        };
         /** Order */
         Order: {
             /** Id */
@@ -1618,6 +1978,13 @@ export interface components {
             status: "filled";
             /** Created At */
             created_at: string;
+            /**
+             * Side
+             * @description Addition: sell for the sales of a rebalancing.
+             * @default buy
+             * @enum {string}
+             */
+            side: "buy" | "sell";
         };
         /** OrderList */
         OrderList: {
@@ -1717,6 +2084,46 @@ export interface components {
             positions: number;
             /** Stress */
             stress: components["schemas"]["StressResult"][];
+            /** Data Label */
+            data_label: string;
+        };
+        /**
+         * PortfolioMonitoring
+         * @description Addition: the client's live portfolio against the mix they last agreed to (the latest executed proposal).
+         */
+        PortfolioMonitoring: {
+            market: components["schemas"]["MarketState"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "on_target" | "drifted" | "rule_breach";
+            /** Target Proposal Id */
+            target_proposal_id: number | null;
+            /** Target Version */
+            target_version: number | null;
+            /** Total Value */
+            total_value: number;
+            /** Band Pp */
+            band_pp: number;
+            /** Classes */
+            classes: components["schemas"]["DriftClass"][];
+            /** Products */
+            products: components["schemas"]["DriftProduct"][];
+            largest: components["schemas"]["DriftLargest"] | null;
+            /** Portfolio Drift Pct */
+            portfolio_drift_pct: number;
+            /** Outside Band */
+            outside_band: boolean;
+            /**
+             * Live Gate
+             * @description The gate's verdict on the live weights, with today's profile.
+             */
+            live_gate: ("PASS" | "WARNING" | "REJECT") | null;
+            /** Rules Failing */
+            rules_failing: components["schemas"]["LiveRuleFailure"][];
+            rebalance: components["schemas"]["RebalancePreview"] | null;
+            open_rebalance: components["schemas"]["OpenRebalance"] | null;
             /** Data Label */
             data_label: string;
         };
@@ -2097,6 +2504,8 @@ export interface components {
             data_as_of: string;
             /** Created At */
             created_at: string;
+            /** @description Addition: the trades of a rebalancing proposal; null for an ordinary proposal. */
+            rebalance?: components["schemas"]["ProposalRebalance"] | null;
         };
         /** ProposalCard */
         ProposalCard: {
@@ -2130,6 +2539,13 @@ export interface components {
             failed_rules: components["schemas"]["FailedRule"][];
             /** Data Label */
             data_label: string;
+            /**
+             * Kind
+             * @description Addition: rebalance for a rebalancing proposal.
+             * @default new
+             * @enum {string}
+             */
+            kind: "new" | "rebalance";
         };
         /** ProposalCreate */
         ProposalCreate: {
@@ -2200,6 +2616,48 @@ export interface components {
             /** Data Label */
             data_label: string;
         };
+        /**
+         * ProposalRebalance
+         * @description Addition: what a rebalancing proposal trades, priced at one market month and one set of holdings.
+         */
+        ProposalRebalance: {
+            /**
+             * Source Proposal Id
+             * @description The executed proposal whose mix it restores.
+             */
+            source_proposal_id: number;
+            /** Market Month */
+            market_month: number;
+            /** Market As Of */
+            market_as_of: string;
+            /** Portfolio Value */
+            portfolio_value: number;
+            /** Trades */
+            trades: components["schemas"]["RebalanceTrade"][];
+            /** Sell Total */
+            sell_total: number;
+            /** Buy Total */
+            buy_total: number;
+            /** Net Cash */
+            net_cash: number;
+            /**
+             * Turnover Pct
+             * @description Sales as a share of the portfolio's value.
+             */
+            turnover_pct: number;
+            /** Drift Before */
+            drift_before: components["schemas"]["DriftClass"][];
+            /**
+             * Band Pp
+             * @description The drift band when it was priced (rules.json drift_band_pp).
+             */
+            band_pp: number;
+            /**
+             * Stale
+             * @description True once prices or holdings have changed since it was priced: it can no longer execute.
+             */
+            stale: boolean;
+        };
         /** ProposalSummary */
         ProposalSummary: {
             /** Id */
@@ -2222,6 +2680,13 @@ export interface components {
             gate_decision: "PASS" | "WARNING" | "REJECT";
             /** Created At */
             created_at: string;
+            /**
+             * Kind
+             * @description Addition: rebalance for a rebalancing proposal.
+             * @default new
+             * @enum {string}
+             */
+            kind: "new" | "rebalance";
         };
         /**
          * Provenance
@@ -2339,6 +2804,58 @@ export interface components {
             answers: {
                 [key: string]: string;
             };
+        };
+        /**
+         * RebalancePreview
+         * @description The trades a rebalancing would place at today's simulated prices. Nothing is saved.
+         */
+        RebalancePreview: {
+            /** Trades */
+            trades: components["schemas"]["RebalanceTrade"][];
+            /** Sell Total */
+            sell_total: number;
+            /** Buy Total */
+            buy_total: number;
+            /** Net Cash */
+            net_cash: number;
+            /** Turnover Pct */
+            turnover_pct: number;
+        };
+        /**
+         * RebalanceTrade
+         * @description Addition: one order of a rebalancing, priced at the current simulated NAV.
+         */
+        RebalanceTrade: {
+            /** Product Code */
+            product_code: string;
+            /** Name */
+            name: string;
+            /**
+             * Asset Class
+             * @enum {string}
+             */
+            asset_class: "cash" | "bond" | "gold" | "equity";
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "buy" | "sell";
+            /** Units */
+            units: number;
+            /** Nav */
+            nav: number;
+            /** Amount */
+            amount: number;
+            /**
+             * From Pct
+             * @description The product's live weight before the trade.
+             */
+            from_pct: number;
+            /**
+             * To Pct
+             * @description Its target weight.
+             */
+            to_pct: number;
         };
         /** RecordList */
         RecordList: {
@@ -7118,6 +7635,425 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelCard"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_market_api_compliance_market_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketState"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    advance_market_api_compliance_market_advance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarketAdvanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketState"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_monitoring_overview_api_compliance_monitoring_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringOverview"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_monitoring_api_monitoring_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioMonitoring"];
+                };
+            };
+            /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description FORBIDDEN, TOKEN_INVALID or TOKEN_EXPIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description A state conflict, e.g. PROFILE_REQUIRED or GATE_REJECTED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description VALIDATION_ERROR; details.fields lists each field and problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description INTERNAL */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    propose_rebalance_api_proposals_rebalance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
                 };
             };
             /** @description UNAUTHENTICATED or INVALID_CREDENTIALS */

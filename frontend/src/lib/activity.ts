@@ -1,6 +1,7 @@
 import {
   Activity,
   BadgeCheck,
+  CalendarClock,
   Bot,
   ClipboardCheck,
   FileSpreadsheet,
@@ -8,6 +9,7 @@ import {
   Gauge,
   History,
   Lock,
+  Repeat,
   MessageSquareHeart,
   Scale,
   ShieldCheck,
@@ -37,6 +39,8 @@ export const ACTIVITY: Record<string, { label: string; icon: LucideIcon }> = {
   goal_set: { label: "Goal saved", icon: Flag },
   chat_feedback: { label: "Rated an answer", icon: MessageSquareHeart },
   review_decided: { label: "AI turn reviewed", icon: ClipboardCheck },
+  market_advanced: { label: "Simulated market moved", icon: CalendarClock },
+  rebalance_proposed: { label: "Rebalancing proposed", icon: Repeat },
 };
 
 export function describeActivity(entry: LogEntry): string {
@@ -49,6 +53,8 @@ export function describeActivity(entry: LogEntry): string {
   if (entry.action === "goal_set" && d.horizon_years) return `${base}: a ${String(d.horizon_years)}-year target`;
   if (entry.action === "chat_feedback" && d.rating) return `${base}: ${d.rating === "down" ? "not helpful" : "helpful"}`;
   if (entry.action === "review_decided" && d.decision) return `${base}: ${String(d.decision)}`;
+  if (entry.action === "rebalance_proposed" && d.proposal_id) return `${base} #${String(d.proposal_id)}${entry.actor === "agent" ? " by Aegis" : ""}`;
+  if (entry.action === "market_advanced" && d.as_of) return `${base} to ${String(d.as_of)}`;
   return base;
 }
 

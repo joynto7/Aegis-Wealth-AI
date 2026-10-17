@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, ArrowRight, Layers, ListOrdered, PieChart, Receipt, ShieldAlert, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -14,6 +15,8 @@ import { KpiTile } from "@/components/shared/kpi-tile";
 import { AnimatedMoney } from "@/components/shared/figure";
 import { AskAbout } from "@/components/shared/ask-about";
 import { ProjectionPanel } from "@/components/proposal/projection-panel";
+import { DriftPanel } from "@/components/monitoring/drift-panel";
+import { SideChip } from "@/components/monitoring/trades-table";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -135,11 +138,16 @@ function AccountOverview() {
         </div>
       </Panel>
 
-      <Panel icon={ListOrdered} title="Order history" description="Every simulated order, newest first. Each was placed by your own Confirm click.">
+      <Panel
+        icon={ListOrdered}
+        title="Order history"
+        description="Every simulated order, newest first, purchases and a rebalancing's sales alike. Each was placed by your own Confirm click."
+      >
         <ol className="space-y-2">
           {(ordersData?.items ?? []).map((o) => (
             <li key={o.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-(--border) px-4 py-3">
               <span className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-caption text-(--text-muted)">#{o.id}</span>
+              <SideChip side={o.side} />
               <span className="font-semibold text-(--text)">{o.product_code}</span>
               <span className="text-caption text-(--text-muted)">
                 {o.units.toFixed(4)} units at {o.nav.toFixed(4)}
@@ -157,7 +165,10 @@ function AccountOverview() {
   );
 }
 
-/** What the client holds now, under the same hypothetical shocks a proposal is tested with, and projected forward. */
+/**
+ * What the client holds now: its drift from the agreed mix at the simulated market's prices (monitoring loop), the same
+ * hypothetical shocks a proposal is tested with, and a projection forward.
+ */
 function RiskAndGoal() {
   const account = useSandboxAccount();
   const analytics = usePortfolioAnalytics();
@@ -169,6 +180,7 @@ function RiskAndGoal() {
   const worst = a.stress.reduce((w, s) => (s.loss_pct < w.loss_pct ? s : w), a.stress[0]);
   return (
     <div className="space-y-6">
+      <DriftPanel />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile icon={Wallet} label="Invested" value={<Money value={a.invested} />} hint={`Of ${a.positions} position${a.positions === 1 ? "" : "s"}, at the sample NAV.`} />
         <KpiTile icon={Receipt} label="Weighted annual fee" value={`${a.weighted_fee_pct.toFixed(2)}%`} hint="Across everything you hold, cash at 0%." />
@@ -234,12 +246,33 @@ function ActivityLog() {
   );
 }
 
+const TABS = ["overview", "risk", "activity"] as const;
+type AccountTab = (typeof TABS)[number];
+
 function AccountContent() {
   usePageTitle("Sandbox Account");
+  const [tab, setTab] = useState<AccountTab>("overview");
+
+  // A link may open a tab directly (#risk, as the briefing's drift insight does); the tab follows back and forward.
+  useEffect(() => {
+    function sync() {
+      const hash = window.location.hash.replace("#", "") as AccountTab;
+      if (TABS.includes(hash)) setTab(hash);
+    }
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  function openTab(next: string) {
+    setTab(next as AccountTab);
+    window.history.replaceState(null, "", next === "overview" ? window.location.pathname : `#${next}`);
+  }
+
   return (
     <div>
       <PageHeader eyebrow="Portfolio" title="Sandbox account" description="Simulated cash, positions and orders. Every change here traces back to your own click." />
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={openTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="risk">Risk and goal</TabsTrigger>

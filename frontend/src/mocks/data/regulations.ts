@@ -19,7 +19,7 @@ interface RawAiControl extends RawBasis {
   note?: string;
 }
 
-export const REGULATIONS_VERSION = "reg-2026-10-v2";
+export const REGULATIONS_VERSION = "reg-2026-10-v3";
 export const REGULATIONS_NOTE =
   "Mapping prepared by the team for this sandbox. It shows which requirement each control is designed to meet; it is not legal advice.";
 
@@ -89,6 +89,18 @@ export const FRAMEWORKS: Framework[] = [
     short: "OWASP Agentic Top 10",
     title: "OWASP Top 10 for Agentic Applications (2026)",
     jurisdiction: "Industry standard",
+  },
+  {
+    id: "HK-SFC-ODAP",
+    short: "HK SFC online platforms guidelines",
+    title: "Guidelines on Online Distribution and Advisory Platforms (SFC, effective 6 April 2019)",
+    jurisdiction: "Hong Kong",
+  },
+  {
+    id: "US-FINRA-DIA",
+    short: "FINRA digital advice report",
+    title: "Report on Digital Investment Advice (FINRA, March 2016)",
+    jurisdiction: "United States",
   },
 ];
 
@@ -341,7 +353,7 @@ const AI_CONTROLS: RawAiControl[] = [
     framework: "OWASP-ASI",
     ref: "ASI02 Tool misuse and exploitation",
     requirement: "Constrain what each tool can do and validate its inputs.",
-    control: "Nine strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
+    control: "Eleven strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
     check: "built_in",
   },
   {
@@ -359,6 +371,27 @@ const AI_CONTROLS: RawAiControl[] = [
     requirement: "Keep a human in control of consequential actions and stop the agent overstating itself.",
     control: "Orders need the client's Confirm click and a one-time token; promise words and unsupported figures never reach the client.",
     check: "built_in",
+  },
+  {
+    id: "SFC-REBALANCE",
+    framework: "HK-SFC-ODAP",
+    ref: "Ch. 4 (robo-advice): rebalancing",
+    requirement: "Treat rebalancing as a recommendation that triggers the suitability requirement, and keep effective rebalancing practices.",
+    control:
+      "A rebalancing is a new proposal version: the nine-rule gate checks it against the client's current tier, How to fix applies if it fails, and only the client's quiz and Confirm execute it.",
+    check: "built_in",
+    note: "Applied as good practice: Aegis is a sandbox, not a licensed platform.",
+  },
+  {
+    id: "FINRA-REBALANCE",
+    framework: "US-FINRA-DIA",
+    ref: "Rebalancing (effective practices)",
+    requirement:
+      "Establish the customer's intent to rebalance, disclose how rebalancing works and any drift threshold, and set how the tool acts in a major market movement.",
+    control:
+      "The 5-point drift band is one number in rules.json, shown beside every drift figure. Nothing rebalances without the client's own request and Confirm, and trades priced before the market moved cannot execute.",
+    check: "built_in",
+    note: "Applied as good practice.",
   },
 ];
 

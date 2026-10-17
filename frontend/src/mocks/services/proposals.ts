@@ -82,6 +82,22 @@ export function reviseProposal(
   return { proposal };
 }
 
+/** A new version built from given items (the monitoring loop's rebalancing); the gate runs as for any proposal. */
+export function createVersion(opts: {
+  userId: number;
+  profile: Profile;
+  amount: number;
+  horizonYears: number;
+  nearTermNeed: number;
+  items: ProposalItem[];
+  notes: string[];
+  parentId: number;
+}): Proposal {
+  const classWeightsPct: Record<AssetClass, number> = { cash: 0, bond: 0, gold: 0, equity: 0 };
+  for (const item of opts.items) classWeightsPct[item.asset_class] += item.weight_pct;
+  return finalizeProposal({ ...opts, classWeightsPct });
+}
+
 function finalizeProposal(opts: {
   userId: number;
   profile: Profile;
@@ -145,5 +161,6 @@ export function toSummary(p: Proposal) {
     tier: p.tier,
     gate_decision: p.gate.decision,
     created_at: p.created_at,
+    kind: db.rebalances.has(p.id) ? ("rebalance" as const) : ("new" as const),
   };
 }

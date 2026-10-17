@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Check,
+  Crosshair,
   FileSpreadsheet,
   ListChecks,
   Package,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 import { FanChart } from "@/components/charts/fan-chart";
 import { Button } from "@/components/ui/button";
-import { useReviseProposal } from "@/lib/queries";
+import { useProposeRebalance, useReviseProposal } from "@/lib/queries";
 import { ApiError } from "@/lib/api-client";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SuitabilityBadge } from "@/components/shared/suitability-badge";
@@ -33,6 +34,7 @@ import type {
   BlockedCard,
   ChatCard,
   ComparisonCard,
+  DriftCard,
   ProductsCard,
   ProfileCard,
   ProjectionCard,
@@ -76,6 +78,8 @@ function ChatCardView({ card }: { card: ChatCard }) {
       return <ProjectionCardView card={card} />;
     case "remedy":
       return <RemedyCardView card={card} />;
+    case "drift":
+      return <DriftCardView card={card} />;
   }
 }
 
@@ -116,7 +120,7 @@ function ProposalCardView({ card }: { card: ProposalCard }) {
   return (
     <Shell
       icon={FileSpreadsheet}
-      title={`Proposal #${card.proposal_id} · v${card.version}`}
+      title={`${card.kind === "rebalance" ? "Rebalancing" : "Proposal"} #${card.proposal_id} · v${card.version}`}
       aside={<StatusBadge decision={card.gate_decision} className="px-2 py-0.5 text-caption [&_svg]:size-3.5" />}
     >
       <AllocationBar weights={weights} legend={false} />
@@ -368,6 +372,91 @@ function RemedyCardView({ card }: { card: RemedyCard }) {
             {revise.isPending ? "Applying…" : "Apply as a new version"}
           </Button>
         ) : null}
+      </div>
+    </Shell>
+  );
+}
+
+const g = (n: number) => String(Number(n.toPrecision(6)));
+
+/**
+ * The check_drift result (monitoring loop): each class's live weight against the agreed mix at simulated prices. The
+ * advisor can only report it; proposing a rebalancing here is the client's own click, and nothing trades until the
+ * client's quiz and Confirm.
+ */
+function DriftCardView({ card }: { card: DriftCard }) {
+  const router = useRouter();
+  const propose = useProposeRebalance();
+  const [proposedId, setProposedId] = useState<number | null>(null);
+  const error = propose.error instanceof ApiError ? propose.error : null;
+  async function onPropose() {
+    const proposal = await propose.mutateAsync();
+    setProposedId(proposal.id);
+    router.push(`/proposals/${proposal.id}`);
+  }
+  if (card.status === "none" || !card.largest) {
+    return (
+      <Shell icon={Crosshair} title="Drift check">
+        <p className="text-(--text-muted)">No invested portfolio yet: drift is measured once a proposal has been executed.</p>
+      </Shell>
+    );
+  }
+  const needed = card.outside_band || card.status === "rule_breach";
+  const pendingId = proposedId ?? card.open_rebalance_id;
+  return (
+    <Shell
+      icon={Crosshair}
+      title={`Drift from proposal #${card.target_proposal_id}`}
+      aside={
+        <span className="rounded-full bg-(--surface-2) px-2 py-0.5 font-semibold tabular-nums ring-1 ring-(--border)">
+          {card.largest.drift_pp >= 0 ? "+" : ""}
+          {g(card.largest.drift_pp)} pts {ASSET_CLASS_LABEL[card.largest.asset_class].toLowerCase()}
+        </span>
+      }
+    >
+      <ul className="space-y-1">
+        {card.classes.map((c) => (
+          <li key={c.asset_class} className="flex items-center justify-between gap-2">
+            <span>{ASSET_CLASS_LABEL[c.asset_class]}</span>
+            <span className="tabular-nums">
+              <span className="text-(--text-muted)">
+                {g(c.current_pct)}% of {g(c.target_pct)}%
+              </span>{" "}
+              <span className={cn(c.outside_band && "font-bold")}>
+                {c.drift_pp >= 0 ? "+" : ""}
+                {g(c.drift_pp)}
+              </span>
+              {c.outside_band ? <span className="sr-only"> (outside the band)</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {card.rules_failing.length ? (
+        <p className="mt-1.5 text-(--text-muted)">
+          Failing on what you hold: <span className="font-mono text-(--text)">{card.rules_failing.join(", ")}</span>
+        </p>
+      ) : null}
+      {needed && card.sell_total !== null ? (
+        <p className="mt-1.5 text-(--text-muted)">Rebalancing would sell {formatMoney(card.sell_total)}.</p>
+      ) : null}
+      {error ? <p className="mt-1.5 text-(--reject)">{error.message}</p> : null}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-(--border) pt-2">
+        <span className="text-(--text-muted)">
+          Band ±{g(card.band_pp)} pts · simulated prices, {card.market_as_of}
+        </span>
+        {pendingId ? (
+          <Link href={`/proposals/${pendingId}`} className="inline-flex items-center gap-1 font-medium text-(--primary) hover:underline">
+            Open #{pendingId} <ArrowRight className="size-3" aria-hidden />
+          </Link>
+        ) : needed ? (
+          <Button size="sm" className="h-7 px-2.5 text-caption" onClick={onPropose} disabled={propose.isPending}>
+            {propose.isPending ? "Preparing…" : "Propose rebalancing"}
+          </Button>
+        ) : (
+          <Link href="/account#risk" className="inline-flex items-center gap-1 font-medium text-(--primary) hover:underline">
+            Details <ArrowRight className="size-3" aria-hidden />
+          </Link>
+        )}
       </div>
     </Shell>
   );

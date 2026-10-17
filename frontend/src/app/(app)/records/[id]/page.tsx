@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Money } from "@/components/shared/money";
 import { Percent } from "@/components/shared/percent";
 import { Panel } from "@/components/shared/panel";
+import { SideChip } from "@/components/monitoring/trades-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/components/shell/page-title";
@@ -106,7 +107,15 @@ function RecordDetail({ id }: { id: number }) {
       </Panel>
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        <Panel icon={Wallet} title="Holdings executed" description={`${content.orders.length} orders filled in the sandbox.`}>
+        <Panel
+          icon={Wallet}
+          title={content.proposal.rebalance ? "Mix restored" : "Holdings executed"}
+          description={
+            content.proposal.rebalance
+              ? `A rebalancing back to the mix of proposal #${content.proposal.rebalance.source_proposal_id}: ${content.orders.filter((o) => o.side === "sell").length} sales and ${content.orders.filter((o) => o.side !== "sell").length} purchases filled in the sandbox.`
+              : `${content.orders.length} orders filled in the sandbox.`
+          }
+        >
           <table className="w-full text-left text-body">
             <tbody>
               {content.proposal.items.map((item) => (
@@ -128,6 +137,22 @@ function RecordDetail({ id }: { id: number }) {
               ))}
             </tbody>
           </table>
+          {content.proposal.rebalance ? (
+            <ul className="mt-4 space-y-2 border-t border-(--border) pt-4">
+              {content.orders.map((o) => (
+                <li key={o.id} className="flex flex-wrap items-center gap-2 text-body">
+                  <SideChip side={o.side} />
+                  <span className="font-medium text-(--text)">{o.product_code}</span>
+                  <span className="text-caption text-(--text-muted)">
+                    {o.units.toFixed(4)} units at {o.nav.toFixed(4)}
+                  </span>
+                  <span className="ml-auto font-semibold text-(--text)">
+                    <Money value={o.cost} withCents />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </Panel>
 
         <Panel icon={ListChecks} title="Compliance gate at execution" description="The verdict on the exact version that was executed.">

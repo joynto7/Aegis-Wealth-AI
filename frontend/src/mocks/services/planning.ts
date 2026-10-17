@@ -11,6 +11,7 @@ import { findEpisode } from "@/mocks/data/replayEpisodes";
 import { ASSUMPTIONS } from "@/mocks/data/scenarios";
 import { HISTORY_DATA_AS_OF, HISTORY_DATA_LABEL } from "@/mocks/data/history";
 import { tierLabel } from "@/lib/labels";
+import { driftInsight } from "@/mocks/services/monitoring";
 
 /**
  * Planning, a port of backend/app/services/planning.py: goal projections (of a proposal, the live portfolio or
@@ -324,6 +325,11 @@ export function insightsFor(userId: number): Insights {
       )
     );
   }
+
+  // Monitoring loop: drift from the executed mix once the simulated market has moved. A drift or a broken rule leads
+  // the briefing; a portfolio still on target follows the goal.
+  const drift = driftInsight(userId);
+  if (drift) items.splice(drift.tone === "attention" ? 0 : items[0]?.id === "goal" ? 1 : 0, 0, drift);
 
   const executed = proposal?.status === "executed";
   if (mix.total > 0 && mix.cash / mix.total >= 0.5 && !executed) {

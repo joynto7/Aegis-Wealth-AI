@@ -23,3 +23,25 @@ export function roundHalf(value: number, decimals = 0): number {
 
 export const round1 = (v: number) => roundHalf(v, 1);
 export const round2 = (v: number) => roundHalf(v, 2);
+export const round4 = (v: number) => roundHalf(v, 4);
+
+/** The digits of a number's shortest decimal form as a BigInt, and how many of them are decimals. */
+function decimalParts(value: number): [bigint, number] | null {
+  const text = Math.abs(value).toString();
+  if (text.includes("e")) return null;
+  const [intPart, frac = ""] = text.split(".");
+  return [BigInt(intPart + frac), frac.length];
+}
+
+/**
+ * Fund units an amount buys at a NAV: floor(amount / NAV x 10,000) / 10,000, in exact decimals, as the backend's
+ * units_for (Decimal arithmetic). Plain floating point would turn 3 / 1 x 10,000 into 29,999.999... on some inputs.
+ */
+export function unitsFor(amount: number, nav: number): number {
+  if (amount <= 0 || nav <= 0) return 0;
+  const a = decimalParts(amount);
+  const n = decimalParts(nav);
+  if (!a || !n) return Math.floor((amount / nav) * 10000) / 10000;
+  const quotient = (a[0] * BigInt(10) ** BigInt(n[1] + 4)) / (n[0] * BigInt(10) ** BigInt(a[1]));
+  return Number(quotient) / 10000;
+}

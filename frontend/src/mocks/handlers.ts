@@ -12,7 +12,8 @@ import { REPLAY_EPISODES, findEpisode } from "@/mocks/data/replayEpisodes";
 import { runReplay } from "@/mocks/engines/replay";
 import { PRODUCTS, findProduct } from "@/mocks/data/products";
 import { compareProducts } from "@/mocks/engines/fees";
-import { createProposal, reviseProposal, toSummary } from "@/mocks/services/proposals";
+import { createProposal, toSummary } from "@/mocks/services/proposals";
+import { roundHalf, unitsFor } from "@/mocks/engines/numbers";
 import { buildQuiz, checkQuiz } from "@/mocks/engines/quiz";
 import { DISCLOSURES } from "@/lib/disclosures";
 import { BANNED_PHRASES, RULES } from "@/mocks/data/rules";
@@ -28,6 +29,20 @@ import { PATTERNS, scanThreats } from "@/mocks/engines/threats";
 import { computeMetrics } from "@/mocks/engines/metrics";
 import { computeStress } from "@/mocks/engines/stress";
 import { evaluateGate } from "@/mocks/engines/gate";
+import { MARKET, marketDate } from "@/mocks/engines/market";
+import {
+  MonitoringError,
+  STALE,
+  advanceMarket,
+  clientView,
+  marketState,
+  monitoringAlerts,
+  monitoringOverview,
+  present,
+  proposeRebalance,
+  reviseWithRebalance,
+  staleError,
+} from "@/mocks/services/monitoring";
 import type {
   AdviceRecord,
   AgentTurn,
@@ -172,7 +187,7 @@ async function oversightBody(): Promise<Oversight> {
 /** Alerts derived from the log, as the backend's oversight.alerts(). */
 function alertsFor(turns: LogEntry[], openReviews: number): Alert[] {
   const now = Date.now();
-  const out: Alert[] = [];
+  const out: Alert[] = monitoringAlerts();
   const recent = db.logs.filter((l) => l.action === "permission_denied" && now - new Date(l.ts).getTime() <= 15 * 60 * 1000);
   const byUser = new Map<number | null, LogEntry[]>();
   for (const l of recent) byUser.set(l.user_id, [...(byUser.get(l.user_id) ?? []), l]);
@@ -236,8 +251,20 @@ const MOCK_CONFIG = {
   model: "claude-opus-5-5",
   effort: "medium",
   mode: "mock-templates",
-  tools: ["search_products", "compare_products", "explain_rule", "get_profile_summary", "get_proposal", "project_goal", "suggest_fix", "create_proposal", "revise_proposal"],
-  data_versions: { regulations: REGULATIONS_VERSION, rules: "rules-2026-10", products_as_of: DATA_AS_OF },
+  tools: [
+    "search_products",
+    "compare_products",
+    "explain_rule",
+    "get_profile_summary",
+    "get_proposal",
+    "project_goal",
+    "suggest_fix",
+    "check_drift",
+    "create_proposal",
+    "revise_proposal",
+    "propose_rebalance",
+  ],
+  data_versions: { regulations: REGULATIONS_VERSION, rules: "rules-2026-10-v2", market: MARKET.version, products_as_of: DATA_AS_OF },
 };
 let fingerprintCache: Promise<string> | null = null;
 function configFingerprint(): Promise<string> {
@@ -276,8 +303,10 @@ async function modelCardBody(): Promise<ModelCard> {
       { name: "get_proposal", tier: "T1", description: "Return one of the client's own proposals." },
       { name: "project_goal", tier: "T1", description: "Project the client's own proposal: chance of a target, bad, typical and good cases." },
       { name: "suggest_fix", tier: "T1", description: "How to fix one of the client's own proposals; the client applies it." },
+      { name: "check_drift", tier: "T1", description: "The client's drift from their executed mix at simulated prices; read-only." },
       { name: "create_proposal", tier: "T2", description: "Create a proposal; the gate always runs." },
       { name: "revise_proposal", tier: "T2", description: "Save a new version; the gate always runs." },
+      { name: "propose_rebalance", tier: "T2", description: "Propose a rebalancing back to the executed mix; the gate runs and nothing is executed." },
     ],
     permission_tiers: [
       { tier: "T0", scope: "Read the product shelf and the compliance rules." },
@@ -313,7 +342,7 @@ async function modelCardBody(): Promise<ModelCard> {
     rules: RULES,
     controls: db.controlsSnapshot(true),
     regulations: regulationsBody(),
-    data_versions: { rules: "rules-2026-10", regulations: REGULATIONS_VERSION, products_as_of: DATA_AS_OF, history: "Illustrative" },
+    data_versions: { rules: "rules-2026-10-v2", regulations: REGULATIONS_VERSION, market: MARKET.version, products_as_of: DATA_AS_OF, history: "Illustrative" },
     governance: {
       config_fingerprint: await configFingerprint(),
       config_components: MOCK_CONFIG,
@@ -513,7 +542,9 @@ export const handlers = [
     if (maxRisk) list = list.filter((p) => p.risk_level <= Number(maxRisk));
     if (q) list = list.filter((p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
 
-    const items = list.map((p) => ({ ...p, suitable: profile ? p.risk_level <= profile.tier : null }));
+    const navs = db.navs();
+    const navDate = marketDate(MARKET.start_date, db.marketMonth());
+    const items = list.map((p) => ({ ...p, nav: navs[p.code], nav_date: navDate, suitable: profile ? p.risk_level <= profile.tier : null }));
     return HttpResponse.json({ items });
   }),
 
@@ -523,7 +554,8 @@ export const handlers = [
     const product = findProduct(String(params.productId));
     if (!product) return errorResponse(404, "NOT_FOUND", "Unknown product.");
     const profile = auth.user.role === "client" ? db.currentProfile(auth.user.id) : undefined;
-    return HttpResponse.json({ ...product, suitable: profile ? product.risk_level <= profile.tier : null });
+    const nav = { nav: db.navs()[product.code], nav_date: marketDate(MARKET.start_date, db.marketMonth()) };
+    return HttpResponse.json({ ...product, ...nav, suitable: profile ? product.risk_level <= profile.tier : null });
   }),
 
   http.post("/api/products/compare", async ({ request }) => {
@@ -598,7 +630,7 @@ export const handlers = [
     if (!isAuthResult(auth)) return auth;
     const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
     if (!proposal) return errorResponse(404, "NOT_FOUND", "Unknown proposal.");
-    return HttpResponse.json(proposal);
+    return HttpResponse.json(present(proposal, auth.user.id));
   }),
 
   http.post("/api/proposals/:proposalId/revise", async ({ request, params }) => {
@@ -625,13 +657,14 @@ export const handlers = [
     if (Math.abs(total - 100) > 0.01) {
       return errorResponse(422, "VALIDATION_ERROR", "Weights must add up to 100%.", { fields: [{ field: "items", problem: "weights must total 100" }] });
     }
-    const result = reviseProposal(auth.user.id, parent, profile!, items);
+    const result = reviseWithRebalance(auth.user.id, parent, profile!, items);
+    if (result.stale) return errorResponse(409, "STATE_CONFLICT", result.error ?? STALE);
     if (result.error || !result.proposal) {
       return errorResponse(422, "VALIDATION_ERROR", result.error ?? "Could not revise this proposal.");
     }
     logAction({ userId: auth.user.id, actor: "client", action: "proposal_revised", decision: "allowed", detail: { proposal_id: result.proposal.id, parent_id: parent.id } });
     logAction({ userId: auth.user.id, actor: "system", action: "gate_decided", decision: "allowed", detail: { proposal_id: result.proposal.id, decision: result.proposal.gate.decision } });
-    return HttpResponse.json(result.proposal, { status: 201 });
+    return HttpResponse.json(present(result.proposal, auth.user.id), { status: 201 });
   }),
 
   http.post("/api/proposals/:proposalId/acknowledge", async ({ request, params }) => {
@@ -649,7 +682,7 @@ export const handlers = [
     const allAcknowledged = softFailIds.every((id) => set.has(id));
     if (proposal.status === "warning" && allAcknowledged) proposal.status = "acknowledged";
     logAction({ userId: auth.user.id, actor: "client", action: "warnings_acknowledged", decision: "allowed", detail: { proposal_id: proposal.id, rule_ids: incoming } });
-    return HttpResponse.json(proposal);
+    return HttpResponse.json(present(proposal, auth.user.id));
   }),
 
   http.get("/api/proposals/:proposalId/quiz", ({ request, params }) => {
@@ -690,6 +723,11 @@ export const handlers = [
     if (proposal.status !== "passed" && proposal.status !== "acknowledged") {
       return errorResponse(409, "STATE_CONFLICT", "This proposal can no longer be confirmed.");
     }
+    const staleConfirm = staleError(proposal, auth.user.id);
+    if (staleConfirm) {
+      logAction({ userId: auth.user.id, actor: "client", action: "token_issued", tier: "T3", decision: "denied", detail: { proposal_id: proposal.id, reason: "STATE_CONFLICT" } });
+      return errorResponse(409, "STATE_CONFLICT", staleConfirm);
+    }
     if (!proposal.quiz_passed) return errorResponse(409, "QUIZ_REQUIRED", "Pass the comprehension quiz first.");
 
     const itemsHash = await sha256Hex(canonicalStringify(proposal.items));
@@ -723,31 +761,43 @@ export const handlers = [
       return errorResponse(409, "STATE_CONFLICT", `This proposal is ${proposal.status} and can no longer be executed.`);
     }
 
+    const staleExecute = staleError(proposal, auth.user.id);
+    if (staleExecute) {
+      logAction({ userId: auth.user.id, actor: "client", action: "orders_executed", tier: "T3", decision: "denied", detail: { proposal_id: proposal.id, reason: "STATE_CONFLICT" } });
+      return errorResponse(409, "STATE_CONFLICT", staleExecute);
+    }
+    const plan = db.rebalances.get(proposal.id);
     const sandbox = db.sandboxFor(auth.user.id);
-    if (sandbox.cash < proposal.amount) {
+    const need = plan ? plan.totals.buy_total - plan.totals.sell_total : proposal.amount;
+    if (sandbox.cash < need) {
       return errorResponse(409, "INSUFFICIENT_CASH", "Your sandbox account no longer holds enough cash.");
     }
 
     const orders: Order[] = [];
     const nowIso = new Date().toISOString();
-    for (const item of proposal.items) {
-      const product = findProduct(item.product_code);
-      if (!product) continue;
-      const units = Math.floor((item.amount / product.nav) * 10000) / 10000;
-      const cost = Math.round(units * product.nav * 100) / 100;
+    const navs = db.navs();
+    // A rebalancing places its stored trades, sales first; any other proposal buys each item.
+    const fills = plan
+      ? [...plan.trades].sort((a, b) => Number(a.side !== "sell") - Number(b.side !== "sell")).map((t) => ({ code: t.product_code, side: t.side, amount: t.amount, units: t.units }))
+      : proposal.items.map((item) => ({ code: item.product_code, side: "buy" as const, amount: item.amount, units: unitsFor(item.amount, navs[item.product_code]) }));
+    for (const fill of fills) {
+      const nav = navs[fill.code];
+      const cost = roundHalf(fill.units * nav, 2);
       const order: Order = {
         id: db.nextId("order"),
-        product_code: item.product_code,
-        amount: item.amount,
-        units,
-        nav: product.nav,
+        product_code: fill.code,
+        amount: fill.amount,
+        units: fill.units,
+        nav,
         cost,
         status: "filled",
         created_at: nowIso,
+        side: fill.side,
       };
       orders.push(order);
       db.addOrder(auth.user.id, order);
-      db.applyOrder(auth.user.id, item.product_code, units, product.nav, cost);
+      if (fill.side === "sell") db.applySale(auth.user.id, fill.code, fill.units, cost);
+      else db.applyOrder(auth.user.id, fill.code, fill.units, nav, cost);
     }
     state.usedAt = Date.now();
     proposal.status = "executed";
@@ -761,7 +811,7 @@ export const handlers = [
     // so later changes to the live proposal must not reach the hashed content.
     const content: AdviceRecord["content"] = structuredClone({
       profile: { version: profile.version, tier: profile.tier, capacity_score: profile.capacity_score, willingness_score: profile.willingness_score, replay_adjustment: profile.replay_adjustment },
-      proposal,
+      proposal: present(proposal, auth.user.id),
       gate: proposal.gate,
       quiz: { passed: lastQuiz?.passed ?? false, results: lastQuiz?.results ?? [] },
       disclosures: DISCLOSURES.map((d) => ({ id: d.id, version: d.version })),
@@ -780,7 +830,7 @@ export const handlers = [
     };
     db.addRecord(auth.user.id, record);
 
-    logAction({ userId: auth.user.id, actor: "client", action: "orders_executed", decision: "allowed", detail: { proposal_id: proposal.id, order_count: orders.length } });
+    logAction({ userId: auth.user.id, actor: "client", action: "orders_executed", tier: "T3", decision: "allowed", detail: { proposal_id: proposal.id, order_count: orders.length, rebalance: Boolean(plan) } });
     logAction({ userId: auth.user.id, actor: "system", action: "record_created", decision: "allowed", detail: { record_id: record.id } });
 
     return HttpResponse.json({
@@ -852,7 +902,8 @@ export const handlers = [
   http.get("/api/sandbox/orders", ({ request }) => {
     const auth = authenticateAs(request, "client");
     if (!isAuthResult(auth)) return auth;
-    return HttpResponse.json({ items: [...db.ordersFor(auth.user.id)].reverse() });
+    // Orders placed before the monitoring loop were all purchases.
+    return HttpResponse.json({ items: [...db.ordersFor(auth.user.id)].reverse().map((o) => ({ ...o, side: o.side ?? "buy" })) });
   }),
 
   // -------------------------------------------------------------- records
@@ -1058,6 +1109,8 @@ export const handlers = [
     if (!proposal) return errorResponse(404, "NOT_FOUND", "There is no proposal with this id.");
     const closed = closedProposalError(proposal);
     if (closed) return closed;
+    const stale = staleError(proposal, auth.user.id);
+    if (stale) return errorResponse(409, "STATE_CONFLICT", stale);
     const profile = db.currentProfile(auth.user.id);
     const precondition = t2PreconditionError(profile);
     if (precondition) return precondition;
@@ -1186,8 +1239,60 @@ export const handlers = [
     return HttpResponse.json(decide(auth.user.id, turn, body.decision, note));
   }),
 
+  // ---------------------------------------------- the monitoring loop (additions)
+  http.get("/api/compliance/market", ({ request }) => {
+    const auth = authenticateAs(request, "compliance");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(marketState(true));
+  }),
+
+  http.post("/api/compliance/market/advance", async ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    if (auth.user.role !== "compliance") return errorResponse(403, "FORBIDDEN", "Only the compliance officer can use this feature.");
+    const body = (await request.json().catch(() => ({}))) as { months?: number; reason?: string };
+    const months = body.months ?? 1;
+    const reason = (body.reason ?? "").trim();
+    const fields = [
+      ...(!(Number.isInteger(months) && months >= 1 && months <= MARKET.max_months_per_advance) ? [{ field: "months", problem: "1 to 12" }] : []),
+      ...(reason.length < 5 || reason.length > 300 ? [{ field: "reason", problem: "5 to 300 characters" }] : []),
+    ];
+    if (fields.length) return errorResponse(422, "VALIDATION_ERROR", "Some fields are missing or invalid.", { fields });
+    return HttpResponse.json(advanceMarket(auth.user, months, reason));
+  }),
+
+  http.get("/api/compliance/monitoring", ({ request }) => {
+    const auth = authenticateAs(request, "compliance");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(monitoringOverview());
+  }),
+
+  http.get("/api/monitoring", ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(clientView(auth.user.id));
+  }),
+
+  http.post("/api/proposals/rebalance", ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const profile = db.currentProfile(auth.user.id);
+    const precondition = t2PreconditionError(profile);
+    if (precondition) {
+      logAction({ userId: auth.user.id, actor: "client", action: "rebalance_proposed", tier: "T2", decision: "denied", detail: {} });
+      return precondition;
+    }
+    try {
+      return HttpResponse.json(present(proposeRebalance(auth.user.id, profile!, "client"), auth.user.id), { status: 201 });
+    } catch (e) {
+      if (e instanceof MonitoringError) return errorResponse(e.status, e.code, e.message);
+      throw e;
+    }
+  }),
+
   http.get("/api/health", () => {
-    return HttpResponse.json({ status: "ok", db: "ok", llm: "fallback", data_as_of: DATA_AS_OF });
+    // The products' NAV date: the simulated market's date once it has moved.
+    return HttpResponse.json({ status: "ok", db: "ok", llm: "fallback", data_as_of: marketDate(MARKET.start_date, db.marketMonth()), market_month: db.marketMonth() });
   }),
 ];
 

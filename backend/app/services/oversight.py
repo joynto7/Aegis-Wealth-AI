@@ -8,6 +8,12 @@
   file: the model's main parameters and the allocation logic, with a SHA-256
   fingerprint of the system prompt and tool list so a filed report can be
   matched to the code that ran.
+
+Additions: alerts derived from the log (repeated broker denials, AI proposals
+the gate rejected, number-check fallbacks, high-severity threat signals, turns
+awaiting review, a stopped advisor or execution), the review counts, and a
+governance section in the disclosure (configuration fingerprint, labelling,
+threat signals, review triggers, tracing).
 """
 
 from __future__ import annotations
@@ -15,20 +21,24 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.agent.fingerprint import components as config_components
+from app.agent.fingerprint import config_fingerprint
 from app.agent.llm import EFFORT, MAX_TOKENS
 from app.agent.orchestrator import HISTORY_MESSAGES, MAX_TOOL_ROUNDS
 from app.agent.prompts import SYSTEM_PROMPT
+from app.agent.threats import PATTERNS
 from app.agent.tools import TOOL_DEFINITIONS, TOOL_TIERS
 from app.core.timeutil import iso, utcnow
 from app.engines.catalog import ASSET_CLASSES, thaw
-from app.models import OperationLog, User
+from app.models import Control, OperationLog, User
 from app.schemas import ModelCard
-from app.services import controls
+from app.services import controls, reviews
 from app.services.context import AppContext
 
 ALLOCATION_STEPS = [
@@ -63,8 +73,28 @@ def _sha256(value: Any) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _turn(row: OperationLog) -> dict[str, Any]:
+REVIEW_TRIGGERS = [
+    "A medium or high threat signal on the client's message",
+    "A tool call the permission broker blocked",
+    "A proposal by the AI that the gate rejected",
+    "A reply rewritten, or replaced by a template, after the number check",
+    "A reply the client marked as unhelpful",
+]
+LABELLING = (
+    "Every reply carries a visible label (AI-generated, automated template or system notice) and machine-readable "
+    "provenance: the serving model, the configuration fingerprint and the SHA-256 of the text, also sent as X-AI-* "
+    "response headers. The chat opens with a notice that the client is talking to an AI system."
+)
+TRACING = (
+    "Each turn is recorded as spans named after the OpenTelemetry GenAI semantic conventions (invoke_agent, chat, "
+    "execute_tool) plus aegis.grounding and aegis.template, with durations, tiers, decisions and token use. "
+    "Prompts and tool arguments are not captured."
+)
+
+
+def _turn(row: OperationLog, annotation: tuple[list[dict[str, str]], str | None] | None = None) -> dict[str, Any]:
     d = row.detail or {}
+    flags, status = annotation or ([], None)
     return {
         "log_id": row.id,
         "ts": iso(row.ts),
@@ -74,7 +104,88 @@ def _turn(row: OperationLog) -> dict[str, Any]:
         "tools": d.get("tools", []),
         "proposals": d.get("proposals", []),
         "figures_traced": int(d.get("figures_traced", 0)),
+        "signals": [sig["id"] for sig in d.get("signals") or []],
+        "flags": len(flags),
+        "review_status": status,
+        "latency_ms": d.get("latency_ms"),
     }
+
+
+def alerts(db: Session, turns: list[OperationLog], open_reviews: int) -> list[dict[str, Any]]:
+    now = utcnow()
+    out: list[dict[str, Any]] = []
+    recent = now - timedelta(minutes=15)
+    denials = db.execute(
+        select(OperationLog.user_id, func.count(), func.min(OperationLog.ts))
+        .where(OperationLog.action == "permission_denied", OperationLog.ts >= recent)
+        .group_by(OperationLog.user_id)
+    ).all()
+    for user_id, n, since in denials:
+        if n >= 3:
+            out.append(
+                {
+                    "id": f"denials-{user_id}",
+                    "severity": "high",
+                    "title": "Repeated blocked tool calls",
+                    "detail": f"Client #{user_id}: {n} calls blocked by the permission broker in the last 15 minutes.",
+                    "since": iso(since),
+                }
+            )
+    hour = now - timedelta(hours=1)
+    in_hour = [t for t in turns if t.ts >= hour]
+    rejected = [p for t in in_hour for p in (t.detail or {}).get("proposals", []) if p.get("gate") == "REJECT"]
+    if len(rejected) >= 2:
+        out.append(
+            {
+                "id": "ai-rejections",
+                "severity": "medium",
+                "title": "AI proposals rejected by the gate",
+                "detail": f"{len(rejected)} proposals made by the AI were rejected in the last hour.",
+                "since": iso(min(t.ts for t in in_hour)),
+            }
+        )
+    threats = [t for t in in_hour if any(sig.get("severity") == "high" for sig in (t.detail or {}).get("signals") or [])]
+    if threats:
+        out.append(
+            {
+                "id": "threats",
+                "severity": "high",
+                "title": "High-severity threat signals",
+                "detail": f"{len(threats)} client messages in the last hour looked like an attack on the advisor.",
+                "since": iso(min(t.ts for t in threats)),
+            }
+        )
+    window = [t for t in turns[:20] if (t.detail or {}).get("mode") != "suspended"]
+    failed = [t for t in window if (t.detail or {}).get("fallback_reason") == "grounding"]
+    if len(window) >= 5 and len(failed) / len(window) > 0.2:
+        out.append(
+            {
+                "id": "grounding",
+                "severity": "medium",
+                "title": "Replies failing the number check",
+                "detail": f"{len(failed)} of the last {len(window)} turns fell back to a template after two failed checks.",
+                "since": iso(min(t.ts for t in failed)),
+            }
+        )
+    if open_reviews:
+        out.append(
+            {
+                "id": "reviews",
+                "severity": "info",
+                "title": "Turns awaiting review",
+                "detail": f"{open_reviews} flagged AI turn{'s' if open_reviews != 1 else ''} to clear or escalate.",
+                "since": None,
+            }
+        )
+    for control, stopped, title in (
+        ("advisor", "suspended", "AI advisor suspended"),
+        ("execution", "halted", "Execution halted"),
+    ):
+        row = db.get(Control, control)
+        if row is not None and row.state == stopped:
+            out.append({"id": control, "severity": "info", "title": title, "detail": row.reason, "since": iso(row.updated_at)})
+    order = {"high": 0, "medium": 1, "info": 2}
+    return sorted(out, key=lambda a: order[a["severity"]])
 
 
 def overview(db: Session, ctx: AppContext, viewer: User, limit: int) -> dict[str, Any]:
@@ -94,6 +205,8 @@ def overview(db: Session, ctx: AppContext, viewer: User, limit: int) -> dict[str
     turns = db.scalars(select(OperationLog).where(OperationLog.action == "agent_turn").order_by(OperationLog.id.desc())).all()
     modes = Counter((t.detail or {}).get("mode") for t in turns)
     made = [p for t in turns for p in (t.detail or {}).get("proposals", [])]
+    queue = reviews.queue(db, "open", 0)
+    annotations = reviews.annotate(db, list(turns[:limit]))
     kpis = {
         "agent_turns": len(turns),
         "model_turns": modes["model"],
@@ -110,15 +223,34 @@ def overview(db: Session, ctx: AppContext, viewer: User, limit: int) -> dict[str
         "figures_traced": sum(int((t.detail or {}).get("figures_traced", 0)) for t in turns),
         "orders_by_agent": total(actor="agent", action="orders_executed", decision="allowed"),
         "orders_by_clients": total(actor="client", action="orders_executed", decision="allowed"),
+        "threat_turns": sum(
+            1 for t in turns if any(sig.get("severity") in ("medium", "high") for sig in (t.detail or {}).get("signals") or [])
+        ),
+        "reviews_open": queue["counts"]["open"],
+        "reviews_escalated": queue["counts"]["escalated"],
+        "feedback_down": _feedback_down(db),
     }
     return {
         "llm": "ok" if ctx.llm is not None else "fallback",
         "model": ctx.settings.model,
         "system_prompt_sha256": _sha256(SYSTEM_PROMPT),
+        "config_fingerprint": config_fingerprint(ctx),
         "controls": controls.snapshot(db, viewer),
         "kpis": kpis,
-        "turns": [_turn(t) for t in turns[:limit]],
+        "alerts": alerts(db, list(turns), queue["counts"]["open"]),
+        "turns": [_turn(t, annotations.get(t.id)) for t in turns[:limit]],
     }
+
+
+def _feedback_down(db: Session) -> int:
+    """Replies whose latest client rating is a thumbs-down."""
+    latest: dict[int, str] = {}
+    rows = db.scalars(select(OperationLog).where(OperationLog.action == "chat_feedback").order_by(OperationLog.id)).all()
+    for row in rows:
+        d = row.detail or {}
+        if "message_id" in d:
+            latest[int(d["message_id"])] = str(d.get("rating"))
+    return sum(1 for rating in latest.values() if rating == "down")
 
 
 def regulations(ctx: AppContext) -> dict[str, Any]:
@@ -189,6 +321,14 @@ def model_card(db: Session, ctx: AppContext, viewer: User) -> dict[str, Any]:
             **dict(catalog.versions),
             "products_as_of": catalog.products_as_of,
             "history": f"{catalog.history_label}, as of {catalog.history_as_of}",
+        },
+        "governance": {
+            "config_fingerprint": config_fingerprint(ctx),
+            "config_components": config_components(ctx),
+            "labelling": LABELLING,
+            "threat_signals": [{"id": p.id, "label": p.label, "severity": p.severity, "owasp": p.owasp} for p in PATTERNS],
+            "review_triggers": REVIEW_TRIGGERS,
+            "tracing": TRACING,
         },
     }
     # Hash exactly what is served: the report as the response model writes it, without the hash itself.

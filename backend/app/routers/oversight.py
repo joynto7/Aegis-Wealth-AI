@@ -7,15 +7,26 @@ other endpoint here is for the compliance role only.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth import compliance_user, current_user
 from app.core.database import get_db
 from app.models import User
 from app.routers.common import ERRORS
-from app.schemas import ControlChange, Controls, ModelCard, Oversight, Regulations
-from app.services import controls, logs, oversight
+from app.schemas import (
+    ControlChange,
+    Controls,
+    ModelCard,
+    Oversight,
+    Regulations,
+    ReviewDecisionRequest,
+    ReviewQueue,
+    TurnDetail,
+)
+from app.services import controls, logs, oversight, reviews
 from app.services.context import AppContext, get_ctx
 
 router = APIRouter(tags=["compliance"], responses=ERRORS)
@@ -40,6 +51,37 @@ def get_overview(
     ctx: AppContext = Depends(get_ctx),
 ) -> dict:
     return oversight.overview(db, ctx, user, limit)
+
+
+@router.get("/compliance/reviews", response_model=ReviewQueue)
+def get_reviews(
+    status: Literal["open", "resolved", "all"] = "open",
+    limit: int = Query(default=50, ge=1, le=200),
+    _user: User = Depends(compliance_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Addition: AI turns flagged for human review (threat signals, blocked calls, gate rejections, failed number
+    checks, client thumbs-down), newest first."""
+    return reviews.queue(db, status, limit)
+
+
+@router.get("/compliance/turns/{log_id}", response_model=TurnDetail)
+def get_turn(
+    log_id: int = Path(ge=1, le=2_147_483_647), _user: User = Depends(compliance_user), db: Session = Depends(get_db)
+) -> dict:
+    """Addition: one AI turn in full: message, reply, provenance, threat signals, tools and its trace."""
+    return reviews.turn_detail(db, log_id)
+
+
+@router.post("/compliance/reviews/{log_id}", response_model=TurnDetail)
+def decide_review(
+    body: ReviewDecisionRequest,
+    log_id: int = Path(ge=1, le=2_147_483_647),
+    user: User = Depends(compliance_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Addition: clear or escalate a flagged turn with a note (logged as review_decided; the latest decision counts)."""
+    return reviews.decide(db, user, log_id, body.decision, body.note)
 
 
 @router.get("/compliance/regulations", response_model=Regulations)

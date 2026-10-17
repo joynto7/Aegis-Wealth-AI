@@ -1,4 +1,4 @@
-"""The 16 tables of Section 3.5, plus `controls` (an addition).
+"""The 16 tables of Section 3.5, plus `controls` and `goals` (additions).
 
 Ids are integer keys; JSON columns hold structures from Section 2.6.
 """
@@ -233,6 +233,8 @@ class ChatMessage(Base):
     # Additions: the cards shown beside the reply and the source of each number in it.
     cards: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     number_sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    # Addition: the reply's AI label and fingerprints (China's labelling measures, EU AI Act Art. 50).
+    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     grounding: Mapped[str | None] = mapped_column(String(12), nullable=True)
     mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -253,6 +255,19 @@ class OperationLog(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class Goal(Base):
+    """The client's saved goal for the planner (addition). Rows are kept; the latest one is the current goal."""
+
+    __tablename__ = "goals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    target_amount: Mapped[float] = mapped_column(Float)
+    horizon_years: Mapped[int] = mapped_column(Integer)
+    monthly_contribution: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Control(Base):
     """Compliance switches (addition): one row per control; no row means the default (advisor active, execution open)."""
 
@@ -269,7 +284,11 @@ APPEND_ONLY_TABLES = ("advice_records", "operation_logs")
 # Columns added after the first release. create_all() creates missing tables but never alters existing ones,
 # so a database from an earlier version gets these columns on start-up.
 ADDED_COLUMNS: dict[str, dict[str, str]] = {
-    "chat_messages": {"cards": "JSON NOT NULL DEFAULT '[]'", "number_sources": "JSON NOT NULL DEFAULT '[]'"},
+    "chat_messages": {
+        "cards": "JSON NOT NULL DEFAULT '[]'",
+        "number_sources": "JSON NOT NULL DEFAULT '[]'",
+        "provenance": "JSON",
+    },
 }
 
 

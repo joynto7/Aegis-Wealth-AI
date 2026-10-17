@@ -39,6 +39,56 @@ def _proposal_card(result: dict[str, Any], catalog: Catalog) -> dict[str, Any]:
     }
 
 
+def _projection_card(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "projection",
+        "basis_label": result["basis"]["label"],
+        "proposal_id": result["basis"]["proposal_id"],
+        **{
+            k: result[k]
+            for k in (
+                "amount",
+                "horizon_years",
+                "monthly_contribution",
+                "target_amount",
+                "total_contributed",
+                "probability_target_pct",
+                "probability_loss_pct",
+                "median_shortfall",
+                "end",
+                "required_monthly",
+                "years",
+                "data_label",
+            )
+        },
+    }
+
+
+def _remedy_card(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "remedy",
+        **{
+            k: result[k]
+            for k in (
+                "proposal_id",
+                "version",
+                "gate_before",
+                "gate_after",
+                "failed_before",
+                "failed_after",
+                "fixed_rule_ids",
+                "items",
+                "summary",
+                "data_label",
+            )
+        },
+        "changes": [
+            {k: c[k] for k in ("product_code", "name", "asset_class", "from_pct", "to_pct", "rule_ids")}
+            for c in result["changes"]
+        ],
+    }
+
+
 def card_for(outcome: ToolOutcome, catalog: Catalog) -> dict[str, Any] | None:
     if outcome.decision == "denied":
         reason = outcome.detail.get("reason") or (outcome.error or "").removeprefix("PERMISSION_DENIED: ")
@@ -82,6 +132,10 @@ def card_for(outcome: ToolOutcome, catalog: Catalog) -> dict[str, Any] | None:
         }
     if outcome.tool in ("get_proposal", "create_proposal", "revise_proposal"):
         return _proposal_card(result, catalog)
+    if outcome.tool == "project_goal":
+        return _projection_card(result)
+    if outcome.tool == "suggest_fix":
+        return _remedy_card(result)
     return None
 
 
@@ -95,6 +149,10 @@ def _key(card: dict[str, Any]) -> tuple[Any, ...]:
         return (kind, card["id"])
     if kind == "blocked":
         return (kind, card["tool"], card["reason"])
+    if kind == "projection":
+        return (kind, card["proposal_id"], card["target_amount"], card["horizon_years"], card["monthly_contribution"])
+    if kind == "remedy":
+        return (kind, card["proposal_id"])
     return (kind,)
 
 

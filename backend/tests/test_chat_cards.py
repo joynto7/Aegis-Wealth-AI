@@ -141,7 +141,12 @@ def test_an_older_database_gets_the_new_chat_columns(tmp_path):
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE chat_messages (id INTEGER PRIMARY KEY, content TEXT)"))
         conn.execute(text("INSERT INTO chat_messages (content) VALUES ('hello')"))
-    assert add_missing_columns(engine) == ["chat_messages.cards", "chat_messages.number_sources"]
+    assert add_missing_columns(engine) == [
+        "chat_messages.cards",
+        "chat_messages.number_sources",
+        "chat_messages.provenance",
+    ]
     assert add_missing_columns(engine) == []  # idempotent
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT cards, number_sources FROM chat_messages")).one() == ("[]", "[]")
+        row = conn.execute(text("SELECT cards, number_sources, provenance FROM chat_messages")).one()
+        assert row == ("[]", "[]", None)

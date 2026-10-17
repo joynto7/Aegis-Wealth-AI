@@ -360,6 +360,185 @@ class AcknowledgeRequest(RequestBody):
     rule_ids: list[str] = Field(max_length=9)
 
 
+# --- What-if and How to fix (additions) -----------------------------------------
+class ProposalPreview(BaseModel):
+    """A dry run of a revision: the same engines and gate, nothing saved."""
+
+    proposal_id: int
+    total_pct: float
+    items: list[ProposalItem]
+    class_weights_pct: ClassWeights
+    metrics: ProposalMetrics
+    stress: list[StressResult]
+    gate: GateResult
+    data_label: str
+
+
+class RemedyChange(BaseModel):
+    product_code: str
+    name: str
+    asset_class: AssetClass
+    risk_level: int
+    from_pct: float
+    to_pct: float
+    rule_ids: list[str]
+    reasons: list[str]
+
+
+class RemedyItem(BaseModel):
+    product_code: str
+    weight_pct: float
+
+
+class Remedy(BaseModel):
+    """The smallest change that gets the proposal through the gate, computed by code (a counterfactual explanation)."""
+
+    proposal_id: int
+    version: int
+    gate_before: GateDecision
+    failed_before: list[str]
+    gate_after: GateDecision
+    failed_after: list[str]
+    fixed_rule_ids: list[str]
+    changes: list[RemedyChange]
+    items: list[RemedyItem]
+    metrics_after: ProposalMetrics
+    summary: str
+    data_label: str
+
+
+# --- Planning (additions): goal projections, goals, briefing, live-portfolio analytics ---
+ProjectionBasisKind = Literal["proposal", "account", "tier"]
+
+
+class ProjectionRequest(RequestBody):
+    basis: ProjectionBasisKind = "tier"
+    proposal_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+    tier: int | None = Field(default=None, ge=1, le=5)
+    amount: float | None = Field(default=None, ge=0, le=10_000_000)
+    horizon_years: int | None = Field(default=None, ge=1, le=30)
+    monthly_contribution: float = Field(default=0, ge=0, le=1_000_000)
+    target_amount: float | None = Field(default=None, ge=1_000, le=100_000_000)
+    compare_tiers: bool = True
+
+
+class ProjectionBasis(BaseModel):
+    kind: ProjectionBasisKind
+    label: str
+    proposal_id: int | None
+    tier: int | None
+
+
+class ProjectionBand(BaseModel):
+    year: int
+    p10: float
+    p25: float
+    p50: float
+    p75: float
+    p90: float
+
+
+class ProjectionEnd(BaseModel):
+    p10: float
+    p25: float
+    p50: float
+    p75: float
+    p90: float
+
+
+class RequiredMonthly(BaseModel):
+    confidence_pct: int
+    monthly: float
+
+
+class TierOutcome(BaseModel):
+    tier: int
+    label: str
+    suitable: bool
+    class_weights_pct: ClassWeights
+    weighted_fee_pct: float
+    probability_target_pct: float | None
+    p10_end: float
+    p50_end: float
+    p90_end: float
+
+
+class Projection(BaseModel):
+    basis: ProjectionBasis
+    amount: float
+    horizon_years: int
+    monthly_contribution: float
+    target_amount: float | None
+    class_weights_pct: ClassWeights
+    weighted_fee_pct: float
+    paths: int
+    block_months: int
+    seed: int
+    method: str
+    total_contributed: float
+    years: list[ProjectionBand]
+    end: ProjectionEnd
+    probability_target_pct: float | None
+    probability_loss_pct: float
+    median_shortfall: float | None = Field(description="Median gap to the target in the paths that miss it.")
+    required_monthly: list[RequiredMonthly] | None = Field(
+        description="Monthly contribution needed for a 50%, 75% and 90% chance of reaching the target."
+    )
+    tiers: list[TierOutcome]
+    client_tier: int | None
+    data_label: str
+    history_label: str
+
+
+class GoalInput(RequestBody):
+    name: str = Field(min_length=1, max_length=60)
+    target_amount: float = Field(ge=1_000, le=100_000_000)
+    horizon_years: int = Field(ge=1, le=30)
+    monthly_contribution: float = Field(default=0, ge=0, le=1_000_000)
+
+
+class Goal(BaseModel):
+    id: int
+    name: str
+    target_amount: float
+    horizon_years: int
+    monthly_contribution: float
+    created_at: str
+
+
+class GoalEnvelope(BaseModel):
+    goal: Goal | None
+
+
+class Insight(BaseModel):
+    id: str
+    tone: Literal["positive", "attention", "info"]
+    title: str
+    body: str
+    figure: str | None
+    figure_label: str | None
+    href: str | None
+    action: str | None
+
+
+class Insights(BaseModel):
+    items: list[Insight]
+    source: str
+    generated_at: str
+
+
+class PortfolioAnalytics(BaseModel):
+    total_value: float
+    cash: float
+    invested: float
+    class_weights_pct: ClassWeights
+    weighted_fee_pct: float
+    largest_position_pct: float
+    positions: int
+    stress: list[StressResult]
+    data_label: str
+
+
 class QuizOption(BaseModel):
     id: str
     label: str
@@ -497,14 +676,98 @@ class BlockedCard(BaseModel):
     reason: str
 
 
+class ProjectionCardBand(BaseModel):
+    year: int
+    p10: float
+    p50: float
+    p90: float
+
+
+class ProjectionCard(BaseModel):
+    """Addition: the project_goal tool's result."""
+
+    type: Literal["projection"]
+    basis_label: str
+    proposal_id: int | None
+    amount: float
+    horizon_years: int
+    monthly_contribution: float
+    target_amount: float | None
+    total_contributed: float
+    probability_target_pct: float | None
+    probability_loss_pct: float
+    median_shortfall: float | None
+    end: ProjectionEnd
+    required_monthly: list[RequiredMonthly] | None
+    years: list[ProjectionCardBand]
+    data_label: str
+
+
+class RemedyCardChange(BaseModel):
+    product_code: str
+    name: str
+    asset_class: AssetClass
+    from_pct: float
+    to_pct: float
+    rule_ids: list[str]
+
+
+class RemedyCard(BaseModel):
+    """Addition: the suggest_fix tool's result; the client applies it with one click."""
+
+    type: Literal["remedy"]
+    proposal_id: int
+    version: int
+    gate_before: GateDecision
+    gate_after: GateDecision
+    failed_before: list[str]
+    failed_after: list[str]
+    fixed_rule_ids: list[str]
+    changes: list[RemedyCardChange]
+    items: list[RemedyItem]
+    summary: str
+    data_label: str
+
+
 ChatCard = Annotated[
-    ProductsCard | ComparisonCard | ProposalCard | RuleCard | ProfileCard | BlockedCard, Field(discriminator="type")
+    ProductsCard | ComparisonCard | ProposalCard | RuleCard | ProfileCard | BlockedCard | ProjectionCard | RemedyCard,
+    Field(discriminator="type"),
 ]
 
 
 class ChatRequest(RequestBody):
     message: str = Field(min_length=1, max_length=1000)
     proposal_id: int | None = None
+
+
+class Provenance(BaseModel):
+    """Addition: the explicit and machine-readable label on every reply (China's AI-content labelling measures,
+    EU AI Act Art. 50). The same facts travel in the X-AI-Generated and X-AI-Content-SHA256 response headers."""
+
+    label: str = Field(description="The visible label: AI-generated, Automated template (checked) or System notice.")
+    ai_generated: bool
+    generator: str
+    provider: str | None
+    model: str | None = Field(description="The model that served the reply, when the model answered.")
+    mode: ChatMode
+    config_fingerprint: str = Field(description="SHA-256 of the configuration that produced the reply.")
+    content_sha256: str = Field(description="SHA-256 of the reply text exactly as shown.")
+    created_at: str
+    standards: list[str]
+
+
+ChatRating = Literal["up", "down"]
+
+
+class ChatFeedbackRequest(RequestBody):
+    message_id: int = Field(ge=1, le=2_147_483_647)
+    rating: ChatRating
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class ChatFeedbackResult(BaseModel):
+    message_id: int
+    rating: ChatRating
 
 
 class ChatReply(BaseModel):
@@ -516,6 +779,7 @@ class ChatReply(BaseModel):
     citations: list[Citation]
     cards: list[ChatCard] = Field(description="Addition: the tool results behind the reply, as cards.")
     number_sources: list[NumberSource] = Field(description="Addition: the source of each figure in the reply.")
+    provenance: Provenance = Field(description="Addition: the reply's AI label and fingerprints.")
     created_at: str
 
 
@@ -529,6 +793,8 @@ class ChatMessage(BaseModel):
     citations: list[Citation] | None = None
     cards: list[ChatCard] | None = None
     number_sources: list[NumberSource] | None = None
+    provenance: Provenance | None = None
+    feedback: ChatRating | None = None
     created_at: str
 
 
@@ -710,6 +976,36 @@ class TurnProposal(BaseModel):
     gate: GateDecision
 
 
+class ThreatSignal(BaseModel):
+    id: str
+    label: str
+    severity: Literal["low", "medium", "high"]
+    owasp: str
+    evidence: str
+
+
+class TraceSpan(BaseModel):
+    """One step of a turn, named after the OpenTelemetry GenAI semantic conventions."""
+
+    span_id: int
+    parent_id: int | None
+    name: str
+    start_ms: float
+    duration_ms: float
+    status: Literal["ok", "error"]
+    attributes: dict[str, object]
+
+
+ReviewStatus = Literal["open", "cleared", "escalated"]
+ReviewSeverity = Literal["high", "medium", "low"]
+
+
+class ReviewFlag(BaseModel):
+    kind: str
+    text: str
+    severity: ReviewSeverity
+
+
 class AgentTurn(BaseModel):
     log_id: int
     ts: str
@@ -719,6 +1015,12 @@ class AgentTurn(BaseModel):
     tools: list[TurnTool]
     proposals: list[TurnProposal]
     figures_traced: int
+    signals: list[str] = Field(default_factory=list, description="Addition: ids of the message's threat signals.")
+    flags: int = Field(default=0, description="Addition: how many review flags the turn raised.")
+    review_status: ReviewStatus | None = Field(
+        default=None, description="Addition: open, cleared or escalated; null if not flagged."
+    )
+    latency_ms: float | None = None
 
 
 class OversightKpis(BaseModel):
@@ -737,15 +1039,98 @@ class OversightKpis(BaseModel):
     figures_traced: int
     orders_by_agent: int
     orders_by_clients: int
+    threat_turns: int = Field(description="Addition: turns whose message raised a medium or high threat signal.")
+    reviews_open: int = Field(description="Addition: flagged turns not yet cleared or escalated.")
+    reviews_escalated: int
+    feedback_down: int = Field(description="Addition: replies a client marked unhelpful.")
+
+
+class Alert(BaseModel):
+    id: str
+    severity: Literal["high", "medium", "info"]
+    title: str
+    detail: str
+    since: str | None
 
 
 class Oversight(BaseModel):
     llm: Literal["ok", "fallback"]
     model: str
     system_prompt_sha256: str
+    config_fingerprint: str = Field(description="Addition: the configuration fingerprint replies are tagged with.")
     controls: Controls
     kpis: OversightKpis
+    alerts: list[Alert] = Field(description="Addition: conditions in the log that need attention.")
     turns: list[AgentTurn]
+
+
+class ReviewItem(BaseModel):
+    log_id: int
+    ts: str
+    user_id: int | None
+    client: str | None
+    message_preview: str
+    mode: ChatMode
+    grounding: ChatGrounding
+    severity: ReviewSeverity
+    flags: list[ReviewFlag]
+    status: ReviewStatus
+    decided_by: str | None
+    decided_at: str | None
+    note: str | None
+
+
+class ReviewCounts(BaseModel):
+    open: int
+    cleared: int
+    escalated: int
+
+
+class ReviewQueue(BaseModel):
+    items: list[ReviewItem]
+    counts: ReviewCounts
+
+
+class ReviewDecisionRequest(RequestBody):
+    decision: Literal["cleared", "escalated"]
+    note: str = Field(min_length=5, max_length=300)
+
+
+class TurnFeedback(BaseModel):
+    rating: ChatRating
+    reason: str | None
+    at: str
+
+
+class TurnDetail(BaseModel):
+    """Addition: everything about one AI turn, for the Control Room's turn inspector."""
+
+    log_id: int
+    ts: str
+    user_id: int | None
+    client: str | None
+    message: str | None
+    reply: str | None
+    mode: ChatMode
+    grounding: ChatGrounding
+    fallback_reason: str | None
+    served_model: str | None
+    config_fingerprint: str | None
+    latency_ms: float | None
+    usage: dict[str, int]
+    provenance: Provenance | None
+    tools: list[ToolCallSummary]
+    cards: list[str]
+    proposals: list[TurnProposal]
+    figures_traced: int
+    signals: list[ThreatSignal]
+    trace: list[TraceSpan]
+    flags: list[ReviewFlag]
+    status: ReviewStatus | None
+    decided_by: str | None
+    decided_at: str | None
+    note: str | None
+    feedback: TurnFeedback | None
 
 
 class AiControl(BaseModel):
@@ -755,7 +1140,7 @@ class AiControl(BaseModel):
     ref: str
     requirement: str
     control: str
-    check: Literal["built_in", "controls", "report"]
+    check: Literal["built_in", "controls", "report", "reviews"]
     note: str | None
 
 
@@ -819,6 +1204,24 @@ class ModelCardAllocation(BaseModel):
     stress_scenarios: list[ModelCardScenario]
 
 
+class ModelCardSignal(BaseModel):
+    id: str
+    label: str
+    severity: Literal["low", "medium", "high"]
+    owasp: str
+
+
+class ModelCardGovernance(BaseModel):
+    """Addition: how the AI's output is labelled, fingerprinted, screened, traced and reviewed."""
+
+    config_fingerprint: str
+    config_components: dict[str, object]
+    labelling: str
+    threat_signals: list[ModelCardSignal]
+    review_triggers: list[str]
+    tracing: str
+
+
 class ModelCard(BaseModel):
     report: str
     generated_at: str
@@ -831,4 +1234,5 @@ class ModelCard(BaseModel):
     controls: Controls
     regulations: Regulations
     data_versions: dict[str, str]
+    governance: ModelCardGovernance
     content_sha256: str = Field(description="SHA-256 of this report without this field, for the record.")

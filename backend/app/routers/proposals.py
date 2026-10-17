@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import client_user
 from app.core.database import get_db
+from app.core.errors import ApiError
 from app.models import User
 from app.routers.common import ERRORS
 from app.schemas import (
@@ -16,9 +17,11 @@ from app.schemas import (
     Proposal,
     ProposalCreate,
     ProposalList,
+    ProposalPreview,
     QuizQuestions,
     QuizResult,
     QuizSubmit,
+    Remedy,
     ReviseRequest,
 )
 from app.services import execution, logs, profiles, proposals
@@ -80,6 +83,41 @@ def revise(
         raise problem
     proposal = proposals.revise(db, ctx, user, parent, profile, [i.model_dump() for i in body.items])
     return proposals.to_schema(proposal, ctx)
+
+
+@router.post("/{proposal_id}/preview", response_model=ProposalPreview)
+def preview(
+    body: ReviseRequest,
+    proposal_id: int = ProposalId,
+    user: User = Depends(client_user),
+    db: Session = Depends(get_db),
+    ctx: AppContext = Depends(get_ctx),
+) -> dict:
+    """Addition: a dry run of a revision for the what-if lab. Same engines and gate as /revise; nothing is saved or logged."""
+    parent = proposals.get_owned(db, user, proposal_id)
+    profile = profiles.latest(db, user.id)
+    problem = profiles.t2_error(profile, ctx)
+    if problem is not None:
+        raise problem
+    return proposals.preview(ctx, parent, profile, [i.model_dump() for i in body.items])
+
+
+@router.get("/{proposal_id}/remedy", response_model=Remedy)
+def remedy(
+    proposal_id: int = ProposalId,
+    user: User = Depends(client_user),
+    db: Session = Depends(get_db),
+    ctx: AppContext = Depends(get_ctx),
+) -> dict:
+    """Addition: How to fix. The smallest change that passes the gate; apply it with /revise, where the gate runs again."""
+    proposal = proposals.get_owned(db, user, proposal_id)
+    if proposal.status not in proposals.OPEN_STATUSES:
+        raise ApiError(409, "STATE_CONFLICT", f"This proposal is {proposal.status} and can no longer change.")
+    profile = profiles.latest(db, user.id)
+    problem = profiles.t2_error(profile, ctx)
+    if problem is not None:
+        raise problem
+    return proposals.remedy(ctx, proposal, profile)
 
 
 @router.post("/{proposal_id}/acknowledge", response_model=Proposal)

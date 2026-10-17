@@ -1,4 +1,10 @@
-"""Endpoints 22-23: the advisor chat and its history (Module 6), plus a streaming variant (P1)."""
+"""Endpoints 22-23: the advisor chat and its history (Module 6), plus a streaming variant (P1).
+
+Additions: every reply's AI label also travels in response headers (X-AI-Generated,
+X-AI-Label, X-AI-Content-SHA256, X-AI-Config-Fingerprint), the machine-readable
+marking of China's labelling measures and the EU AI Act (Art. 50); and clients
+can rate a reply (POST /chat/feedback), which the review queue picks up.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,7 @@ import queue
 import threading
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -16,7 +22,7 @@ from app.core.database import get_db
 from app.core.errors import ApiError, error_body
 from app.models import User
 from app.routers.common import ERRORS
-from app.schemas import ChatHistory, ChatReply, ChatRequest
+from app.schemas import ChatFeedbackRequest, ChatFeedbackResult, ChatHistory, ChatReply, ChatRequest
 from app.services import chat
 from app.services.context import AppContext, get_ctx
 
@@ -28,12 +34,33 @@ def _rate_limit(ctx: AppContext, user: User) -> None:
         raise ApiError(429, "RATE_LIMITED", "Too many messages. Wait a minute and try again.")
 
 
+def label_headers(provenance: dict) -> dict[str, str]:
+    return {
+        "X-AI-Generated": "true" if provenance["ai_generated"] else "false",
+        "X-AI-Label": provenance["label"],
+        "X-AI-Content-SHA256": provenance["content_sha256"],
+        "X-AI-Config-Fingerprint": provenance["config_fingerprint"],
+    }
+
+
 @router.post("", response_model=ChatReply)
 def send(
-    body: ChatRequest, user: User = Depends(client_user), db: Session = Depends(get_db), ctx: AppContext = Depends(get_ctx)
+    body: ChatRequest,
+    response: Response,
+    user: User = Depends(client_user),
+    db: Session = Depends(get_db),
+    ctx: AppContext = Depends(get_ctx),
 ) -> dict:
     _rate_limit(ctx, user)
-    return chat.turn(db, ctx, user, body.message, body.proposal_id)
+    result = chat.turn(db, ctx, user, body.message, body.proposal_id)
+    response.headers.update(label_headers(result["provenance"]))
+    return result
+
+
+@router.post("/feedback", response_model=ChatFeedbackResult)
+def feedback(body: ChatFeedbackRequest, user: User = Depends(client_user), db: Session = Depends(get_db)) -> dict:
+    """Addition: rate one of your own replies. A thumbs-down flags the turn for compliance review."""
+    return chat.rate(db, user, body.message_id, body.rating, body.reason)
 
 
 @router.get("/history", response_model=ChatHistory)

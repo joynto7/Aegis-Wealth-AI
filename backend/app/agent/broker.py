@@ -8,7 +8,8 @@ T2 create or revise proposals - only with a complete, contradiction-free
 T3 execute - no tool exists. Only the client's click can create the token.
 
 While compliance has the advisor suspended, every call is denied (addition).
-Every call is logged with its tier and decision.
+Every call is logged with its tier and decision, and (addition) traced as an
+`execute_tool` span when the turn carries a tracer.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.agent.tools import RUNNERS, TOOL_TIERS, ToolContext, ToolInputError
+from app.agent.trace import Tracer
 from app.core.errors import ApiError
 from app.services import controls, logs, profiles
 
@@ -64,6 +66,13 @@ def _summary(tool: str, args: dict[str, Any], result: dict[str, Any] | None) -> 
         return "Loaded your profile summary"
     if tool == "get_proposal":
         return f"Loaded proposal #{args.get('proposal_id')}"
+    if tool == "project_goal" and result:
+        chance = result.get("probability_target_pct")
+        return f"Projected {result['horizon_years']} years" + (
+            f": {chance:g}% chance of the target" if chance is not None else ""
+        )
+    if tool == "suggest_fix" and result:
+        return f"How to fix #{result['proposal_id']}: {result['gate_before']} to {result['gate_after']}"
     if tool == "create_proposal" and result:
         return f"Created proposal #{result['id']}: gate {result['gate']['decision']}"
     if tool == "revise_proposal" and result:
@@ -72,8 +81,9 @@ def _summary(tool: str, args: dict[str, Any], result: dict[str, Any] | None) -> 
 
 
 class PermissionBroker:
-    def __init__(self, tc: ToolContext):
+    def __init__(self, tc: ToolContext, tracer: Tracer | None = None):
         self.tc = tc
+        self.tracer = tracer
         self.outcomes: list[ToolOutcome] = []
 
     def _record(self, outcome: ToolOutcome) -> ToolOutcome:
@@ -99,7 +109,24 @@ class PermissionBroker:
             ToolOutcome(tool, tier, "denied", summary, error=f"PERMISSION_DENIED: {reason}", detail={"reason": reason})
         )
 
-    def run(self, tool: str, args: dict[str, Any]) -> ToolOutcome:
+    def run(self, tool: str, args: dict[str, Any], call_id: str | None = None) -> ToolOutcome:
+        if self.tracer is None:
+            return self._run(tool, args)
+        with self.tracer.span(
+            f"execute_tool {tool}",
+            **{"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": tool, "gen_ai.tool.call.id": call_id},
+        ) as span:
+            outcome = self._run(tool, args)
+            span.set(**{"aegis.tier": outcome.tier, "aegis.decision": outcome.decision})
+            if outcome.result and "gate" in outcome.result and isinstance(outcome.result["gate"], dict):
+                span.set(**{"aegis.gate.decision": outcome.result["gate"]["decision"]})
+            if outcome.result and "gate_after" in outcome.result:
+                span.set(**{"aegis.gate.decision": outcome.result["gate_after"]})
+            if outcome.error:
+                span.fail(outcome.error.split(":", 1)[0])
+            return outcome
+
+    def _run(self, tool: str, args: dict[str, Any]) -> ToolOutcome:
         tier = TOOL_TIERS.get(tool)
         if tier is None:
             # Includes any attempt at an execution tool: none exists at any tier.
@@ -127,4 +154,6 @@ class PermissionBroker:
         detail = {}
         if result and "id" in result and tool in ("create_proposal", "revise_proposal", "get_proposal"):
             detail["proposal_id"] = result["id"]
+        if result and tool == "suggest_fix":
+            detail["proposal_id"] = result["proposal_id"]
         return self._record(ToolOutcome(tool, tier, "allowed", _summary(tool, args, result), result=result, detail=detail))

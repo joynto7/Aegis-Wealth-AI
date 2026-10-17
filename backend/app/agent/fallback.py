@@ -40,6 +40,15 @@ RULES = re.compile(
     r"skip the (compliance )?gate|bypass|override|suspend|disabled|no rules|\bdan\b|only a suggestion|"
     r"forget (all )?(previous|prior|your)|ignore (rules|your|all|the)|admin mode|approve all"
 )
+FIX = re.compile(
+    r"how (do|can|could|should) i (fix|pass|get (it|this) (to )?pass)|\bfix (it|this|that|my|the)\b|make (it|this) pass|"
+    r"what (should|do) i change|how to (fix|pass)|suggest a fix|smallest change"
+)
+GOAL = re.compile(
+    r"\b(goal|reach|on track|chances?|probab\w*|likely|will i have|how much will|enough (money|to)|retire\w*|afford|target)\b"
+)
+MONTHLY = re.compile(r"(?:cny\s?)?([\d,]+(?:\.\d+)?)\s*(k)?\s*(?:a|per|each|every)\s*month")
+MONEY = re.compile(r"cny\s?([\d,]+(?:\.\d+)?)\s*(k|m)?|\b([\d,]{5,}(?:\.\d+)?)\b|\b(\d+(?:\.\d+)?)\s*(k|m)\b")
 PRODUCT_CODE = re.compile(r"\b([a-z]{3}-\d{2})\b")
 PERCENT = re.compile(r"(\d{1,3})\s?%")
 THEMATIC = re.compile(r"thematic|high[- ]growth")
@@ -95,6 +104,10 @@ def detect_intent(message: str) -> str:
         re.search(r"why|explain|what is|tell me about", m) and re.search(r"fund|product|deposit|etf|this one", m)
     ):
         return "explain_item"
+    if FIX.search(m):
+        return "fix_request"
+    if GOAL.search(m):
+        return "goal_projection"
     for name, pattern in INTENTS:
         if pattern.search(m):
             return name
@@ -200,6 +213,82 @@ def _parse_amount_and_years(m: str) -> tuple[float | None, int | None]:
     )
 
 
+def _money(number: str, suffix: str | None) -> float:
+    value = float(number.replace(",", ""))
+    return value * {"k": 1_000, "m": 1_000_000}.get(suffix or "", 1)
+
+
+def _parse_goal(m: str) -> tuple[float | None, float | None, int | None]:
+    """Target, monthly contribution and years from a goal question ("reach CNY 300,000 in 8 years, CNY 2,000 a month")."""
+    monthly_match = MONTHLY.search(m)
+    monthly = _money(monthly_match.group(1), monthly_match.group(2)) if monthly_match else None
+    rest = m.replace(monthly_match.group(0), " ") if monthly_match else m
+    amounts = []
+    for match in MONEY.finditer(rest):
+        if match.group(1):
+            amounts.append(_money(match.group(1), match.group(2)))
+        elif match.group(3):
+            amounts.append(_money(match.group(3), None))
+        elif match.group(4):
+            amounts.append(_money(match.group(4), match.group(5)))
+    years = re.search(r"(\d{1,2})\s*(?:years?|yrs?)", rest)
+    return (max(amounts) if amounts else None, monthly, int(years.group(1)) if years else None)
+
+
+def _fix(broker: PermissionBroker, pid: int) -> str:
+    outcome = broker.run("suggest_fix", {"proposal_id": pid})
+    r = outcome.result
+    if r is None:
+        problem = (outcome.error or "").split(": ", 1)[-1]
+        return f"I couldn't work out a fix: {problem.rstrip('.')}. Your latest open proposal is the one a fix can change."
+    if not r["changes"]:
+        return f"Proposal #{pid} already passes every rule a fix can address. Open Confirm and Execute to continue."
+    biggest = max(r["changes"], key=lambda c: abs(c["to_pct"] - c["from_pct"]))
+    others = len(r["changes"]) - 1
+    rules = ", ".join(r["fixed_rule_ids"]) or "no rule"
+    return (
+        f"The smallest change that passes moves {biggest['name']} ({biggest['product_code']}) from "
+        f"{biggest['from_pct']:g}% to {biggest['to_pct']:g}%"
+        + (f", with {others} other adjustment{'s' if others != 1 else ''}" if others else "")
+        + f". It fixes {rules}, and the gate's verdict goes from {r['gate_before']} to {r['gate_after']}. "
+        "Press Apply on the card to save it as a new version; the gate checks it again."
+    )
+
+
+def _goal(broker: PermissionBroker, pid: int | None, m: str) -> str:
+    if pid is None:
+        return "Build a proposal first, then I can project it. Or open the Goal Planner to try any amount and horizon."
+    target, monthly, years = _parse_goal(m)
+    args = {
+        "proposal_id": pid,
+        "amount": None,
+        "horizon_years": years if years and 1 <= years <= 30 else None,
+        "monthly_contribution": monthly if monthly is not None and monthly <= 1_000_000 else None,
+        "target_amount": target if target is not None and 1_000 <= target <= 100_000_000 else None,
+    }
+    r = broker.run("project_goal", args).result
+    if r is None:
+        return "I couldn't run that projection. Open the Goal Planner to try other figures."
+    end, paths = r["end"], f"{r['paths']:,}"
+    tail = "These come from resampled history, not a forecast. Next step: open the Goal Planner to try other amounts."
+    if r["probability_target_pct"] is None:
+        return (
+            f"In {paths} illustrative paths, proposal #{pid} ends after {r['horizon_years']} years near "
+            f"{format_money(end['p50'])} in a typical case and {format_money(end['p10'])} in a bad case (1 in 10). {tail}"
+        )
+    chance = r["probability_target_pct"]
+    lift = ""
+    if chance < 75 and r["required_monthly"]:
+        need = next((x for x in r["required_monthly"] if x["confidence_pct"] == 75), None)
+        if need and need["monthly"] > 0:
+            lift = f"Adding about {format_money(need['monthly'])} a month would lift the chance to 75%. "
+    return (
+        f"In {paths} illustrative paths, proposal #{pid} has a {chance:g}% chance of reaching "
+        f"{format_money(r['target_amount'])} in {r['horizon_years']} years. A bad case (1 in 10) ends near "
+        f"{format_money(end['p10'])}, a typical one near {format_money(end['p50'])}. {lift}{tail}"
+    )
+
+
 def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> str:
     m = message.lower()
     intent = detect_intent(message)
@@ -277,6 +366,13 @@ def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> s
             return NO_PROPOSAL
         return _explain_item(p, message) or _explain_proposal(p)
 
+    if intent == "fix_request":
+        pid = _current_proposal_id(broker, proposal_id)
+        return NO_PROPOSAL if pid is None else _fix(broker, pid)
+
+    if intent == "goal_projection":
+        return _goal(broker, _current_proposal_id(broker, proposal_id), m)
+
     if intent == "explain_tier":
         s = broker.run("get_profile_summary", {}).result or {}
         if not s.get("has_profile"):
@@ -320,7 +416,7 @@ def answer(broker: PermissionBroker, message: str, proposal_id: int | None) -> s
             return f"Your proposal is {p['status']}. Next step: {_next(p)}."
         hard = next((r for r in p["gate"]["rules"] if r["result"] == "fail" and r["type"] == "hard"), None)
         if hard:
-            return f"The gate rejected this version: {hard['id']}, {hard['message']} Change that item and the gate runs again."
+            return f"The gate rejected this version: {hard['id']}, {hard['message']} {_fix(broker, p['id'])}"
         soft = next((r for r in p["gate"]["rules"] if r["result"] == "fail"), None)
         if soft:
             return (

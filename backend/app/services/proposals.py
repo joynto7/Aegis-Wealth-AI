@@ -20,6 +20,7 @@ from app.engines.gate import evaluate_gate, failed_rule_ids
 from app.engines.metrics import compute_metrics
 from app.engines.numbers import format_pct, round2
 from app.engines.quiz import build_quiz, check_quiz
+from app.engines.remedy import suggest_fix
 from app.engines.stress import compute_stress
 from app.models import GateResult, Product, Profile, Proposal, ProposalItem, QuizAttempt, SandboxAccount, User
 from app.services import logs
@@ -325,6 +326,60 @@ def revise(
     )
     db.commit()
     return proposal
+
+
+def preview(ctx: AppContext, parent: Proposal, profile: Profile, raw_items: list[dict[str, Any]]) -> dict[str, Any]:
+    """A dry run of a revision (addition): the same items, engines and gate as revise(), and nothing is saved.
+
+    The total is not forced to 100 here, so the what-if lab can show R-01 failing while weights are moved.
+    """
+    catalog = ctx.catalog
+    items = _revised_items(parent, raw_items, ctx, "client")
+    weights = class_weights_of(items)
+    metrics = compute_metrics(items, weights, catalog.history, catalog.by_code)
+    stress = compute_stress(weights, parent.amount, catalog.scenarios)
+    gate = evaluate_gate(
+        items=items,
+        class_weights_pct=weights,
+        metrics=metrics,
+        stress=stress,
+        tier=profile.tier,
+        amount=parent.amount,
+        horizon_years=parent.horizon_years,
+        near_term_need=parent.near_term_need,
+        max_acceptable_loss_pct=profile.max_acceptable_loss_pct,
+        by_code=catalog.by_code,
+        thresholds=catalog.thresholds,
+    )
+    return {
+        "proposal_id": parent.id,
+        "total_pct": round2(sum(float(i["weight_pct"]) for i in items)),
+        "items": items,
+        "class_weights_pct": weights,
+        "metrics": metrics,
+        "stress": stress,
+        "gate": gate,
+        "data_label": DATA_LABEL,
+    }
+
+
+def remedy(ctx: AppContext, proposal: Proposal, profile: Profile) -> dict[str, Any]:
+    """How to fix (addition): the smallest change that passes the gate, for the client to apply as a revision."""
+    catalog = ctx.catalog
+    result = suggest_fix(
+        item_dicts(proposal),
+        tier=profile.tier,
+        amount=proposal.amount,
+        horizon_years=proposal.horizon_years,
+        near_term_need=proposal.near_term_need,
+        max_acceptable_loss_pct=profile.max_acceptable_loss_pct,
+        products=catalog.products,
+        by_code=catalog.by_code,
+        history=catalog.history,
+        scenarios=catalog.scenarios,
+        thresholds=catalog.thresholds,
+    )
+    return {"proposal_id": proposal.id, "version": proposal.version, **result, "data_label": DATA_LABEL}
 
 
 def ensure_open(proposal: Proposal) -> None:

@@ -1,0 +1,20 @@
+# Build context of the one-container image (Dockerfile at the repo root): only backend/, frontend/ and deploy/.
+.git
+.claude
+.env
+.env.*
+docs
+evidence
+**/.DS_Store
+
+backend/.venv
+**/__pycache__
+**/*.pyc
+backend/.pytest_cache
+backend/.ruff_cache
+backend/data/aegis.db
+backend/data/aegis.db-*
+
+frontend/node_modules
+frontend/.next*
+frontend/tsconfig.tsbuildinfo

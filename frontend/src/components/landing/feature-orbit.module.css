@@ -158,7 +158,7 @@
   }
 }
 .landing {
-  --orbit-bg: #f7f8fd;
+  --orbit-bg: #f8f9ff;
   --orbit-text: #111a33;
   --orbit-muted: #64708a;
   --orbit-panel: #f0f3fb;
@@ -177,8 +177,26 @@
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: var(--orbit-bg);
+  background-color: var(--orbit-bg);
+  background-image:
+    radial-gradient(48rem 34rem at 12% 88%, rgba(99, 102, 241, 0.15), transparent 74%),
+    radial-gradient(42rem 32rem at 92% 92%, rgba(168, 85, 247, 0.13), transparent 72%),
+    linear-gradient(135deg, #eef2ff 0%, #fbfbff 46%, #ffffff 66%, #faf5ff 100%);
   color: var(--orbit-text);
+}
+
+.landing::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(79, 70, 229, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 70, 229, 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 24% 35%, black 10%, transparent 74%);
 }
 
 :global(.dark) .landing {
@@ -198,6 +216,17 @@
   --orbit-accent: #a5b4fc;
   --orbit-soft: rgba(199, 210, 254, 0.1);
   --orbit-soft-text: #e0e7ff;
+  background-image:
+    radial-gradient(48rem 34rem at 12% 88%, rgba(79, 70, 229, 0.2), transparent 74%),
+    radial-gradient(42rem 32rem at 92% 92%, rgba(124, 58, 237, 0.16), transparent 72%),
+    linear-gradient(135deg, #101a45 0%, #0b1538 48%, #08122e 100%);
+}
+
+:global(.dark) .landing::before {
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(199, 210, 254, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(199, 210, 254, 0.045) 1px, transparent 1px);
 }
 
 .glowOne,
@@ -276,13 +305,13 @@
 }
 
 .brandOrb {
-  border-color: var(--orbit-border);
-  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.14), rgba(255, 255, 255, 0.96) 72%);
-  box-shadow: 0 0 90px -34px rgba(79, 70, 229, 0.34);
+  border-color: rgba(99, 102, 241, 0.22);
+  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.2), rgba(255, 255, 255, 0.86) 72%);
+  box-shadow: 0 0 100px -30px rgba(99, 102, 241, 0.48), 0 0 42px -20px rgba(168, 85, 247, 0.3);
 }
 
 .brandOrbInner {
-  border-color: rgba(30, 41, 80, 0.08);
+  border-color: rgba(79, 70, 229, 0.14);
 }
 
 .brandName {

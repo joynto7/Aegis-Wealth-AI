@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, ArrowRight, ListOrdered, PieChart, Wallet } from "lucide-react";
+import { Activity, ArrowRight, Layers, ListOrdered, PieChart, Receipt, ShieldAlert, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoleGate } from "@/components/shared/role-gate";
 import { Money } from "@/components/shared/money";
@@ -9,11 +9,16 @@ import { ErrorState } from "@/components/shared/error-state";
 import { Panel } from "@/components/shared/panel";
 import { DecisionLabel } from "@/components/shared/decision-label";
 import { AllocationDonut, AllocationLegend } from "@/components/charts/allocation-donut";
+import { StressBars } from "@/components/charts/stress-bars";
+import { KpiTile } from "@/components/shared/kpi-tile";
+import { AnimatedMoney } from "@/components/shared/figure";
+import { AskAbout } from "@/components/shared/ask-about";
+import { ProjectionPanel } from "@/components/proposal/projection-panel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/components/shell/page-title";
-import { useLogs, useSandboxAccount, useSandboxOrders } from "@/lib/queries";
+import { useLogs, usePortfolioAnalytics, useSandboxAccount, useSandboxOrders } from "@/lib/queries";
 import { useAssetColors } from "@/lib/asset-colors";
 import { ACTIVITY, FALLBACK_ACTIVITY_ICON, describeActivity } from "@/lib/activity";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
@@ -30,7 +35,7 @@ function AccountHero({ account }: { account: SandboxAccount }) {
           <Wallet className="size-4" aria-hidden /> Total value · {account.data_label}
         </p>
         <p className="mt-3 text-hero-figure text-white">
-          <Money value={account.total_value} />
+          <AnimatedMoney value={account.total_value} />
         </p>
         <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-white/10 pt-5">
           <div>
@@ -152,6 +157,52 @@ function AccountOverview() {
   );
 }
 
+/** What the client holds now, under the same hypothetical shocks a proposal is tested with, and projected forward. */
+function RiskAndGoal() {
+  const account = useSandboxAccount();
+  const analytics = usePortfolioAnalytics();
+  if (analytics.isLoading || account.isLoading) return <Skeleton className="h-80 w-full rounded-2xl" />;
+  if (analytics.error || !analytics.data || !account.data) {
+    return <ErrorState error={analytics.error ?? account.error} onRetry={() => analytics.refetch()} />;
+  }
+  const a = analytics.data;
+  const worst = a.stress.reduce((w, s) => (s.loss_pct < w.loss_pct ? s : w), a.stress[0]);
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiTile icon={Wallet} label="Invested" value={<Money value={a.invested} />} hint={`Of ${a.positions} position${a.positions === 1 ? "" : "s"}, at the sample NAV.`} />
+        <KpiTile icon={Receipt} label="Weighted annual fee" value={`${a.weighted_fee_pct.toFixed(2)}%`} hint="Across everything you hold, cash at 0%." />
+        <KpiTile icon={Layers} label="Largest position" value={`${a.largest_position_pct}%`} hint="Share of total value in one product." />
+        <KpiTile
+          icon={ShieldAlert}
+          label="Worst hypothetical loss"
+          value={`−${Math.abs(worst.loss_pct).toFixed(2)}%`}
+          hint={
+            <>
+              {worst.name}: about <Money value={Math.abs(worst.loss_cny)} />. Hypothetical.
+            </>
+          }
+        />
+      </div>
+      <Panel
+        icon={Activity}
+        title="Stress test of what you hold"
+        description="The same hypothetical instant shocks a proposal is checked with, applied to your positions and cash."
+        action={<AskAbout question="What would a combined crisis do to the portfolio I hold now?" />}
+      >
+        <StressBars stress={a.stress} />
+        <p className="mt-3 text-caption text-(--text-muted)">{a.data_label}.</p>
+      </Panel>
+      <ProjectionPanel
+        basis={{ kind: "account" }}
+        defaultHorizon={10}
+        defaultAmount={account.data.total_value}
+        title="Will what you hold reach your goal?"
+      />
+    </div>
+  );
+}
+
 function ActivityLog() {
   const { data, isLoading, error, refetch } = useLogs({ limit: 100 });
   if (isLoading) return <Skeleton className="h-64 w-full rounded-2xl" />;
@@ -191,10 +242,14 @@ function AccountContent() {
       <Tabs defaultValue="overview">
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="risk">Risk and goal</TabsTrigger>
           <TabsTrigger value="activity">My activity</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <AccountOverview />
+        </TabsContent>
+        <TabsContent value="risk">
+          <RiskAndGoal />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityLog />

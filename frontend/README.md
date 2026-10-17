@@ -13,11 +13,15 @@ repository root; see the [root README](../README.md).
 | Against the real backend | `NEXT_PUBLIC_API_MOCK=0 API_BASE_URL=http://localhost:8000 npm run dev` | FastAPI in `../backend`, through the `/api/*` rewrite in `next.config.ts` |
 | Mock-first (no backend) | `npm run dev` | [MSW](https://mswjs.io) in the browser (`src/mocks/`) |
 
-Mock mode follows the "mock-first frontend" rule in Section 2.10.3. The mock implements the same 32
-endpoints, plus streaming chat, with the same shapes and error envelope. Its engines
-(`src/mocks/engines/`) are ports of the backend's, so the numbers, item reasons and gate details
-match; `scripts/verify.ts` checks both against the documentation's worked examples. Screens never
-import from `src/mocks`, so switching modes needs no screen change.
+Mock mode follows the "mock-first frontend" rule in Section 2.10.3. The mock implements all 49
+operations (the 32 contract endpoints, streaming chat, oversight, planning and what-if), with the
+same shapes and error envelope. Its engines (`src/mocks/engines/`) are ports of the backend's, so the
+numbers, item reasons and gate details match; `scripts/verify.ts` checks both against the
+documentation's worked examples. The version 2 ports give the backend's exact results: the goal
+projection shares its random generator (mulberry32, the same seed) and rounding (`numbers.ts`, half
+away from zero on the written digits), How to fix matched the Python engine on 400 random proposals,
+and the threat signals on 36 test messages. Screens never import from `src/mocks`, so switching modes
+needs no screen change.
 
 | Variable | Effect |
 | --- | --- |
@@ -44,6 +48,11 @@ import from `src/mocks`, so switching modes needs no screen change.
   regulatory basis, profile, products, or a call the broker blocked), and every figure in it is
   underlined: hover or focus it to see the tool field, message or profile value it came from.
 - When compliance suspends the advisor, the drawer says so and the reply is a fixed notice.
+- Version 2: the drawer opens with a notice that the client is talking to an AI system; each reply
+  carries its label (AI-generated, Automated template (checked) or System notice) with a provenance
+  popover (model, configuration fingerprint, content hash); a live step timeline shows the run; goal
+  projection and How to fix cards render in the thread, the latter with *Apply*; and every reply can
+  be copied or rated, with a reason for a thumbs-down. Suggested questions follow the current page.
 
 ### Demo accounts
 
@@ -62,7 +71,7 @@ npm run start            # serve the production build
 npm run lint             # ESLint
 npm run typecheck        # tsc --noEmit
 npm run gen:types        # regenerate src/lib/api-types.ts from ../backend/openapi.json
-npx tsx scripts/verify.ts  # mock engines against the worked examples, mock data against ../backend/data (exits 1 on a mismatch)
+npx tsx scripts/verify.ts  # 39 checks: mock engines against the worked examples and the backend's results, mock data against ../backend/data (exits 1 on a mismatch)
 ```
 
 ## API types are generated (NFR-5.2)
@@ -82,17 +91,25 @@ A contract change that breaks a screen or the mock then fails the type check.
 ```
 src/
   app/                 Next.js App Router routes: one folder per screen (S01-S12), plus control-room/
-                       (the compliance officer's AI Control Room)
+                       (the compliance officer's AI Control Room) and planner/ (the Goal Planner);
+                       (app)/template.tsx fades each page in
   components/
     ui/                shadcn/ui primitives (Button, Card, Dialog, Sheet, ...)
     shared/            StatusBadge, TierBadge, SuitabilityBadge, DecisionLabel, DataLabel, Money,
-                       Percent, PageHeader, Stepper, RegulationChips, ...
-    chat/              ChatCards (tool results as cards) and ReplyText (figures linked to their sources)
-    charts/            AllocationDonut, ReplayLine, ReplayPlayer (the month-by-month replay), StressBars, FeeBars
-    shell/             Sidebar, TopBar (with the light/dark toggle), ChatDrawer and DockedChat
+                       Percent, PageHeader, Stepper, RegulationChips, AnimatedMoney and AnimatedNumber
+                       (figure.tsx), AiLabel and AiNotice, AskAbout, InsightCard, Segmented, ...
+    chat/              ChatCards (tool results as cards, incl. projection and How to fix) and ReplyText
+                       (figures linked to their sources)
+    charts/            AllocationDonut, ReplayLine, ReplayPlayer (the month-by-month replay), StressBars, FeeBars,
+                       FanChart, ProbabilityRing, TierBars, Sparkline, TraceWaterfall
+    proposal/          WhatIfLab (sliders with a live gate), FixPanel (How to fix), ProjectionPanel
+    oversight/         TurnInspector (the Control Room's side sheet: provenance, signals, trace, decision)
+    shell/             Sidebar, TopBar (with the light/dark toggle), ChatDrawer, DockedChat, CommandPalette
   lib/                 api-types.ts (generated), types.ts, api-client.ts (incl. streamChat),
-                       queries.ts (TanStack Query hooks), labels.ts, disclosures.ts, format.ts
-  mocks/               the MSW mock API: data, engines, services, db.ts, handlers.ts
+                       queries.ts (TanStack Query hooks), labels.ts, disclosures.ts, format.ts,
+                       chart-theme.ts, use-debounced.ts
+  mocks/               the MSW mock API: data, engines (incl. projection, remedy, threats, numbers),
+                       services (incl. planning, reviews), db.ts, handlers.ts
 ```
 
 ## Design system
@@ -111,6 +128,23 @@ The research, the design language and a prompt for every screen are in
   (`src/lib/asset-colors.ts`), and the riskometer uses a validated one-hue ramp.
 - **`cn`** (`src/lib/utils.ts`) knows the custom type scale, so `text-caption` and a colour such as
   `text-(--text)` no longer cancel each other.
-- **Shell features:** the ⌘K command palette (`components/shell/command-palette.tsx`) and privacy mode
-  (`lib/privacy.tsx`; every `<Money>` hides while it is on).
+- **Shell features:** the ⌘K command palette (`components/shell/command-palette.tsx`), which also
+  sends a typed question to Aegis, and privacy mode (`lib/privacy.tsx`; every `<Money>` and
+  `<AnimatedMoney>` hides while it is on).
 - **Components** are built on shadcn/ui (Radix primitives) and Tailwind CSS v4.
+- **Version 2** adds motion and elevation tokens, a glass surface, segmented-control tokens and a
+  one-hue band ramp for projections (`--band-*`, `--target-line`), all with dark values; Motion
+  (`motion`) for transitions under `MotionConfig reducedMotion="user"`; NumberFlow for figures that
+  roll to their new value; and a table twin for every chart. Part 4 of the design document has the
+  details.
+
+### Running a second dev server
+
+`next.config.ts` reads `NEXT_DIST_DIR` (default `.next`), so a second dev server can run beside the
+first with its own build folder, for example mock mode on another port:
+
+```bash
+NEXT_PUBLIC_API_MOCK=1 NEXT_DIST_DIR=.next-mock npx next dev -p 3002
+```
+
+Folders named `.next-*` are git-ignored.

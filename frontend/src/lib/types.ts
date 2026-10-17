@@ -107,3 +107,34 @@ export type AiControl = Schemas["AiControl"];
 export type Framework = Schemas["Framework"];
 export type Regulations = Schemas["Regulations"];
 export type ModelCard = Schemas["ModelCard"];
+
+// ---------------------------------------------------------------------------
+// Additions (v2): what-if, How to fix, planning, AI governance
+// ---------------------------------------------------------------------------
+
+export type ProposalPreview = Schemas["ProposalPreview"];
+export type Remedy = Schemas["Remedy"];
+export type RemedyChange = Schemas["RemedyChange"];
+export type RemedyItem = Schemas["RemedyItem"];
+export type ProjectionRequest = Schemas["ProjectionRequest"];
+export type Projection = Schemas["Projection"];
+export type ProjectionBand = Schemas["ProjectionBand"];
+export type TierOutcome = Schemas["TierOutcome"];
+export type RequiredMonthly = Schemas["RequiredMonthly"];
+export type Goal = Schemas["Goal"];
+export type GoalInput = Schemas["GoalInput"];
+export type Insight = Schemas["Insight"];
+export type Insights = Schemas["Insights"];
+export type PortfolioAnalytics = Schemas["PortfolioAnalytics"];
+export type ProjectionCard = Schemas["ProjectionCard"];
+export type RemedyCard = Schemas["RemedyCard"];
+export type Provenance = Schemas["Provenance"];
+export type ChatRating = Schemas["ChatFeedbackRequest"]["rating"];
+export type ThreatSignal = Schemas["ThreatSignal"];
+export type TraceSpan = Schemas["TraceSpan"];
+export type ReviewFlag = Schemas["ReviewFlag"];
+export type ReviewItem = Schemas["ReviewItem"];
+export type ReviewQueue = Schemas["ReviewQueue"];
+export type ReviewStatus = Schemas["ReviewItem"]["status"];
+export type TurnDetail = Schemas["TurnDetail"];
+export type Alert = Schemas["Alert"];

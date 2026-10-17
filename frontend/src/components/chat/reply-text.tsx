@@ -13,6 +13,8 @@ export const TOOL_LABEL: Record<string, string> = {
   get_proposal: "Your proposal",
   create_proposal: "New proposal",
   revise_proposal: "Revised proposal",
+  project_goal: "Goal projection",
+  suggest_fix: "How to fix",
 };
 
 export function sourceLabel(source: NumberSource): string {

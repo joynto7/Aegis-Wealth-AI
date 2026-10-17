@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "public/mockServiceWorker.js",
+    // Extra build folders from NEXT_DIST_DIR (a second dev server, see next.config.ts).
+    ".next-*/**",
   ]),
 ]);
 

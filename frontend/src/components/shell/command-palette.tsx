@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { CornerDownLeft, Eye, EyeOff, MessageCircleQuestion, Moon, Plus, Search, Sun, type LucideIcon } from "lucide-react";
+import { CornerDownLeft, Eye, EyeOff, MessageCircleQuestion, Moon, Plus, Search, Sparkles, Sun, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SidebarNavItems } from "@/components/shell/sidebar";
 import { usePrivacy } from "@/lib/privacy";
@@ -32,7 +32,7 @@ export function CommandPalette({
   role: UserRole;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAskAegis?: () => void;
+  onAskAegis?: (question?: string) => void;
 }) {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
@@ -41,6 +41,7 @@ export function CommandPalette({
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
 
+  const typed = query.trim();
   const commands = useMemo<Command[]>(() => {
     const close = (fn: () => void) => () => {
       onOpenChange(false);
@@ -72,7 +73,7 @@ export function CommandPalette({
                     group: "Actions" as const,
                     icon: MessageCircleQuestion,
                     keywords: "chat ai advisor help",
-                    run: close(onAskAegis),
+                    run: close(() => onAskAegis()),
                   },
                 ]
               : []),
@@ -98,8 +99,23 @@ export function CommandPalette({
     return [...go, ...actions];
   }, [role, router, onOpenChange, onAskAegis, hidden, toggle, resolvedTheme, setTheme]);
 
-  const q = query.trim().toLowerCase();
-  const shown = q ? commands.filter((c) => `${c.label} ${c.keywords ?? ""}`.toLowerCase().includes(q)) : commands;
+  const q = typed.toLowerCase();
+  const matched = q ? commands.filter((c) => `${c.label} ${c.keywords ?? ""}`.toLowerCase().includes(q)) : commands;
+  // Anything typed can also go straight to the advisor (v2): the AI from the command bar.
+  const askTyped: Command | null =
+    onAskAegis && typed.length >= 3
+      ? {
+          id: "ask-typed",
+          label: `Ask Aegis: “${typed.length > 60 ? `${typed.slice(0, 59)}…` : typed}”`,
+          group: "Actions",
+          icon: Sparkles,
+          run: () => {
+            onOpenChange(false);
+            onAskAegis(typed);
+          },
+        }
+      : null;
+  const shown = askTyped ? (matched.length ? [...matched, askTyped] : [askTyped]) : matched;
   const active = Math.min(cursor, Math.max(shown.length - 1, 0));
 
   useEffect(() => {
@@ -140,7 +156,7 @@ export function CommandPalette({
               setCursor(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Search screens and actions…"
+            placeholder={onAskAegis ? "Search screens, or ask Aegis anything…" : "Search screens and actions…"}
             className="h-12 flex-1 bg-transparent text-form text-(--text) outline-none placeholder:text-(--text-muted)"
             aria-label="Search screens and actions"
             role="combobox"

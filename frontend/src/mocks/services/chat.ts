@@ -8,6 +8,7 @@ import type {
   Profile,
   Proposal,
   ToolCallSummary,
+  TraceSpan,
 } from "@/lib/types";
 import { db, logAction } from "@/mocks/db";
 import { PRODUCTS } from "@/mocks/data/products";
@@ -15,6 +16,8 @@ import { findRule } from "@/mocks/data/rules";
 import { compareProducts } from "@/mocks/engines/fees";
 import { numberSources } from "@/mocks/engines/grounding";
 import { reviseProposal } from "@/mocks/services/proposals";
+import { projectionFor } from "@/mocks/services/planning";
+import { suggestFix, type RemedyResult } from "@/mocks/engines/remedy";
 import { formatMoney } from "@/lib/format";
 import { tierLabel } from "@/mocks/engines/scoring";
 
@@ -29,7 +32,23 @@ import { tierLabel } from "@/mocks/engines/scoring";
  * has the advisor suspended no turn runs at all.
  */
 
-type Intent = "explain_proposal" | "explain_tier" | "compare" | "explain_rejection" | "next_step" | "override_attempt" | "other";
+type Intent =
+  | "explain_proposal"
+  | "explain_tier"
+  | "compare"
+  | "explain_rejection"
+  | "next_step"
+  | "override_attempt"
+  | "fix_request"
+  | "goal_projection"
+  | "other";
+
+// Ported from backend/app/agent/fallback.py (v2 intents).
+const FIX =
+  /how (do|can|could|should) i (fix|pass|get (it|this) (to )?pass)|\bfix (it|this|that|my|the)\b|make (it|this) pass|what (should|do) i change|how to (fix|pass)|suggest a fix|smallest change/;
+const GOAL = /\b(goal|reach|on track|chances?|probab\w*|likely|will i have|how much will|enough (money|to)|retire\w*|afford|target)\b/;
+const MONTHLY = /(?:cny\s?)?([\d,]+(?:\.\d+)?)\s*(k)?\s*(?:a|per|each|every)\s*month/;
+const MONEY = /cny\s?([\d,]+(?:\.\d+)?)\s*(k|m)?|\b([\d,]{5,}(?:\.\d+)?)\b|\b(\d+(?:\.\d+)?)\s*(k|m)\b/g;
 
 export const SUSPENDED_REPLY =
   "The AI advisor is paused by the compliance team. Your profile and proposals are unchanged and every screen still works. Orders still need your own Confirm click.";
@@ -39,12 +58,33 @@ function detectIntent(message: string): Intent {
   if (/(ignore (your|all) rules|override|put everything|all[- ]in|sell everything and buy|max(imum|) out)/.test(m)) {
     return "override_attempt";
   }
+  if (FIX.test(m)) return "fix_request";
+  if (GOAL.test(m)) return "goal_projection";
   if (/(reject|failed|rule|why not)/.test(m)) return "explain_rejection";
   if (/(compare|cheaper|fee|cost)/.test(m)) return "compare";
   if (/(tier|risk level|profile|score)/.test(m)) return "explain_tier";
   if (/(why|explain|portfolio|allocation)/.test(m)) return "explain_proposal";
   if (/(next|how do i|confirm|what now)/.test(m)) return "next_step";
   return "other";
+}
+
+function moneyValue(number: string, suffix?: string): number {
+  return Number(number.replace(/,/g, "")) * ({ k: 1_000, m: 1_000_000 }[suffix ?? ""] ?? 1);
+}
+
+/** Target, monthly contribution and years from a goal question (port of the backend's _parse_goal). */
+function parseGoal(m: string): { target: number | null; monthly: number | null; years: number | null } {
+  const monthlyMatch = MONTHLY.exec(m);
+  const monthly = monthlyMatch ? moneyValue(monthlyMatch[1], monthlyMatch[2]) : null;
+  const rest = monthlyMatch ? m.replace(monthlyMatch[0], " ") : m;
+  const amounts: number[] = [];
+  for (const match of rest.matchAll(MONEY)) {
+    if (match[1]) amounts.push(moneyValue(match[1], match[2]));
+    else if (match[3]) amounts.push(moneyValue(match[3]));
+    else if (match[4]) amounts.push(moneyValue(match[4], match[5]));
+  }
+  const years = /(\d{1,2})\s*(?:years?|yrs?)/.exec(rest);
+  return { target: amounts.length ? Math.max(...amounts) : null, monthly, years: years ? Number(years[1]) : null };
 }
 
 function currentProposal(userId: number, proposalId?: number): Proposal | undefined {
@@ -117,6 +157,30 @@ function profileCard(p: Profile): ChatCard {
   };
 }
 
+function remedyCard(proposal: Proposal, r: RemedyResult): ChatCard {
+  return {
+    type: "remedy",
+    proposal_id: proposal.id,
+    version: proposal.version,
+    gate_before: r.gate_before,
+    gate_after: r.gate_after,
+    failed_before: r.failed_before,
+    failed_after: r.failed_after,
+    fixed_rule_ids: r.fixed_rule_ids,
+    items: r.items,
+    summary: r.summary,
+    data_label: proposal.data_label,
+    changes: r.changes.map((c) => ({
+      product_code: c.product_code,
+      name: c.name,
+      asset_class: c.asset_class,
+      from_pct: c.from_pct,
+      to_pct: c.to_pct,
+      rule_ids: c.rule_ids,
+    })),
+  };
+}
+
 function cardKey(card: ChatCard): string {
   switch (card.type) {
     case "proposal":
@@ -127,6 +191,10 @@ function cardKey(card: ChatCard): string {
       return `rule:${card.id}`;
     case "blocked":
       return `blocked:${card.tool}:${card.reason}`;
+    case "projection":
+      return `projection:${card.proposal_id}:${card.target_amount}:${card.horizon_years}:${card.monthly_contribution}`;
+    case "remedy":
+      return `remedy:${card.proposal_id}`;
     default:
       return card.type;
   }
@@ -144,11 +212,14 @@ function dedupe(cards: ChatCard[]): ChatCard[] {
 }
 
 export interface MockTurn {
-  reply: ChatReply;
+  /** The reply before the handler adds its provenance (label, fingerprints). */
+  reply: Omit<ChatReply, "provenance">;
   /** Proposals the agent created or revised, with the gate's decision (for the agent_turn log entry). */
   proposalsMade: { tool: string; proposal_id: number; gate: AgentTurn["proposals"][number]["gate"] }[];
   /** The card of each tool call, in call order, for the streamed tool events. */
   toolCards: (ChatCard | null)[];
+  /** The turn's steps, shaped like the backend's OpenTelemetry GenAI spans (addition). */
+  trace: TraceSpan[];
 }
 
 export function respondToChat(userId: number, message: string, proposalId?: number): MockTurn {
@@ -158,8 +229,12 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
       reply: { ...base, mode: "suspended", grounding: "fallback", reply: SUSPENDED_REPLY, tool_calls: [], citations: [], cards: [], number_sources: [] },
       proposalsMade: [],
       toolCards: [],
+      trace: [{ span_id: 1, parent_id: null, name: "invoke_agent aegis-advisor", start_ms: 0, duration_ms: 0.1, status: "ok", attributes: { "gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "aegis-advisor", "aegis.mode": "suspended" } }],
     };
   }
+  const started = performance.now();
+  const spans: TraceSpan[] = [];
+  let mark = started;
 
   const intent = detectIntent(message);
   const profile = db.currentProfile(userId);
@@ -179,6 +254,25 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
     summary: string,
     result?: { value: unknown; card: ChatCard }
   ) => {
+    const now = performance.now();
+    const gate =
+      result?.card.type === "proposal" ? result.card.gate_decision : result?.card.type === "remedy" ? result.card.gate_after : undefined;
+    spans.push({
+      span_id: spans.length + 3,
+      parent_id: 2,
+      name: `execute_tool ${tool}`,
+      start_ms: Math.round((mark - started) * 100) / 100,
+      duration_ms: Math.round(Math.max(now - mark, 0.05) * 100) / 100,
+      status: decision === "denied" ? "error" : "ok",
+      attributes: {
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": tool,
+        "aegis.tier": tier,
+        "aegis.decision": decision,
+        ...(gate ? { "aegis.gate.decision": gate } : {}),
+      },
+    });
+    mark = now;
     toolCalls.push({ tool, tier, decision, summary });
     if (decision === "denied") {
       const blocked: BlockedCard = { type: "blocked", tool, tier, reason: summary };
@@ -203,6 +297,40 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
   };
 
   const t2Denial = t2DenialReason(profile);
+
+  /** How to fix (T1, read-only): the smallest change that passes; the client applies it with the card's button. */
+  const fixReply = (target: Proposal): string => {
+    if (target.status === "executed" || target.status === "superseded") {
+      addTool("suggest_fix", "T1", "allowed", `suggest_fix failed: INVALID_INPUT`);
+      return `I couldn't work out a fix: proposal #${target.id} is ${target.status} and can no longer change. Your latest open proposal is the one a fix can change.`;
+    }
+    if (t2Denial || !profile) {
+      addTool("suggest_fix", "T1", "allowed", `suggest_fix failed: ${t2Denial ?? "PROFILE_REQUIRED"}`);
+      return "I couldn't work out a fix: your risk profile needs attention first. Your latest open proposal is the one a fix can change.";
+    }
+    const fix = suggestFix(target.items, {
+      tier: profile.tier,
+      amount: target.amount,
+      horizonYears: target.horizon_years,
+      nearTermNeed: target.near_term_need,
+      maxAcceptableLossPct: profile.max_acceptable_loss_pct,
+    });
+    addTool("suggest_fix", "T1", "allowed", `How to fix #${target.id}: ${fix.gate_before} to ${fix.gate_after}`, {
+      value: { proposal_id: target.id, version: target.version, ...fix },
+      card: remedyCard(target, fix),
+    });
+    if (!fix.changes.length) return `Proposal #${target.id} already passes every rule a fix can address. Open Confirm and Execute to continue.`;
+    const biggest = fix.changes.reduce((b, c) => (Math.abs(c.to_pct - c.from_pct) > Math.abs(b.to_pct - b.from_pct) ? c : b), fix.changes[0]);
+    const others = fix.changes.length - 1;
+    const rules = fix.fixed_rule_ids.length ? fix.fixed_rule_ids.join(", ") : "no rule";
+    const fmt = (n: number) => String(Number(n.toPrecision(6)));
+    return (
+      `The smallest change that passes moves ${biggest.name} (${biggest.product_code}) from ${fmt(biggest.from_pct)}% to ${fmt(biggest.to_pct)}%` +
+      (others ? `, with ${others} other adjustment${others !== 1 ? "s" : ""}` : "") +
+      `. It fixes ${rules}, and the gate's verdict goes from ${fix.gate_before} to ${fix.gate_after}. ` +
+      "Press Apply on the card to save it as a new version; the gate checks it again."
+    );
+  };
 
   if (intent === "override_attempt") {
     if (t2Denial) {
@@ -262,6 +390,80 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
         reply = "I couldn't make that change. I have no tool that places orders; to act, review the proposal and press Confirm.";
       }
     }
+  } else if (intent === "fix_request") {
+    if (!proposal) {
+      reply = "You don't have a proposal yet. Next step: open Proposals and enter an amount and a horizon.";
+    } else {
+      reply = fixReply(proposal);
+    }
+  } else if (intent === "goal_projection") {
+    if (!proposal) {
+      reply = "Build a proposal first, then I can project it. Or open the Goal Planner to try any amount and horizon.";
+    } else {
+      const { target, monthly, years } = parseGoal(message.toLowerCase());
+      const projection = projectionFor(userId, {
+        basis: "proposal",
+        proposal_id: proposal.id,
+        horizon_years: years && years >= 1 && years <= 30 ? years : undefined,
+        monthly_contribution: monthly !== null && monthly <= 1_000_000 ? monthly : 0,
+        target_amount: target !== null && target >= 1_000 && target <= 100_000_000 ? target : null,
+        compare_tiers: false,
+      });
+      const value = {
+        basis: projection.basis,
+        amount: projection.amount,
+        horizon_years: projection.horizon_years,
+        monthly_contribution: projection.monthly_contribution,
+        target_amount: projection.target_amount,
+        total_contributed: projection.total_contributed,
+        weighted_fee_pct: projection.weighted_fee_pct,
+        paths: projection.paths,
+        probability_target_pct: projection.probability_target_pct,
+        probability_loss_pct: projection.probability_loss_pct,
+        median_shortfall: projection.median_shortfall,
+        end: projection.end,
+        required_monthly: projection.required_monthly,
+        years: projection.years.map((b) => ({ year: b.year, p10: b.p10, p50: b.p50, p90: b.p90 })),
+        data_label: projection.data_label,
+      };
+      const chance = projection.probability_target_pct;
+      addTool(
+        "project_goal",
+        "T1",
+        "allowed",
+        `Projected ${projection.horizon_years} years${chance !== null ? `: ${chance}% chance of the target` : ""}`,
+        {
+          value,
+          card: {
+            type: "projection",
+            basis_label: projection.basis.label,
+            proposal_id: projection.basis.proposal_id,
+            amount: value.amount,
+            horizon_years: value.horizon_years,
+            monthly_contribution: value.monthly_contribution,
+            target_amount: value.target_amount,
+            total_contributed: value.total_contributed,
+            probability_target_pct: value.probability_target_pct,
+            probability_loss_pct: value.probability_loss_pct,
+            median_shortfall: value.median_shortfall,
+            end: value.end,
+            required_monthly: value.required_monthly,
+            years: value.years,
+            data_label: value.data_label,
+          },
+        }
+      );
+      const end = projection.end;
+      const paths = projection.paths.toLocaleString("en-US");
+      const tail = "These come from resampled history, not a forecast. Next step: open the Goal Planner to try other amounts.";
+      if (chance === null) {
+        reply = `In ${paths} illustrative paths, proposal #${proposal.id} ends after ${projection.horizon_years} years near ${formatMoney(end.p50)} in a typical case and ${formatMoney(end.p10)} in a bad case (1 in 10). ${tail}`;
+      } else {
+        const need = chance < 75 ? projection.required_monthly?.find((r) => r.confidence_pct === 75) : undefined;
+        const lift = need && need.monthly > 0 ? `Adding about ${formatMoney(need.monthly)} a month would lift the chance to 75%. ` : "";
+        reply = `In ${paths} illustrative paths, proposal #${proposal.id} has a ${chance}% chance of reaching ${formatMoney(projection.target_amount ?? 0)} in ${projection.horizon_years} years. A bad case (1 in 10) ends near ${formatMoney(end.p10)}, a typical one near ${formatMoney(end.p50)}. ${lift}${tail}`;
+      }
+    }
   } else if (intent === "explain_proposal" && proposal) {
     addTool("get_proposal", "T1", "allowed", `Loaded proposal #${proposal.id}`, { value: proposal, card: proposalCard(proposal) });
     const w = proposal.class_weights_pct;
@@ -310,7 +512,7 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
     const failed = proposal.gate.rules.find((r) => r.result === "fail" && r.type === "hard");
     const warned = proposal.gate.rules.filter((r) => r.result === "fail" && r.type === "soft");
     if (failed) {
-      reply = `The gate rejected this version: ${failed.id}, ${failed.message} Change that item and the gate runs again.`;
+      reply = `The gate rejected this version: ${failed.id}, ${failed.message} ${fixReply(proposal)}`;
       citations.push({ tool: "get_proposal", path: "gate.rules", value: failed.id });
     } else if (warned.length) {
       reply = `The gate did not reject this version, but it raised a warning: ${warned[0].id}, ${warned[0].message} Tick each warning on the Confirm screen to continue.`;
@@ -333,6 +535,29 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
     reply = "You don't have a proposal yet. Open Proposal Workspace and request one with an amount and horizon.";
   }
 
+  const sources = numberSources(reply, results, message);
+  const total = Math.round(Math.max(performance.now() - started, 0.1) * 100) / 100;
+  const trace: TraceSpan[] = [
+    {
+      span_id: 1,
+      parent_id: null,
+      name: "invoke_agent aegis-advisor",
+      start_ms: 0,
+      duration_ms: total,
+      status: "ok",
+      attributes: { "gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "aegis-advisor", "aegis.mode": "fallback", "aegis.grounding": "fallback" },
+    },
+    {
+      span_id: 2,
+      parent_id: 1,
+      name: "aegis.template",
+      start_ms: 0,
+      duration_ms: total,
+      status: "ok",
+      attributes: { "aegis.fallback.reason": "no_model", "aegis.grounding.figures_traced": sources.length },
+    },
+    ...spans,
+  ];
   return {
     reply: {
       ...base,
@@ -342,9 +567,10 @@ export function respondToChat(userId: number, message: string, proposalId?: numb
       tool_calls: toolCalls,
       citations,
       cards: dedupe(cards),
-      number_sources: numberSources(reply, results, message),
+      number_sources: sources,
     },
     proposalsMade,
     toolCards,
+    trace,
   };
 }

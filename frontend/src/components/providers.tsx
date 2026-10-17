@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ThemeProvider } from "next-themes";
+import { MotionConfig } from "motion/react";
 import dynamicImport from "next/dynamic";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -70,9 +71,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <PrivacyProvider>{API_MOCK ? <MockGate>{children}</MockGate> : children}</PrivacyProvider>
-        </TooltipProvider>
+        {/* Motion follows the OS setting: transforms off under prefers-reduced-motion (v2 design system). */}
+        <MotionConfig reducedMotion="user">
+          <TooltipProvider>
+            <PrivacyProvider>{API_MOCK ? <MockGate>{children}</MockGate> : children}</PrivacyProvider>
+          </TooltipProvider>
+        </MotionConfig>
       </QueryClientProvider>
     </ThemeProvider>
   );

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Calculator, FlaskConical, Lock, Scale, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, Calculator, Eye, FlaskConical, Lock, Scale, ShieldCheck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,9 +34,15 @@ const PROOF_POINTS = [
   { icon: Calculator, title: "Every number computed by tested code", text: "The AI explains; it never invents a figure." },
   { icon: Lock, title: "The AI cannot place an order", text: "Only your own click creates a one-time token." },
   { icon: ShieldCheck, title: "Every recommendation sealed", text: "Hash-chained records and an append-only log." },
+  { icon: Eye, title: "Every AI reply labelled, traced and reviewable", text: "Provenance on each answer; a human reviews what code flags." },
 ];
 
-const TRUST_CHIPS = ["Compliance gate · 9 rules", "Red-team · 30 of 30 blocked", "Sandbox only · no real money"];
+const TRUST_CHIPS = [
+  "Compliance gate · 9 rules",
+  "Red-team · 30 of 30 blocked",
+  "OWASP Agentic Top 10 mapped",
+  "Sandbox only · no real money",
+];
 
 function BrandPanel() {
   return (

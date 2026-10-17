@@ -70,7 +70,7 @@ export function TopBar({
         <Menu className="size-5" />
       </Button>
       <div className="min-w-0">
-        <p className="text-eyebrow text-(--text-muted)">{user.role === "compliance" ? "Oversight" : "Wealth sandbox"}</p>
+        <p className="text-eyebrow hidden text-(--text-muted) sm:block">{user.role === "compliance" ? "Oversight" : "Wealth sandbox"}</p>
         <h2 className="truncate font-display text-[17px] font-bold leading-tight text-(--text)">{title}</h2>
       </div>
 
@@ -80,7 +80,7 @@ export function TopBar({
         className="ml-auto hidden h-10 w-64 items-center gap-2 rounded-[10px] border border-(--border) bg-(--surface-2) px-3 text-body text-(--text-muted) transition-colors hover:border-(--border-strong) lg:flex"
       >
         <Search className="size-4" aria-hidden />
-        <span className="flex-1 text-left">Search or jump to…</span>
+        <span className="flex-1 text-left">{user.role === "client" ? "Search or ask Aegis…" : "Search or jump to…"}</span>
         <kbd className="rounded-md border border-(--border) bg-(--surface) px-1.5 text-caption">⌘K</kbd>
       </button>
 

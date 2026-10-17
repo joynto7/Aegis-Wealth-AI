@@ -1,7 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Scale, ShieldX, UserRound, ListChecks, Package, FileSpreadsheet, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowRight,
+  Check,
+  FileSpreadsheet,
+  ListChecks,
+  Package,
+  Scale,
+  ShieldX,
+  Target,
+  UserRound,
+  Wand2,
+  XCircle,
+} from "lucide-react";
+import { FanChart } from "@/components/charts/fan-chart";
+import { Button } from "@/components/ui/button";
+import { useReviseProposal } from "@/lib/queries";
+import { ApiError } from "@/lib/api-client";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SuitabilityBadge } from "@/components/shared/suitability-badge";
 import { TierBadge } from "@/components/shared/tier-badge";
@@ -17,7 +35,9 @@ import type {
   ComparisonCard,
   ProductsCard,
   ProfileCard,
+  ProjectionCard,
   ProposalCard,
+  RemedyCard,
   RuleCard,
 } from "@/lib/types";
 import { TOOL_LABEL } from "@/components/chat/reply-text";
@@ -52,6 +72,10 @@ function ChatCardView({ card }: { card: ChatCard }) {
       return <ProductsCardView card={card} />;
     case "blocked":
       return <BlockedCardView card={card} />;
+    case "projection":
+      return <ProjectionCardView card={card} />;
+    case "remedy":
+      return <RemedyCardView card={card} />;
   }
 }
 
@@ -243,6 +267,108 @@ function BlockedCardView({ card }: { card: BlockedCard }) {
         </span>
       </p>
       <p className="mt-0.5 text-(--text-muted)">Reason: {card.reason}</p>
+    </Shell>
+  );
+}
+
+function ProjectionCardView({ card }: { card: ProjectionCard }) {
+  const chance = card.probability_target_pct;
+  return (
+    <Shell
+      icon={Target}
+      title={card.target_amount ? `Reaching ${formatMoney(card.target_amount)} in ${card.horizon_years} years` : `${card.horizon_years}-year projection`}
+      aside={
+        chance !== null ? (
+          <span className="rounded-full bg-(--primary-soft) px-2 py-0.5 font-semibold tabular-nums text-(--primary)">{chance}% chance</span>
+        ) : null
+      }
+    >
+      <p className="text-(--text-muted)">{card.basis_label}</p>
+      <div className="mt-2">
+        <FanChart
+          years={card.years}
+          amount={card.amount}
+          monthly={card.monthly_contribution}
+          target={card.target_amount}
+          height={132}
+          compact
+        />
+      </div>
+      <dl className="mt-1 grid grid-cols-3 gap-2">
+        {(
+          [
+            ["Bad (P10)", card.end.p10],
+            ["Typical", card.end.p50],
+            ["Good (P90)", card.end.p90],
+          ] as const
+        ).map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-(--text-muted)">{label}</dt>
+            <dd className="font-semibold tabular-nums">{formatMoney(value)}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-(--border) pt-2">
+        <span className="text-(--text-muted)">Illustrative, not a forecast</span>
+        <Link href="/planner" className="inline-flex items-center gap-1 font-medium text-(--primary) hover:underline">
+          Planner <ArrowRight className="size-3" aria-hidden />
+        </Link>
+      </div>
+    </Shell>
+  );
+}
+
+/** The agent proposes; the client approves. Apply saves the fix as the next version, which the gate checks again. */
+function RemedyCardView({ card }: { card: RemedyCard }) {
+  const router = useRouter();
+  const revise = useReviseProposal(card.proposal_id);
+  const [appliedId, setAppliedId] = useState<number | null>(null);
+  const error = revise.error instanceof ApiError ? revise.error : null;
+  async function apply() {
+    const next = await revise.mutateAsync(card.items);
+    setAppliedId(next.id);
+    router.push(`/proposals/${next.id}`);
+  }
+  return (
+    <Shell
+      icon={Wand2}
+      title={`How to fix #${card.proposal_id}`}
+      aside={
+        <span className="flex items-center gap-1">
+          <StatusBadge decision={card.gate_before} className="px-1.5 py-0.5 text-[11px] [&_svg]:size-3" />
+          <ArrowRight className="size-3 text-(--text-muted)" aria-hidden />
+          <StatusBadge decision={card.gate_after} className="px-1.5 py-0.5 text-[11px] [&_svg]:size-3" />
+        </span>
+      }
+    >
+      <ul className="space-y-1">
+        {card.changes.map((c) => (
+          <li key={c.product_code} className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate">
+              {c.name} <span className="font-mono text-(--text-muted)">{c.rule_ids.join(" ")}</span>
+            </span>
+            <span className="shrink-0 font-semibold tabular-nums">
+              <span className="text-(--text-muted)">{c.from_pct}%</span> → {c.to_pct}%
+            </span>
+          </li>
+        ))}
+      </ul>
+      {card.failed_after.length ? (
+        <p className="mt-1.5 text-(--text-muted)">Still a warning after the fix: {card.failed_after.join(", ")}.</p>
+      ) : null}
+      {error ? <p className="mt-1.5 text-(--reject)">{error.message}</p> : null}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-(--border) pt-2">
+        <span className="text-(--text-muted)">Computed by code. You decide.</span>
+        {appliedId ? (
+          <span className="inline-flex items-center gap-1 font-medium text-(--primary)">
+            <Check className="size-3.5" aria-hidden /> Saved as #{appliedId}
+          </span>
+        ) : card.changes.length ? (
+          <Button size="sm" className="h-7 px-2.5 text-caption" onClick={apply} disabled={revise.isPending}>
+            {revise.isPending ? "Applying…" : "Apply as a new version"}
+          </Button>
+        ) : null}
+      </div>
     </Shell>
   );
 }

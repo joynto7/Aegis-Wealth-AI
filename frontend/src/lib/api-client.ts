@@ -33,7 +33,7 @@ export class ApiError extends Error {
 const BASE = "/api";
 
 async function request<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   path: string,
   body?: unknown,
   extraHeaders?: Record<string, string>
@@ -141,4 +141,5 @@ export const api = {
   get: <T>(path: string, extraHeaders?: Record<string, string>) => request<T>("GET", path, undefined, extraHeaders),
   post: <T>(path: string, body?: unknown, extraHeaders?: Record<string, string>) =>
     request<T>("POST", path, body, extraHeaders),
+  put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
 };

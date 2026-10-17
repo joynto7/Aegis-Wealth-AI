@@ -1,6 +1,7 @@
 import type {
   AdviceRecord,
   ControlName,
+  Goal,
   Controls,
   ControlStateValue,
   LogActor,
@@ -84,8 +85,10 @@ class MockDb {
   replayReactions = new Map<number, Set<string>>();
   chatTimestamps = new Map<number, number[]>();
   controls = new Map<ControlName, ControlRow>();
+  /** Saved goals per client (addition); the latest is the current one. */
+  goals = new Map<number, Goal[]>();
 
-  private ids = { proposal: 100, log: 1, message: 1, order: 1, record: 1, session: 1, profile: 1 };
+  private ids = { proposal: 100, log: 1, message: 1, order: 1, record: 1, session: 1, profile: 1, goal: 1 };
 
   nextId(key: keyof MockDb["ids"]) {
     return this.ids[key]++;
@@ -109,6 +112,7 @@ class MockDb {
         quizAttempts: [...this.quizAttempts],
         replayReactions: [...this.replayReactions].map(([id, episodes]) => [id, [...episodes]]),
         controls: [...this.controls],
+        goals: [...this.goals],
       };
       window.sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
     } catch {
@@ -137,6 +141,8 @@ class MockDb {
       this.logs = s.logs;
       this.confirmTokens = new Map(s.confirmTokens);
       this.quizAttempts = new Map(s.quizAttempts);
+      this.goals = new Map(s.goals ?? []);
+      this.ids = { goal: 1, ...s.ids };
       this.replayReactions = new Map(
         (s.replayReactions as [number, string[]][]).map(([id, episodes]) => [id, new Set(episodes)])
       );
@@ -207,6 +213,18 @@ class MockDb {
     const list = this.proposals.get(userId) ?? [];
     list.push(proposal);
     this.proposals.set(userId, list);
+  }
+
+  // --- goals (addition) ------------------------------------------------
+  currentGoal(userId: number): Goal | undefined {
+    const list = this.goals.get(userId) ?? [];
+    return list[list.length - 1];
+  }
+
+  addGoal(userId: number, goal: Goal) {
+    const list = this.goals.get(userId) ?? [];
+    list.push(goal);
+    this.goals.set(userId, list);
   }
 
   // --- chat -----------------------------------------------------------

@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 className={cn(
                   "mx-auto max-w-[1320px] px-4 py-6 md:px-8 md:py-8 print:max-w-none print:p-0",
-                  isClient && "pb-28"
+                  isClient && "pb-28 md:pb-28"
                 )}
               >
                 {children}
@@ -123,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             role={user.role}
             open={commandOpen}
             onOpenChange={setCommandOpen}
-            onAskAegis={isClient ? () => askAegis() : undefined}
+            onAskAegis={isClient ? (question?: string) => askAegis(question) : undefined}
           />
         </div>
       </PageTitleProvider>

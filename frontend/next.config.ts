@@ -8,6 +8,9 @@ const apiBaseUrl = process.env.API_BASE_URL;
 const nextConfig: NextConfig = {
   // A self-contained server for the Docker image (frontend/Dockerfile).
   output: "standalone",
+  // Next.js allows one `next dev` per output folder; a second local server (for example against an API on
+  // another port) sets NEXT_DIST_DIR to a folder of its own, such as .next-local.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   async rewrites() {
     return apiBaseUrl ? [{ source: "/api/:path*", destination: `${apiBaseUrl}/api/:path*` }] : [];
   },

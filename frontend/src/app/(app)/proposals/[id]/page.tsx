@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -8,8 +8,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Droplets,
+  FlaskConical,
   Layers,
-  PencilLine,
   PieChart,
   Receipt,
   Scale,
@@ -30,15 +30,19 @@ import { AllocationDonut, AllocationLegend } from "@/components/charts/allocatio
 import { StressBars } from "@/components/charts/stress-bars";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageTitle } from "@/components/shell/page-title";
 import { DockedChat } from "@/components/shell/chat-drawer";
 import { Stepper } from "@/components/shared/stepper";
 import { RegulationChips } from "@/components/shared/regulation-chips";
-import { useComplianceRules, useProducts, useProposal, useProposals, useReviseProposal } from "@/lib/queries";
+import { AskAbout } from "@/components/shared/ask-about";
+import { Segmented } from "@/components/shared/segmented";
+import { AllocationBar } from "@/components/shared/allocation-bar";
+import { WhatIfLab } from "@/components/proposal/what-if-lab";
+import { FixPanel } from "@/components/proposal/fix-panel";
+import { ProjectionPanel } from "@/components/proposal/projection-panel";
+import { useComplianceRules, useProposal, useProposals } from "@/lib/queries";
 import { ASSET_CLASS_LABEL } from "@/lib/labels";
 import { useAssetColors } from "@/lib/asset-colors";
 import { formatMoney } from "@/lib/format";
@@ -49,7 +53,7 @@ import type { AssetClass, GateRule, Proposal, ProposalItem } from "@/lib/types";
  * The gate decision with every rule's reason: its name, its verdict, the measured value against its limit and
  * (addition) the regulatory requirement the rule is designed to meet.
  */
-function GatePanel({ gate }: { gate: Proposal["gate"] }) {
+function GatePanel({ gate, proposalId }: { gate: Proposal["gate"]; proposalId: number }) {
   const rules = useComplianceRules();
   const byId = new Map((rules.data?.items ?? []).map((r) => [r.id, r]));
   const failedHard = gate.rules.filter((r) => r.result === "fail" && r.type === "hard").length;
@@ -81,9 +85,13 @@ function GatePanel({ gate }: { gate: Proposal["gate"] }) {
                 <CheckCircle2 className="mt-0.5 size-[18px] shrink-0 text-(--pass)" aria-hidden />
               )}
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-x-2">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-mono text-caption text-(--text-muted)">{r.id}</span>
                   <span className="font-semibold text-(--text)">{byId.get(r.id)?.name ?? ""}</span>
+                  <AskAbout
+                    className="ml-auto"
+                    question={`Explain ${r.id} (${byId.get(r.id)?.name ?? "this rule"}) and how proposal #${proposalId} measures against it.`}
+                  />
                   <span className="sr-only">{fail ? (r.type === "hard" ? " failed" : " warning") : " passed"}</span>
                   {fail ? (
                     <span className={cn("text-caption font-medium", r.type === "hard" ? "text-(--reject)" : "text-(--warning)")}>
@@ -250,97 +258,36 @@ function Holdings({ items, dataLabel }: { items: ProposalItem[]; dataLabel: stri
   );
 }
 
-function ReviseForm({ proposal, onCancel }: { proposal: Proposal; onCancel: () => void }) {
-  const revise = useReviseProposal(proposal.id);
-  const products = useProducts({});
-  const router = useRouter();
-  const [rows, setRows] = useState(() => proposal.items.map((i) => ({ product_code: i.product_code, weight_pct: i.weight_pct })));
-  const total = rows.reduce((s, r) => s + (Number(r.weight_pct) || 0), 0);
-
-  function updateWeight(index: number, value: number) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, weight_pct: value } : r)));
-  }
-  function updateProduct(index: number, code: string) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, product_code: code } : r)));
-  }
-
-  async function save() {
-    const newProposal = await revise.mutateAsync(rows);
-    router.push(`/proposals/${newProposal.id}`);
-  }
-
-  return (
-    <Card className="ring-2 ring-(--primary)/25">
-      <CardContent className="space-y-4 px-6 py-5">
-        <div className="flex items-center justify-between">
-          <h3 className="flex items-center gap-2 font-display text-form font-bold text-(--text)">
-            <PencilLine className="size-4 text-(--primary)" aria-hidden /> Revise allocation
-          </h3>
-          <span className="text-body font-semibold tabular-nums text-(--text)" aria-live="polite">
-            {total.toFixed(0)}% of 100%
-            {Math.abs(total - 100) > 0.01 ? (
-              <span className="ml-2 font-normal text-(--text-muted)">
-                ({total > 100 ? `${(total - 100).toFixed(0)}% over` : `${(100 - total).toFixed(0)}% short`}; Save needs exactly 100%)
-              </span>
-            ) : null}
-          </span>
-        </div>
-        <div className="space-y-2">
-          {rows.map((row, i) => {
-            const original = proposal.items[i];
-            const candidates = (products.data?.items ?? []).filter((p) => p.asset_class === original.asset_class);
-            return (
-              <div key={i} className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[2fr_1fr_auto]">
-                <Select value={row.product_code} onValueChange={(v) => updateProduct(i, v)}>
-                  <SelectTrigger aria-label={`Product for ${ASSET_CLASS_LABEL[original.asset_class]} slot ${i + 1}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {candidates.map((p) => (
-                      <SelectItem key={p.code} value={p.code}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="hidden text-caption text-(--text-muted) sm:block">{ASSET_CLASS_LABEL[original.asset_class]}</span>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    aria-label={`Weight of slot ${i + 1} in percent`}
-                    className="w-20"
-                    value={row.weight_pct}
-                    onChange={(e) => updateWeight(i, Number(e.target.value))}
-                  />
-                  <span className="text-body text-(--text-muted)">%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {revise.isError ? <ErrorState error={revise.error} /> : null}
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={revise.isPending}>
-            Cancel
-          </Button>
-          <Button onClick={save} disabled={Math.abs(total - 100) > 0.01 || revise.isPending}>
-            {revise.isPending ? "Saving…" : "Save revision"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+type Tab = "overview" | "lab" | "projection";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "overview", label: "Overview" },
+  { value: "lab", label: "What-if lab" },
+  { value: "projection", label: "Goal projection" },
+];
 
 function ProposalDetail({ id }: { id: number }) {
   const { data: proposal, isLoading, error, refetch } = useProposal(id);
   const proposals = useProposals();
   const router = useRouter();
-  const [revising, setRevising] = useState(false);
+  const [tab, setTab] = useState<Tab>("overview");
 
   usePageTitle("Proposal Workspace");
+
+  // A link may open a tab directly (#lab, #projection); the tab also follows the hash on back/forward.
+  useEffect(() => {
+    function sync() {
+      const hash = window.location.hash.replace("#", "") as Tab;
+      if (TABS.some((t) => t.value === hash)) setTab(hash);
+    }
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, [id]);
+
+  function openTab(next: Tab) {
+    setTab(next);
+    window.history.replaceState(null, "", next === "overview" ? window.location.pathname : `#${next}`);
+  }
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (error || !proposal) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -351,12 +298,14 @@ function ProposalDetail({ id }: { id: number }) {
       ? proposals.data?.items.find((p) => p.id > proposal.id && p.status !== "superseded")
       : undefined;
   const canContinue = proposal.status === "passed" || proposal.status === "warning" || proposal.status === "acknowledged";
+  const editable = proposal.status !== "executed" && proposal.status !== "superseded";
 
   return (
     <div className="flex items-start gap-6">
       <div className="min-w-0 flex-1 space-y-6">
         <Stepper current={proposal.status === "executed" ? "Done" : "Proposal"} />
         <section className="bg-ink relative overflow-hidden rounded-2xl p-6 shadow-raised md:p-7">
+          <div className="grid-faint pointer-events-none absolute inset-0 opacity-60" aria-hidden />
           <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
           <div className="relative flex flex-wrap items-start justify-between gap-6">
             <div className="min-w-0">
@@ -378,33 +327,38 @@ function ProposalDetail({ id }: { id: number }) {
                 Over {proposal.horizon_years} years
                 {proposal.near_term_need > 0 ? `, with ${formatMoney(proposal.near_term_need)} needed within 2 years` : ""} · built for tier {proposal.tier}
               </p>
+              <div className="mt-5 max-w-md [&_li]:text-(--ink-muted) [&_li_span.font-semibold]:text-white">
+                <AllocationBar weights={classWeights} />
+              </div>
             </div>
             <div className="flex flex-col items-start gap-3 sm:items-end">
               <div className="flex flex-wrap items-center gap-2">
                 <TierBadge tier={proposal.tier} className="bg-white/10 text-white" />
                 <StatusBadge decision={proposal.gate.decision} />
               </div>
-              {!revising ? (
-                <div className="flex flex-wrap gap-2">
-                  {proposal.status !== "executed" && proposal.status !== "superseded" ? (
-                    <Button variant="outline" onClick={() => setRevising(true)} className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white">
-                      <PencilLine className="size-4" /> Revise
-                    </Button>
-                  ) : null}
-                  {canContinue ? (
-                    <Button onClick={() => router.push(`/proposals/${proposal.id}/confirm`)} className="bg-white text-(--ink) hover:bg-white/90">
-                      Continue to confirm <ArrowRight className="size-4" />
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {editable ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => openTab("lab")}
+                    className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white"
+                  >
+                    <FlaskConical className="size-4" /> Try changes
+                  </Button>
+                ) : null}
+                {canContinue ? (
+                  <Button onClick={() => router.push(`/proposals/${proposal.id}/confirm`)} className="bg-white text-(--ink) hover:bg-white/90">
+                    Continue to confirm <ArrowRight className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
 
-        {proposal.parent_id ? <VersionCompare current={proposal} parentId={proposal.parent_id} /> : null}
+        <FixPanel proposal={proposal} />
 
-      {proposal.status === "superseded" ? (
+        {proposal.status === "superseded" ? (
           <Alert>
             <AlertTitle>This version was superseded</AlertTitle>
             <AlertDescription>
@@ -428,45 +382,65 @@ function ProposalDetail({ id }: { id: number }) {
           </Alert>
         ) : null}
 
-        <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-          <Panel icon={PieChart} title="Allocation" description="By asset class. The colours are the same in every chart.">
-            <p className="sr-only">Allocation by asset class.</p>
-            <AllocationDonut weights={classWeights} height={220} centerValue={`${proposal.items.length}`} centerLabel="products" />
-            <div className="mt-4">
-              <AllocationLegend weights={classWeights} columns />
-            </div>
-          </Panel>
-          <GatePanel gate={proposal.gate} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Segmented value={tab} onChange={openTab} options={TABS} label="Workspace view" />
+          {proposal.parent_id ? (
+            <span className="text-caption text-(--text-muted)">Version {proposal.version} of this proposal</span>
+          ) : null}
         </div>
 
-        <MetricCards proposal={proposal} />
-
-        <Holdings items={proposal.items} dataLabel={proposal.data_label} />
-
-        <Panel icon={Activity} title="Stress tests" description="Hypothetical instant shocks, and what each asset class would contribute to the loss.">
-          <StressBars stress={proposal.stress} />
-        </Panel>
-
-        {revising ? (
-          <ReviseForm proposal={proposal} onCancel={() => setRevising(false)} />
-        ) : (
-          <div className="flex flex-wrap justify-end gap-2">
-            {proposal.status !== "executed" && proposal.status !== "superseded" ? (
-              <Button variant="outline" onClick={() => setRevising(true)}>
-                Revise
-              </Button>
-            ) : null}
-            {canContinue || proposal.status === "rejected" ? (
-              <Button disabled={!canContinue} onClick={() => router.push(`/proposals/${proposal.id}/confirm`)}>
-                Continue to confirm <ArrowRight className="size-4" />
-              </Button>
+        {tab === "overview" ? (
+          <div className="space-y-6">
+            {proposal.parent_id ? <VersionCompare current={proposal} parentId={proposal.parent_id} /> : null}
+            <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <Panel icon={PieChart} title="Allocation" description="By asset class. The colours are the same in every chart.">
+                <p className="sr-only">Allocation by asset class.</p>
+                <AllocationDonut weights={classWeights} height={220} centerValue={`${proposal.items.length}`} centerLabel="products" />
+                <div className="mt-4">
+                  <AllocationLegend weights={classWeights} columns />
+                </div>
+              </Panel>
+              <GatePanel gate={proposal.gate} proposalId={proposal.id} />
+            </div>
+            <MetricCards proposal={proposal} />
+            <Holdings items={proposal.items} dataLabel={proposal.data_label} />
+            <Panel
+              icon={Activity}
+              title="Stress tests"
+              description="Hypothetical instant shocks, and what each asset class would contribute to the loss."
+              action={<AskAbout question={`What would the worst stress scenario mean for proposal #${proposal.id}?`} />}
+            >
+              <StressBars stress={proposal.stress} />
+            </Panel>
+            <div className="flex flex-wrap justify-end gap-2">
+              {editable ? (
+                <Button variant="outline" onClick={() => openTab("lab")}>
+                  <FlaskConical className="size-4" /> Try changes in the lab
+                </Button>
+              ) : null}
+              {canContinue || proposal.status === "rejected" ? (
+                <Button disabled={!canContinue} onClick={() => router.push(`/proposals/${proposal.id}/confirm`)}>
+                  Continue to confirm <ArrowRight className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+            {proposal.status === "rejected" ? (
+              <p className="text-right text-caption text-(--text-muted)">
+                The gate rejected this version. Apply the fix above, or change it in the lab so every hard rule passes.
+              </p>
             ) : null}
           </div>
-        )}
-        {proposal.status === "rejected" && !revising ? (
-          <p className="text-right text-caption text-(--text-muted)">
-            The gate rejected this version. Revise it so every hard rule passes to continue.
-          </p>
+        ) : null}
+
+        {tab === "lab" ? <WhatIfLab key={proposal.id} proposal={proposal} onSaved={() => setTab("overview")} /> : null}
+
+        {tab === "projection" ? (
+          <ProjectionPanel
+            basis={{ kind: "proposal", proposalId: proposal.id }}
+            defaultHorizon={proposal.horizon_years}
+            defaultAmount={proposal.amount}
+            title={`Will proposal #${proposal.id} reach your goal?`}
+          />
         ) : null}
       </div>
       <DockedChat proposalId={proposal.id} className="hidden xl:flex" />

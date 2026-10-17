@@ -7,7 +7,9 @@ import {
   Activity,
   ArrowRight,
   Check,
+  Cpu,
   FileSpreadsheet,
+  Flag,
   Gauge,
   Lock,
   Scale,
@@ -24,12 +26,25 @@ import { Panel } from "@/components/shared/panel";
 import { ProgressRing } from "@/components/shared/progress-ring";
 import { AllocationBar } from "@/components/shared/allocation-bar";
 import { Riskometer, ScoreMeter } from "@/components/charts/riskometer";
+import { ProbabilityRing } from "@/components/charts/probability-ring";
+import { AnimatedMoney } from "@/components/shared/figure";
+import { InsightCard } from "@/components/shared/insight-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/components/shell/page-title";
 import { useAskAegis } from "@/components/shell/app-shell";
-import { useCurrentProfile, useLogs, useMe, useProposal, useProposals, useSandboxAccount } from "@/lib/queries";
-import { formatDateTime } from "@/lib/format";
+import {
+  useCurrentProfile,
+  useGoal,
+  useInsights,
+  useLogs,
+  useMe,
+  useProjection,
+  useProposal,
+  useProposals,
+  useSandboxAccount,
+} from "@/lib/queries";
+import { formatDateTime, formatMoney } from "@/lib/format";
 import { ACTIVITY, describeActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import type { Profile, ProposalSummary } from "@/lib/types";
@@ -120,6 +135,7 @@ function PortfolioHero() {
   const investedShare = sandbox && sandbox.total_value > 0 ? (invested / sandbox.total_value) * 100 : 0;
   return (
     <section className="bg-ink relative overflow-hidden rounded-2xl p-7 shadow-raised">
+      <div className="grid-faint pointer-events-none absolute inset-0 opacity-70" aria-hidden />
       <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-[#6366f1]/25 blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -bottom-32 right-24 size-64 rounded-full bg-[#a855f7]/20 blur-3xl" aria-hidden />
       <div className="relative flex h-full flex-col gap-6">
@@ -135,7 +151,7 @@ function PortfolioHero() {
           <Skeleton className="h-14 w-64 bg-white/10" />
         ) : (
           <p className="text-hero-figure text-white">
-            <Money value={sandbox.total_value} />
+            <AnimatedMoney value={sandbox.total_value} />
           </p>
         )}
         <div className="mt-auto space-y-3">
@@ -147,13 +163,13 @@ function PortfolioHero() {
               <p className="flex items-center gap-1.5 text-caption text-(--ink-muted)">
                 <span className="size-2 rounded-full bg-[#a5b4fc]" aria-hidden /> Invested
               </p>
-              <p className="mt-0.5 font-display text-form font-bold text-white">{sandbox ? <Money value={invested} /> : "—"}</p>
+              <p className="mt-0.5 font-display text-form font-bold text-white">{sandbox ? <AnimatedMoney value={invested} /> : "—"}</p>
             </div>
             <div>
               <p className="flex items-center gap-1.5 text-caption text-(--ink-muted)">
                 <span className="size-2 rounded-full bg-white/30" aria-hidden /> Cash available
               </p>
-              <p className="mt-0.5 font-display text-form font-bold text-white">{sandbox ? <Money value={sandbox.cash} /> : "—"}</p>
+              <p className="mt-0.5 font-display text-form font-bold text-white">{sandbox ? <AnimatedMoney value={sandbox.cash} /> : "—"}</p>
             </div>
           </div>
         </div>
@@ -299,6 +315,117 @@ function AskAegisCard() {
 }
 
 // ---------------------------------------------------------------------------
+// Briefing and goal (v2)
+// ---------------------------------------------------------------------------
+
+function Briefing() {
+  const { data, isLoading } = useInsights();
+  const items = data?.items ?? [];
+  return (
+    <section aria-labelledby="briefing-title" className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="briefing-title" className="font-display text-section text-(--text)">
+            Your briefing
+          </h2>
+          <p className="text-caption text-(--text-muted)">What your numbers mean today, each linked to where it comes from.</p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-(--border) bg-(--surface) px-2.5 py-1 text-caption text-(--text-muted)">
+          <Cpu className="size-3.5" aria-hidden /> Computed by code, not written by the AI
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} className="shimmer block h-44 rounded-2xl" />
+          ))}
+        </div>
+      ) : items.length ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {items.slice(0, 8).map((insight) => (
+            <InsightCard key={insight.id} insight={insight} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-(--border) bg-(--surface) px-6 py-8 text-center text-body text-(--text-muted)">
+          Your briefing fills in as you set a risk tier and build a proposal.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function GoalCard({ latest }: { latest: ProposalSummary | undefined }) {
+  const goal = useGoal();
+  const sandbox = useSandboxAccount();
+  const g = goal.data;
+  const invested = (sandbox.data?.positions.length ?? 0) > 0;
+  const useProposalBasis = latest && latest.status !== "executed" && latest.status !== "superseded";
+  const body =
+    g && (useProposalBasis || invested)
+      ? {
+          basis: (useProposalBasis ? "proposal" : "account") as "proposal" | "account",
+          proposal_id: useProposalBasis ? latest!.id : null,
+          horizon_years: g.horizon_years,
+          monthly_contribution: g.monthly_contribution,
+          target_amount: g.target_amount,
+          compare_tiers: false,
+        }
+      : null;
+  const projection = useProjection(body);
+  const chance = projection.data?.probability_target_pct ?? null;
+  return (
+    <Panel
+      icon={Flag}
+      title="Your goal"
+      description="The chance of getting there, across 1,000 illustrative paths."
+      action={
+        <Link href="/planner" className="text-body font-medium text-(--primary) hover:underline">
+          {g ? "Plan" : "Set one"}
+        </Link>
+      }
+    >
+      {goal.isLoading ? (
+        <Skeleton className="h-48 w-full" />
+      ) : g ? (
+        <div className="flex h-full flex-col gap-5">
+          <div className="flex items-center gap-4">
+            <ProbabilityRing value={body ? chance : null} size={112} stroke={11} label="chance" />
+            <div className="min-w-0">
+              <p className="truncate font-display text-form font-bold text-(--text)">{g.name}</p>
+              <p className="text-caption text-(--text-muted)">
+                <Money value={g.target_amount} /> in {g.horizon_years} years
+                {g.monthly_contribution ? ` · ${formatMoney(g.monthly_contribution)} a month` : ""}
+              </p>
+              <p className="mt-2 text-caption text-(--text-muted)">
+                {!body
+                  ? "Build a proposal to see the chance of reaching it."
+                  : projection.data
+                    ? `With ${projection.data.basis.label.toLowerCase()}. Typical outcome ${formatMoney(projection.data.end.p50)}.`
+                    : "Projecting…"}
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline" className="mt-auto w-full">
+            <Link href="/planner">
+              Open the goal planner <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <ProbabilityRing value={null} size={104} stroke={10} label="no goal yet" />
+          <p className="text-body text-(--text-muted)">Name a target and a date; see the chance of reaching it and what would lift it.</p>
+          <Button asChild>
+            <Link href="/planner">Set a goal</Link>
+          </Button>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Activity and safeguards
 // ---------------------------------------------------------------------------
 
@@ -413,15 +540,20 @@ export default function DashboardPage() {
         {profileLoading || proposalsLoading ? <Skeleton className="h-full min-h-64 rounded-2xl" /> : <JourneyCard action={action} />}
       </div>
 
+      <Briefing />
+
       <div className="grid gap-6 lg:grid-cols-3">
+        <GoalCard latest={latest} />
         <RiskCard profile={profile} loading={profileLoading} />
         <LatestProposalCard latest={latest} loading={proposalsLoading} />
-        <AskAegisCard />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
         <ActivityTimeline />
-        <SafeguardsCard />
+        <div className="flex flex-col gap-6">
+          <AskAegisCard />
+          <SafeguardsCard />
+        </div>
       </div>
     </div>
   );

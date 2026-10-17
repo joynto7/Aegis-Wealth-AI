@@ -21,11 +21,22 @@ import { AI_CONTROL_LIST, FRAMEWORKS, REGULATIONS_NOTE, REGULATIONS_VERSION } fr
 import { MODEL_PORTFOLIOS } from "@/mocks/data/modelPortfolios";
 import { verifyChain } from "@/mocks/services/chain";
 import { ASSUMPTIONS, DATA_AS_OF, SCENARIOS } from "@/mocks/data/scenarios";
+import { PlanningError, analyticsFor, insightsFor, projectionFor, setGoal } from "@/mocks/services/planning";
+import { annotate, decide, feedbackByMessage, findTurn, flagsFor, reviewQueue, turnDetail } from "@/mocks/services/reviews";
+import { suggestFix } from "@/mocks/engines/remedy";
+import { PATTERNS, scanThreats } from "@/mocks/engines/threats";
+import { computeMetrics } from "@/mocks/engines/metrics";
+import { computeStress } from "@/mocks/engines/stress";
+import { evaluateGate } from "@/mocks/engines/gate";
 import type {
   AdviceRecord,
   AgentTurn,
+  Alert,
+  AssetClass,
   ChatCard,
   ChatReply,
+  Provenance,
+  ProposalItem,
   ControlName,
   ControlStateValue,
   LogEntry,
@@ -98,17 +109,21 @@ function regulationsBody() {
   return { version: REGULATIONS_VERSION, note: REGULATIONS_NOTE, frameworks: FRAMEWORKS, ai_controls: AI_CONTROL_LIST };
 }
 
-/** The Control Room's counts and feed, from the mock operation log (port of backend services/oversight.py). */
-function oversightBody(): Oversight {
+/** The Control Room's counts, alerts and feed, from the mock operation log (port of backend services/oversight.py). */
+async function oversightBody(): Promise<Oversight> {
   const count = (pred: (l: LogEntry) => boolean) => db.logs.filter(pred).length;
   const turns = db.logs.filter((l) => l.action === "agent_turn").reverse();
   const detail = (l: LogEntry) => l.detail as Record<string, unknown>;
   const made = turns.flatMap((t) => (detail(t).proposals as AgentTurn["proposals"]) ?? []);
   const mode = (m: string) => turns.filter((t) => detail(t).mode === m).length;
+  const queue = reviewQueue("open", 0);
+  const annotations = annotate(turns.slice(0, 30));
+  const feedback = feedbackByMessage();
   return {
     llm: "fallback",
     model: "claude-opus-5-5",
     system_prompt_sha256: MOCK_PROMPT_SHA256,
+    config_fingerprint: await configFingerprint(),
     controls: db.controlsSnapshot(true),
     kpis: {
       agent_turns: turns.length,
@@ -126,18 +141,108 @@ function oversightBody(): Oversight {
       figures_traced: turns.reduce((s, t) => s + Number(detail(t).figures_traced ?? 0), 0),
       orders_by_agent: count((l) => l.actor === "agent" && l.action === "orders_executed" && l.decision === "allowed"),
       orders_by_clients: count((l) => l.actor === "client" && l.action === "orders_executed" && l.decision === "allowed"),
+      threat_turns: turns.filter((t) =>
+        ((detail(t).signals as { severity: string }[] | undefined) ?? []).some((s) => s.severity === "medium" || s.severity === "high")
+      ).length,
+      reviews_open: queue.counts.open,
+      reviews_escalated: queue.counts.escalated,
+      feedback_down: [...feedback.values()].filter((f) => f.rating === "down").length,
     },
-    turns: turns.slice(0, 30).map((t) => ({
-      log_id: t.id,
-      ts: t.ts,
-      user_id: t.user_id,
-      mode: (detail(t).mode as AgentTurn["mode"]) ?? "fallback",
-      grounding: (detail(t).grounding as AgentTurn["grounding"]) ?? "fallback",
-      tools: (detail(t).tools as AgentTurn["tools"]) ?? [],
-      proposals: (detail(t).proposals as AgentTurn["proposals"]) ?? [],
-      figures_traced: Number(detail(t).figures_traced ?? 0),
-    })),
+    alerts: alertsFor(turns, queue.counts.open),
+    turns: turns.slice(0, 30).map((t) => {
+      const [flags, status] = annotations.get(t.id) ?? [[], null];
+      return {
+        log_id: t.id,
+        ts: t.ts,
+        user_id: t.user_id,
+        mode: (detail(t).mode as AgentTurn["mode"]) ?? "fallback",
+        grounding: (detail(t).grounding as AgentTurn["grounding"]) ?? "fallback",
+        tools: (detail(t).tools as AgentTurn["tools"]) ?? [],
+        proposals: (detail(t).proposals as AgentTurn["proposals"]) ?? [],
+        figures_traced: Number(detail(t).figures_traced ?? 0),
+        signals: ((detail(t).signals as { id: string }[] | undefined) ?? []).map((sig) => sig.id),
+        flags: flags.length,
+        review_status: status,
+        latency_ms: (detail(t).latency_ms as number | undefined) ?? null,
+      };
+    }),
   };
+}
+
+/** Alerts derived from the log, as the backend's oversight.alerts(). */
+function alertsFor(turns: LogEntry[], openReviews: number): Alert[] {
+  const now = Date.now();
+  const out: Alert[] = [];
+  const recent = db.logs.filter((l) => l.action === "permission_denied" && now - new Date(l.ts).getTime() <= 15 * 60 * 1000);
+  const byUser = new Map<number | null, LogEntry[]>();
+  for (const l of recent) byUser.set(l.user_id, [...(byUser.get(l.user_id) ?? []), l]);
+  for (const [userId, rows] of byUser) {
+    if (rows.length >= 3) {
+      out.push({
+        id: `denials-${userId}`,
+        severity: "high",
+        title: "Repeated blocked tool calls",
+        detail: `Client #${userId}: ${rows.length} calls blocked by the permission broker in the last 15 minutes.`,
+        since: rows[0].ts,
+      });
+    }
+  }
+  const inHour = turns.filter((t) => now - new Date(t.ts).getTime() <= 60 * 60 * 1000);
+  const rejected = inHour.flatMap((t) => ((t.detail as Record<string, unknown>).proposals as AgentTurn["proposals"]) ?? []).filter((p) => p.gate === "REJECT");
+  if (rejected.length >= 2) {
+    out.push({
+      id: "ai-rejections",
+      severity: "medium",
+      title: "AI proposals rejected by the gate",
+      detail: `${rejected.length} proposals made by the AI were rejected in the last hour.`,
+      since: inHour[inHour.length - 1].ts,
+    });
+  }
+  const threats = inHour.filter((t) =>
+    (((t.detail as Record<string, unknown>).signals as { severity: string }[] | undefined) ?? []).some((s) => s.severity === "high")
+  );
+  if (threats.length) {
+    out.push({
+      id: "threats",
+      severity: "high",
+      title: "High-severity threat signals",
+      detail: `${threats.length} client messages in the last hour looked like an attack on the advisor.`,
+      since: threats[threats.length - 1].ts,
+    });
+  }
+  if (openReviews) {
+    out.push({
+      id: "reviews",
+      severity: "info",
+      title: "Turns awaiting review",
+      detail: `${openReviews} flagged AI turn${openReviews !== 1 ? "s" : ""} to clear or escalate.`,
+      since: null,
+    });
+  }
+  for (const [control, stopped, title] of [
+    ["advisor", "suspended", "AI advisor suspended"],
+    ["execution", "halted", "Execution halted"],
+  ] as const) {
+    const snapshot = db.controlsSnapshot(true)[control];
+    if (snapshot.state === stopped) out.push({ id: control, severity: "info", title, detail: snapshot.reason ?? "", since: snapshot.changed_at });
+  }
+  const order = { high: 0, medium: 1, info: 2 } as const;
+  return out.sort((a, b) => order[a.severity] - order[b.severity]);
+}
+
+/** The mock's configuration fingerprint: what shapes its answers (templates, tools, data versions). */
+const MOCK_CONFIG = {
+  provider: "anthropic",
+  model: "claude-opus-5-5",
+  effort: "medium",
+  mode: "mock-templates",
+  tools: ["search_products", "compare_products", "explain_rule", "get_profile_summary", "get_proposal", "project_goal", "suggest_fix", "create_proposal", "revise_proposal"],
+  data_versions: { regulations: REGULATIONS_VERSION, rules: "rules-2026-10", products_as_of: DATA_AS_OF },
+};
+let fingerprintCache: Promise<string> | null = null;
+function configFingerprint(): Promise<string> {
+  fingerprintCache ??= sha256Hex(canonicalStringify(MOCK_CONFIG));
+  return fingerprintCache;
 }
 
 // The mock has no model and no system prompt; a fixed placeholder stands in for the backend's fingerprint.
@@ -169,6 +274,8 @@ async function modelCardBody(): Promise<ModelCard> {
       { name: "explain_rule", tier: "T0", description: "Return one compliance rule and its regulatory basis." },
       { name: "get_profile_summary", tier: "T1", description: "Return the client's own risk profile." },
       { name: "get_proposal", tier: "T1", description: "Return one of the client's own proposals." },
+      { name: "project_goal", tier: "T1", description: "Project the client's own proposal: chance of a target, bad, typical and good cases." },
+      { name: "suggest_fix", tier: "T1", description: "How to fix one of the client's own proposals; the client applies it." },
       { name: "create_proposal", tier: "T2", description: "Create a proposal; the gate always runs." },
       { name: "revise_proposal", tier: "T2", description: "Save a new version; the gate always runs." },
     ],
@@ -207,6 +314,22 @@ async function modelCardBody(): Promise<ModelCard> {
     controls: db.controlsSnapshot(true),
     regulations: regulationsBody(),
     data_versions: { rules: "rules-2026-10", regulations: REGULATIONS_VERSION, products_as_of: DATA_AS_OF, history: "Illustrative" },
+    governance: {
+      config_fingerprint: await configFingerprint(),
+      config_components: MOCK_CONFIG,
+      labelling:
+        "Every reply carries a visible label (AI-generated, automated template or system notice) and machine-readable provenance: the serving model, the configuration fingerprint and the SHA-256 of the text. The chat opens with a notice that the client is talking to an AI system.",
+      threat_signals: PATTERNS.map((p) => ({ id: p.id, label: p.label, severity: p.severity, owasp: p.owasp })),
+      review_triggers: [
+        "A medium or high threat signal on the client's message",
+        "A tool call the permission broker blocked",
+        "A proposal by the AI that the gate rejected",
+        "A reply rewritten, or replaced by a template, after the number check",
+        "A reply the client marked as unhelpful",
+      ],
+      tracing:
+        "Each turn is recorded as spans named after the OpenTelemetry GenAI semantic conventions (invoke_agent, chat, execute_tool) plus aegis.grounding and aegis.template, with durations, tiers, decisions and token use. Prompts and tool arguments are not captured.",
+    },
   };
   return { ...body, content_sha256: await sha256Hex(canonicalStringify(body)) };
 }
@@ -856,12 +979,12 @@ export const handlers = [
     return HttpResponse.json(db.controlsSnapshot(true));
   }),
 
-  http.get("/api/compliance/overview", ({ request }) => {
+  http.get("/api/compliance/overview", async ({ request }) => {
     const auth = authenticate(request);
     if (!isAuthResult(auth)) return auth;
     const forbidden = requireRole(auth.user, "compliance");
     if (forbidden) return forbidden;
-    return HttpResponse.json(oversightBody());
+    return HttpResponse.json(await oversightBody());
   }),
 
   http.get("/api/compliance/regulations", ({ request }) => {
@@ -878,6 +1001,189 @@ export const handlers = [
     const card = await modelCardBody();
     logAction({ userId: auth.user.id, actor: "compliance", action: "model_card_exported", decision: "allowed", detail: { content_sha256: card.content_sha256 } });
     return HttpResponse.json(card);
+  }),
+
+  // ------------------------------------------- planning and what-if (additions)
+  http.post("/api/proposals/:proposalId/preview", async ({ request, params }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const parent = db.findProposal(auth.user.id, Number(params.proposalId));
+    if (!parent) return errorResponse(404, "NOT_FOUND", "There is no proposal with this id.");
+    const profile = db.currentProfile(auth.user.id);
+    const precondition = t2PreconditionError(profile);
+    if (precondition) return precondition;
+    const body = (await request.json()) as { items?: { product_code: string; weight_pct: number }[] };
+    const raw = body.items ?? [];
+    if (raw.length < 1 || raw.length > 6 || new Set(raw.map((i) => i.product_code)).size !== raw.length) {
+      return errorResponse(422, "VALIDATION_ERROR", "Use 1 to 6 different products.", { fields: [{ field: "items", problem: "1 to 6 unique products" }] });
+    }
+    const before = new Map(parent.items.map((i) => [i.product_code, i]));
+    const items: ProposalItem[] = [];
+    for (const r of raw) {
+      const product = findProduct(r.product_code);
+      if (!product) return errorResponse(422, "VALIDATION_ERROR", `Unknown product code: ${r.product_code}.`);
+      items.push({
+        product_code: product.code,
+        name: product.name,
+        asset_class: product.asset_class,
+        risk_level: product.risk_level,
+        weight_pct: r.weight_pct,
+        amount: Math.round((r.weight_pct / 100) * parent.amount * 100) / 100,
+        rationale: before.get(product.code)?.rationale ?? "",
+      });
+    }
+    const weights: Record<AssetClass, number> = { cash: 0, bond: 0, gold: 0, equity: 0 };
+    for (const i of items) weights[i.asset_class] += i.weight_pct;
+    const metrics = computeMetrics(items);
+    const stress = computeStress(weights, parent.amount);
+    const gate = evaluateGate({
+      items,
+      classWeightsPct: weights,
+      metrics,
+      stress,
+      tier: profile!.tier,
+      amount: parent.amount,
+      horizonYears: parent.horizon_years,
+      nearTermNeed: parent.near_term_need,
+      maxAcceptableLossPct: profile!.max_acceptable_loss_pct,
+    });
+    const total = Math.round(items.reduce((s, i) => s + i.weight_pct, 0) * 100) / 100;
+    return HttpResponse.json({ proposal_id: parent.id, total_pct: total, items, class_weights_pct: weights, metrics, stress, gate, data_label: parent.data_label });
+  }),
+
+  http.get("/api/proposals/:proposalId/remedy", ({ request, params }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const proposal = db.findProposal(auth.user.id, Number(params.proposalId));
+    if (!proposal) return errorResponse(404, "NOT_FOUND", "There is no proposal with this id.");
+    const closed = closedProposalError(proposal);
+    if (closed) return closed;
+    const profile = db.currentProfile(auth.user.id);
+    const precondition = t2PreconditionError(profile);
+    if (precondition) return precondition;
+    const fix = suggestFix(proposal.items, {
+      tier: profile!.tier,
+      amount: proposal.amount,
+      horizonYears: proposal.horizon_years,
+      nearTermNeed: proposal.near_term_need,
+      maxAcceptableLossPct: profile!.max_acceptable_loss_pct,
+    });
+    return HttpResponse.json({ proposal_id: proposal.id, version: proposal.version, ...fix, data_label: proposal.data_label });
+  }),
+
+  http.post("/api/projections", async ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    try {
+      return HttpResponse.json(projectionFor(auth.user.id, body));
+    } catch (e) {
+      if (e instanceof PlanningError) return errorResponse(e.status, e.code, e.message, e.fields ? { fields: e.fields } : undefined);
+      throw e;
+    }
+  }),
+
+  http.get("/api/goals/current", ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json({ goal: db.currentGoal(auth.user.id) ?? null });
+  }),
+
+  http.put("/api/goals/current", async ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const body = (await request.json().catch(() => ({}))) as { name?: string; target_amount?: number; horizon_years?: number; monthly_contribution?: number };
+    const name = (body.name ?? "").trim();
+    const target = Number(body.target_amount);
+    const years = Number(body.horizon_years);
+    const monthly = Number(body.monthly_contribution ?? 0);
+    const fields = [
+      ...(!name || name.length > 60 ? [{ field: "name", problem: "1 to 60 characters" }] : []),
+      ...(!(target >= 1000 && target <= 100000000) ? [{ field: "target_amount", problem: "CNY 1,000 to 100,000,000" }] : []),
+      ...(!(Number.isInteger(years) && years >= 1 && years <= 30) ? [{ field: "horizon_years", problem: "1 to 30" }] : []),
+      ...(!(monthly >= 0 && monthly <= 1000000) ? [{ field: "monthly_contribution", problem: "CNY 0 to 1,000,000" }] : []),
+    ];
+    if (fields.length) return errorResponse(422, "VALIDATION_ERROR", "Check the goal's fields.", { fields });
+    return HttpResponse.json({ goal: setGoal(auth.user.id, { name, target_amount: target, horizon_years: years, monthly_contribution: monthly }) });
+  }),
+
+  http.get("/api/insights", ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(insightsFor(auth.user.id));
+  }),
+
+  http.get("/api/sandbox/analytics", ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    return HttpResponse.json(analyticsFor(auth.user.id));
+  }),
+
+  http.post("/api/chat/feedback", async ({ request }) => {
+    const auth = authenticateAs(request, "client");
+    if (!isAuthResult(auth)) return auth;
+    const body = (await request.json().catch(() => ({}))) as { message_id?: number; rating?: string; reason?: string | null };
+    if (body.rating !== "up" && body.rating !== "down") {
+      return errorResponse(422, "VALIDATION_ERROR", "Rate the reply up or down.", { fields: [{ field: "rating", problem: "up or down" }] });
+    }
+    const mine = db.chatFor(auth.user.id).find((m) => m.message_id === body.message_id && m.role === "assistant");
+    if (!mine) {
+      const elsewhere = [...db.chat.values()].some((list) => list.some((m) => m.message_id === body.message_id && m.role === "assistant"));
+      return elsewhere
+        ? errorResponse(403, "FORBIDDEN", "This reply belongs to another client.")
+        : errorResponse(404, "NOT_FOUND", "There is no reply with this id.");
+    }
+    mine.feedback = body.rating;
+    logAction({
+      userId: auth.user.id,
+      actor: "client",
+      action: "chat_feedback",
+      decision: "allowed",
+      detail: { message_id: mine.message_id, rating: body.rating, reason: body.reason || null },
+    });
+    return HttpResponse.json({ message_id: mine.message_id, rating: body.rating });
+  }),
+
+  // --------------------------------------------- supervisory review (additions)
+  http.get("/api/compliance/reviews", ({ request }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    const url = new URL(request.url);
+    const status = (url.searchParams.get("status") ?? "open") as "open" | "resolved" | "all";
+    return HttpResponse.json(reviewQueue(status, Number(url.searchParams.get("limit") ?? 50)));
+  }),
+
+  http.get("/api/compliance/turns/:logId", ({ request, params }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    const turn = findTurn(Number(params.logId));
+    if (!turn) return errorResponse(404, "NOT_FOUND", "There is no AI turn with this id.");
+    return HttpResponse.json(turnDetail(turn));
+  }),
+
+  http.post("/api/compliance/reviews/:logId", async ({ request, params }) => {
+    const auth = authenticate(request);
+    if (!isAuthResult(auth)) return auth;
+    const forbidden = requireRole(auth.user, "compliance");
+    if (forbidden) return forbidden;
+    const turn = findTurn(Number(params.logId));
+    if (!turn) return errorResponse(404, "NOT_FOUND", "There is no AI turn with this id.");
+    const body = (await request.json().catch(() => ({}))) as { decision?: string; note?: string };
+    const note = (body.note ?? "").trim();
+    if ((body.decision !== "cleared" && body.decision !== "escalated") || note.length < 5 || note.length > 300) {
+      return errorResponse(422, "VALIDATION_ERROR", "Choose clear or escalate and give a note of 5 to 300 characters.", {
+        fields: [{ field: "note", problem: "5 to 300 characters" }],
+      });
+    }
+    const d = turn.detail as Record<string, unknown>;
+    if (!flagsFor(d, feedbackByMessage().get(Number(d.message_id ?? 0))).length) {
+      return errorResponse(409, "STATE_CONFLICT", "This turn raised no review flag.");
+    }
+    return HttpResponse.json(decide(auth.user.id, turn, body.decision, note));
   }),
 
   http.get("/api/health", () => {
@@ -900,7 +1206,24 @@ async function chatTurn(request: Request): Promise<(ChatReply & { toolCards: (Ch
   db.recordChatMessage(auth.user.id);
   db.addChatMessage(auth.user.id, { message_id: db.nextId("message"), role: "user", content: message, created_at: new Date().toISOString() });
   await delay(350);
-  const { reply, proposalsMade, toolCards } = respondToChat(auth.user.id, message, body.proposal_id);
+  const started = performance.now();
+  const signals = scanThreats(message);
+  const { reply: draft, proposalsMade, toolCards, trace } = respondToChat(auth.user.id, message, body.proposal_id);
+  const fingerprint = await configFingerprint();
+  const provenance: Provenance = {
+    label: draft.mode === "suspended" ? "System notice" : "Automated template (checked)",
+    ai_generated: false,
+    generator: "Aegis advisor",
+    provider: null,
+    model: null,
+    mode: draft.mode,
+    config_fingerprint: fingerprint,
+    content_sha256: await sha256Hex(draft.reply),
+    created_at: draft.created_at,
+    standards: ["CN Measures for Labelling AI-Generated Synthetic Content (2025)", "EU AI Act Art. 50"],
+  };
+  const reply: ChatReply = { ...draft, provenance };
+  if (signals.length && trace.length) trace[0].attributes["aegis.threat.signals"] = signals.map((sig) => sig.id);
   db.addChatMessage(auth.user.id, {
     message_id: reply.message_id,
     role: "assistant",
@@ -911,6 +1234,7 @@ async function chatTurn(request: Request): Promise<(ChatReply & { toolCards: (Ch
     citations: reply.citations,
     cards: reply.cards,
     number_sources: reply.number_sources,
+    provenance,
     created_at: reply.created_at,
   });
   // Addition: one entry per turn for the compliance Control Room.
@@ -926,6 +1250,13 @@ async function chatTurn(request: Request): Promise<(ChatReply & { toolCards: (Ch
       proposals: proposalsMade,
       figures_traced: reply.number_sources.length,
       cards: reply.cards.map((c) => c.type),
+      fallback_reason: reply.mode === "suspended" ? "suspended" : "no_model",
+      served_model: null,
+      config_fingerprint: fingerprint,
+      latency_ms: Math.round((performance.now() - started) * 10) / 10,
+      usage: {},
+      signals,
+      trace,
     },
   });
   return { ...reply, toolCards };

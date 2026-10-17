@@ -6,6 +6,7 @@ import {
   Archive,
   FileSpreadsheet,
   Gauge,
+  Goal,
   History,
   LayoutDashboard,
   Package,
@@ -40,6 +41,7 @@ const CLIENT_NAV: NavGroup[] = [
       { href: "/profile/replay", label: "Crisis Replay", icon: History },
       { href: "/products", label: "Products", icon: Package },
       { href: "/proposals/new", label: "Proposals", icon: FileSpreadsheet },
+      { href: "/planner", label: "Goal Planner", icon: Goal },
     ],
   },
   {

@@ -2,10 +2,13 @@ import {
   Activity,
   BadgeCheck,
   Bot,
+  ClipboardCheck,
   FileSpreadsheet,
+  Flag,
   Gauge,
   History,
   Lock,
+  MessageSquareHeart,
   Scale,
   ShieldCheck,
   Wallet,
@@ -31,6 +34,9 @@ export const ACTIVITY: Record<string, { label: string; icon: LucideIcon }> = {
   tool_call: { label: "Aegis used a tool", icon: Bot },
   permission_denied: { label: "Request blocked by the broker", icon: ShieldCheck },
   chain_verified: { label: "Record chain verified", icon: ShieldCheck },
+  goal_set: { label: "Goal saved", icon: Flag },
+  chat_feedback: { label: "Rated an answer", icon: MessageSquareHeart },
+  review_decided: { label: "AI turn reviewed", icon: ClipboardCheck },
 };
 
 export function describeActivity(entry: LogEntry): string {
@@ -40,6 +46,9 @@ export function describeActivity(entry: LogEntry): string {
   if (entry.action === "tool_call" && entry.tool) return `${base}: ${entry.tool} (${entry.tier})`;
   if (entry.action === "permission_denied" && entry.tool) return `${base}: ${entry.tool}`;
   if ((entry.action === "proposal_created" || entry.action === "proposal_revised") && d.proposal_id) return `${base} #${String(d.proposal_id)}`;
+  if (entry.action === "goal_set" && d.horizon_years) return `${base}: a ${String(d.horizon_years)}-year target`;
+  if (entry.action === "chat_feedback" && d.rating) return `${base}: ${d.rating === "down" ? "not helpful" : "helpful"}`;
+  if (entry.action === "review_decided" && d.decision) return `${base}: ${String(d.decision)}`;
   return base;
 }
 

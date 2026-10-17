@@ -8,6 +8,17 @@ import { clearSessionToken, getSessionToken, setSessionToken } from "@/lib/sessi
 import type {
   AdviceRecord,
   ChatMessage,
+  ChatRating,
+  Goal,
+  GoalInput,
+  Insights,
+  PortfolioAnalytics,
+  Projection,
+  ProjectionRequest,
+  ProposalPreview,
+  Remedy,
+  ReviewQueue,
+  TurnDetail,
   CompareResult,
   ConfirmTokenResponse,
   ControlName,
@@ -200,6 +211,7 @@ export function useCreateProposal() {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
       toast.success(`Proposal #${proposal.id} created. The gate returned ${proposal.gate.decision}.`);
     },
   });
@@ -213,6 +225,8 @@ export function useReviseProposal(proposalId: number) {
     onSuccess: (proposal) => {
       qc.setQueryData(["proposals", proposal.id], proposal);
       qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      qc.invalidateQueries({ queryKey: ["remedy"] });
       toast.success(`Version ${proposal.version} saved. The gate returned ${proposal.gate.decision}.`);
     },
   });
@@ -264,7 +278,32 @@ export function useExecuteProposal(proposalId: number) {
       qc.invalidateQueries({ queryKey: ["proposals"] });
       qc.invalidateQueries({ queryKey: ["sandbox"] });
       qc.invalidateQueries({ queryKey: ["records"] });
+      qc.invalidateQueries({ queryKey: ["insights"] });
     },
+  });
+}
+
+/**
+ * A dry run of a revision (addition): the engines and the gate on the weights being edited, nothing saved.
+ * Keeps the previous result on screen while the next one computes, so the what-if lab never flickers.
+ */
+export function usePreview(proposalId: number, items: { product_code: string; weight_pct: number }[] | null) {
+  return useQuery<ProposalPreview>({
+    queryKey: ["preview", proposalId, items],
+    queryFn: () => api.post<ProposalPreview>(`/proposals/${proposalId}/preview`, { items }),
+    enabled: !!items && items.length > 0,
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
+}
+
+/** How to fix (addition): the smallest change that passes the gate. */
+export function useRemedy(proposalId: number | null, enabled = true) {
+  return useQuery<Remedy>({
+    queryKey: ["remedy", proposalId],
+    queryFn: () => api.get<Remedy>(`/proposals/${proposalId}/remedy`),
+    enabled: !!proposalId && enabled,
+    retry: false,
   });
 }
 
@@ -280,6 +319,74 @@ export function useChatHistory() {
   return useQuery<{ items: ChatMessage[] }>({
     queryKey: ["chat", "history"],
     queryFn: () => api.get("/chat/history"),
+  });
+}
+
+/** Rate a reply (addition). A thumbs-down flags the turn for compliance review. */
+export function useChatFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { message_id: number; rating: ChatRating; reason?: string }) =>
+      api.post<{ message_id: number; rating: ChatRating }>("/chat/feedback", body),
+    onSuccess: (result) => {
+      qc.setQueryData<{ items: ChatMessage[] }>(["chat", "history"], (old) =>
+        old
+          ? { items: old.items.map((m) => (m.message_id === result.message_id ? { ...m, feedback: result.rating } : m)) }
+          : old
+      );
+      toast.success(
+        result.rating === "down" ? "Thanks. The compliance team will review this answer." : "Thanks for the feedback."
+      );
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Planning (additions): projections, goals, briefing, live-portfolio analytics
+// ---------------------------------------------------------------------------
+
+/** A seeded Monte Carlo projection; the same inputs always give the same answer, so it caches by its inputs. */
+export function useProjection(body: ProjectionRequest | null) {
+  return useQuery<Projection>({
+    queryKey: ["projection", body],
+    queryFn: () => api.post<Projection>("/projections", body),
+    enabled: !!body,
+    placeholderData: (previous) => previous,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useGoal() {
+  return useQuery<Goal | null>({
+    queryKey: ["goal"],
+    queryFn: async () => (await api.get<{ goal: Goal | null }>("/goals/current")).goal,
+  });
+}
+
+export function useSetGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GoalInput) => api.put<{ goal: Goal | null }>("/goals/current", body),
+    onSuccess: (data) => {
+      qc.setQueryData(["goal"], data.goal);
+      qc.invalidateQueries({ queryKey: ["insights"] });
+      toast.success(`Goal saved: ${data.goal?.name}. Your dashboard now tracks it.`);
+    },
+  });
+}
+
+export function useInsights() {
+  return useQuery<Insights>({
+    queryKey: ["insights"],
+    queryFn: () => api.get<Insights>("/insights"),
+  });
+}
+
+export function usePortfolioAnalytics() {
+  return useQuery<PortfolioAnalytics>({
+    queryKey: ["sandbox", "analytics"],
+    queryFn: () => api.get<PortfolioAnalytics>("/sandbox/analytics"),
   });
 }
 
@@ -386,6 +493,37 @@ export function useOversight() {
     queryKey: ["oversight"],
     queryFn: () => api.get<Oversight>("/compliance/overview"),
     refetchInterval: 3_000,
+  });
+}
+
+/** Flagged AI turns for human review (addition), refreshed with the Control Room. */
+export function useReviews(status: "open" | "resolved" | "all" = "open") {
+  return useQuery<ReviewQueue>({
+    queryKey: ["reviews", status],
+    queryFn: () => api.get<ReviewQueue>(`/compliance/reviews?status=${status}`),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useTurn(logId: number | null) {
+  return useQuery<TurnDetail>({
+    queryKey: ["turn", logId],
+    queryFn: () => api.get<TurnDetail>(`/compliance/turns/${logId}`),
+    enabled: !!logId,
+  });
+}
+
+export function useDecideReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { log_id: number; decision: "cleared" | "escalated"; note: string }) =>
+      api.post<TurnDetail>(`/compliance/reviews/${body.log_id}`, { decision: body.decision, note: body.note }),
+    onSuccess: (turn) => {
+      qc.setQueryData(["turn", turn.log_id], turn);
+      qc.invalidateQueries({ queryKey: ["reviews"] });
+      qc.invalidateQueries({ queryKey: ["oversight"] });
+      toast.success(`Turn ${turn.status === "cleared" ? "cleared" : "escalated"}. The decision is in the operation log.`);
+    },
   });
 }
 

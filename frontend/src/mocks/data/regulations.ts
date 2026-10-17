@@ -19,7 +19,7 @@ interface RawAiControl extends RawBasis {
   note?: string;
 }
 
-export const REGULATIONS_VERSION = "reg-2026-10";
+export const REGULATIONS_VERSION = "reg-2026-10-v2";
 export const REGULATIONS_NOTE =
   "Mapping prepared by the team for this sandbox. It shows which requirement each control is designed to meet; it is not legal advice.";
 
@@ -27,8 +27,7 @@ export const FRAMEWORKS: Framework[] = [
   {
     id: "CN-AMGO",
     short: "CN 2018 Guiding Opinions",
-    title:
-      "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
+    title: "Guiding Opinions on Regulating the Asset Management Business of Financial Institutions (PBOC, CBIRC, CSRC and SAFE, 2018)",
     jurisdiction: "China",
   },
   {
@@ -60,6 +59,36 @@ export const FRAMEWORKS: Framework[] = [
     short: "Aegis policy",
     title: "Internal control set by the Aegis team",
     jurisdiction: "Internal",
+  },
+  {
+    id: "CN-AIGC-LABEL",
+    short: "CN AI Labelling Measures",
+    title: "Measures for Labelling AI-Generated Synthetic Content (CAC, MIIT, MPS and NRTA, 2025)",
+    jurisdiction: "China",
+  },
+  {
+    id: "CN-CSRC-FT",
+    short: "CSRC FinTech Plan 2026-2030",
+    title: "Capital Market FinTech Development Plan 2026-2030 (CSRC, 2026)",
+    jurisdiction: "China",
+  },
+  {
+    id: "HK-SFC-GENAI",
+    short: "HK SFC GenAI circular",
+    title: "Circular to licensed corporations on the use of generative AI language models (SFC, 2024)",
+    jurisdiction: "Hong Kong",
+  },
+  {
+    id: "US-FINRA-2026",
+    short: "FINRA 2026 report",
+    title: "2026 Annual Regulatory Oversight Report: generative AI and AI agents (FINRA, 2025)",
+    jurisdiction: "United States",
+  },
+  {
+    id: "OWASP-ASI",
+    short: "OWASP Agentic Top 10",
+    title: "OWASP Top 10 for Agentic Applications (2026)",
+    jurisdiction: "Industry standard",
   },
 ];
 
@@ -171,8 +200,7 @@ const AI_CONTROLS: RawAiControl[] = [
     framework: "CN-AMGO",
     ref: "Art. 23",
     requirement: "Report the AI model's main parameters and asset-allocation logic to the regulator.",
-    control:
-      "Model disclosure report (model, prompt fingerprint, tools, allocation logic and rules), exported from the Control Room.",
+    control: "Model disclosure report (model, prompt fingerprint, tools, allocation logic and rules), exported from the Control Room.",
     check: "report",
   },
   {
@@ -211,8 +239,7 @@ const AI_CONTROLS: RawAiControl[] = [
     id: "A23-INTERVENE",
     framework: "CN-AMGO",
     ref: "Art. 23",
-    requirement:
-      "When model defects or system faults cause herd behaviour that threatens market stability, step in by hand to adjust or stop the AI business.",
+    requirement: "When model defects or system faults cause herd behaviour that threatens market stability, step in by hand to adjust or stop the AI business.",
     control: "Suspend AI advisor and Halt execution switches, each with a logged reason.",
     check: "controls",
   },
@@ -235,11 +262,102 @@ const AI_CONTROLS: RawAiControl[] = [
     note: "Applied as good practice: investment advice is not on the Act's high-risk list.",
   },
   {
+    id: "AIA-50",
+    framework: "EU-AIACT",
+    ref: "Art. 50(1) and 50(2)",
+    requirement: "Tell people they are interacting with an AI system, and mark AI-generated content in a machine-readable way.",
+    control: "The chat opens with an AI notice, every reply carries its label, and its provenance travels with it and in X-AI-* response headers.",
+    check: "built_in",
+    note: "Applies since 2 August 2026.",
+  },
+  {
     id: "MIFID-25-6",
     framework: "EU-MIFID2",
     ref: "Art. 25(6)",
     requirement: "Before the transaction, give a retail client a statement on how the advice suits them.",
     control: "A hash-chained advice record holds the proposal, the gate result, the disclosures and the quiz.",
+    check: "built_in",
+  },
+  {
+    id: "LABEL-EXPLICIT",
+    framework: "CN-AIGC-LABEL",
+    ref: "Art. 4 (explicit labels)",
+    requirement: "Add explicit labels that users can see to AI-generated text, in the content or the interface.",
+    control: "Each reply is labelled AI-generated, Automated template (checked) or System notice where the client reads it.",
+    check: "built_in",
+  },
+  {
+    id: "LABEL-IMPLICIT",
+    framework: "CN-AIGC-LABEL",
+    ref: "Art. 5 (implicit labels)",
+    requirement: "Add implicit labels to the metadata of AI-generated content.",
+    control: "Each reply's provenance (label, serving model, configuration fingerprint, SHA-256 of the text) is stored with it and sent as response headers.",
+    check: "built_in",
+  },
+  {
+    id: "CSRC-FILING",
+    framework: "CN-CSRC-FT",
+    ref: "Robo-advice: algorithm filing",
+    requirement: "File the advisory algorithm and disclose how it works.",
+    control: "The model disclosure states the configuration fingerprint that every reply records, so a filing can be matched to the answers it produced.",
+    check: "report",
+  },
+  {
+    id: "CSRC-HUMAN",
+    framework: "CN-CSRC-FT",
+    ref: "'Human + AI' advisory model",
+    requirement: "Combine human oversight with AI advice.",
+    control: "The review queue: AI turns flagged by code are cleared or escalated by the compliance officer, and only the client's own click executes.",
+    check: "reviews",
+  },
+  {
+    id: "SFC-HIGHRISK",
+    framework: "HK-SFC-GENAI",
+    ref: "High-risk use: investment advice",
+    requirement: "For AI investment advice, keep management oversight, human review of output and continuous monitoring.",
+    control: "The Control Room's live feed and alerts, and human review of every flagged turn.",
+    check: "reviews",
+    note: "Applied as good practice: Aegis is a sandbox, not a licensed corporation.",
+  },
+  {
+    id: "FINRA-AGENTS",
+    framework: "US-FINRA-2026",
+    ref: "Generative AI: AI agents",
+    requirement: "Track agent actions and decisions, keep prompt and output logs, and record which model version was used and when.",
+    control: "Each turn's trace (model calls, tool calls, the number check), stored with the reply, the serving model and the configuration fingerprint.",
+    check: "built_in",
+    note: "Applied as good practice.",
+  },
+  {
+    id: "ASI01",
+    framework: "OWASP-ASI",
+    ref: "ASI01 Agent goal hijack",
+    requirement: "Detect and contain attempts to redirect the agent's goals.",
+    control: "Threat signals on every message for the review queue; the broker and the gate stop the attempt whatever the model writes.",
+    check: "built_in",
+  },
+  {
+    id: "ASI02",
+    framework: "OWASP-ASI",
+    ref: "ASI02 Tool misuse and exploitation",
+    requirement: "Constrain what each tool can do and validate its inputs.",
+    control: "Nine strict tools in permission tiers T0 to T2, with server-side limits; no tool can execute an order.",
+    check: "built_in",
+  },
+  {
+    id: "ASI03",
+    framework: "OWASP-ASI",
+    ref: "ASI03 Identity and privilege abuse",
+    requirement: "Scope every agent action to the user's own identity and privileges.",
+    control: "The session's user id limits every query; a request for another client's data is refused by the broker and logged.",
+    check: "built_in",
+  },
+  {
+    id: "ASI09",
+    framework: "OWASP-ASI",
+    ref: "ASI09 Human-agent trust exploitation",
+    requirement: "Keep a human in control of consequential actions and stop the agent overstating itself.",
+    control: "Orders need the client's Confirm click and a one-time token; promise words and unsupported figures never reach the client.",
     check: "built_in",
   },
 ];

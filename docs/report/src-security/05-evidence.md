@@ -54,7 +54,7 @@ Rule-breaking requests were attempted as revisions and rejected by the gate with
 
 ## 5.4 Evidence Files
 
-The competition asks, for non-on-chain topics, for the operation logs of the simulated account as execution evidence [@competition]. {@tbl:evidence-files} lists the evidence pack in the `evidence` folder of the repository and the script, in `backend/scripts`, that produces each file on a fresh database.
+The competition asks, for non-on-chain topics, for the operation logs of the simulated account and a demo video as execution evidence [@competition]. The demo video is submitted with the other deliverables. {@tbl:evidence-files} lists the evidence pack in the `evidence` folder of the repository and the script, in `backend/scripts`, that produces each file on a fresh database.
 
 Table: Evidence files and how to reproduce them {#tbl:evidence-files}
 | File | Content | Script |

@@ -38,7 +38,7 @@ DOCS = {
             "Risk-aware wealth guidance with human-confirmed simulated actions.",
         ],
         "strip": "Architecture, algorithms and security",
-        "version": "Version 1.0  /  18 October 2026",
+        "version": "Version 1.0  /  19 October 2026",
     },
     "security": {
         "deliverable": "05",

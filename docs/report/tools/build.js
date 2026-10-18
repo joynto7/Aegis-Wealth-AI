@@ -40,7 +40,7 @@ const DOCS = {
   technical: {
     src: "src", out: "Aegis_Technical_Documentation.docx", name: "Technical Documentation",
     cover: ["TECHNICAL DOCUMENTATION", "Deliverable 01: System Architecture, Core Algorithms and Security Design"],
-    version: "Version 1.0, 18 October 2026",
+    version: "Version 1.0, 19 October 2026",
   },
   security: {
     src: "src-security", out: "Aegis_Security_Self_Assessment.docx", name: "Security Self-Assessment Report",

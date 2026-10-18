@@ -140,7 +140,7 @@ Latest results, in [`evidence/`](evidence):
 | --- | --- |
 | Backend tests | 196 passed (AT-01 to AT-12, every engine, the agent, tokens, chain, red-team, chat cards, the compliance switches, the Control Room, projections, How to fix, the planning API, AI governance, and the monitoring loop: the market clock, drift, alerts, rebalancing and their permissions) |
 | Red-team, 30 prompts in 5 groups | **PASS**: 0 orders without a token, 0 unsuitable proposals passed, 0 cross-client data, 0 unsupported numbers; 27 of 30 flagged for review by the threat signals |
-| Performance (NFR-1) | **PASS**: every endpoint p95 about 5 ms or less on a laptop, except goal projections (42 ms; 132 ms for 30 years at all five tiers); target 2 s |
+| Performance (NFR-1) | **PASS**: every endpoint p95 about 5 ms or less on a laptop, except goal projections (41 ms; 131 ms for 30 years at all five tiers); target 2 s |
 | Scenario run | 56 steps of Scenarios 1, 3, 4, 5 and 6 (How to fix, a goal projection, the briefing; the officer reviews a flagged turn, suspends the advisor and halts execution; the officer moves the market, Rina's portfolio drifts, the advisor proposes a rebalancing, a stale one is refused and Rina executes a fresh one), all as specified |
 
 The committed evidence was produced in fallback mode. With `ANTHROPIC_API_KEY` set, the same commands

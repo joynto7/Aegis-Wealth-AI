@@ -17,6 +17,10 @@ __pycache__/
 .claude/
 .DS_Store
 
+# Submission materials kept locally, not published in the repository
+/docs/
+/evidence/
+
 # Report build tools (docs/report)
 docs/report/tools/node_modules/
 

@@ -39,8 +39,8 @@ What makes it different:
   AI-labelling measures and the EU AI Act ask. Threat signals mapped to the OWASP Top 10 for Agentic
   Applications flag attacks; a review queue lets the officer clear or escalate each flagged turn; and
   every turn keeps an OpenTelemetry-style trace.
-- **A product-grade interface.** A design system researched against wealth and fintech products
-  ([docs/ui-redesign.md](docs/ui-redesign.md)): an ink-navy shell with an indigo accent and a violet
+- **A product-grade interface.** A design system researched against wealth and fintech products:
+  an ink-navy shell with an indigo accent and a violet
   gradient reserved for the AI, a riskometer gauge, a "next best step" journey card, an activity
   timeline, a compare tray, a ⌘K command palette that also asks Aegis, figures that roll to their new
   value, a daily briefing computed by code, and a privacy mode that hides every amount.
@@ -125,22 +125,22 @@ Rina confirms a rebalancing, Confirm refuses it (its prices no longer match) and
 
 ```bash
 docker compose run --rm api pytest -q                      # 196 backend tests, including all 12 acceptance tests
-docker compose run --rm api python scripts/redteam.py      # 30 attack prompts -> evidence/redteam_log.json
-docker compose run --rm api python scripts/perf.py         # NFR-1 timings -> evidence/perf.json
-docker compose run --rm api python scripts/evidence.py     # Scenarios 1, 3, 4, 5, 6 + operation log + model disclosure -> evidence/
+docker compose run --rm api python scripts/redteam.py      # 30 attack prompts; writes local ignored results
+docker compose run --rm api python scripts/perf.py         # NFR-1 timings; writes local ignored results
+docker compose run --rm api python scripts/evidence.py     # Scenarios, operation log and model disclosure; writes local ignored results
 ```
 
 Frontend checks (in `frontend/`): `npm run lint`, `npm run typecheck`, `npm run build`, and
-`npx tsx scripts/verify.ts` (the mock engines against the documentation's worked examples and the
+`npx tsx scripts/verify.ts` (the mock engines against worked examples and the
 backend's results: 50 checks, including the market clock, drift and rebalancing trades).
 
-Latest results, in [`evidence/`](evidence):
+Latest local results:
 
 | Check | Result |
 | --- | --- |
 | Backend tests | 196 passed (AT-01 to AT-12, every engine, the agent, tokens, chain, red-team, chat cards, the compliance switches, the Control Room, projections, How to fix, the planning API, AI governance, and the monitoring loop: the market clock, drift, alerts, rebalancing and their permissions) |
 | Red-team, 30 prompts in 5 groups | **PASS**: 0 orders without a token, 0 unsuitable proposals passed, 0 cross-client data, 0 unsupported numbers; 27 of 30 flagged for review by the threat signals |
-| Performance (NFR-1) | **PASS**: every endpoint p95 about 5 ms or less on a laptop, except goal projections (42 ms; 132 ms for 30 years at all five tiers); target 2 s |
+| Performance (NFR-1) | **PASS**: every endpoint p95 about 5 ms or less on a laptop, except goal projections (41 ms; 131 ms for 30 years at all five tiers); target 2 s |
 | Scenario run | 56 steps of Scenarios 1, 3, 4, 5 and 6 (How to fix, a goal projection, the briefing; the officer reviews a flagged turn, suspends the advisor and halts execution; the officer moves the market, Rina's portfolio drifts, the advisor proposes a rebalancing, a stale one is refused and Rina executes a fresh one), all as specified |
 
 The committed evidence was produced in fallback mode. With `ANTHROPIC_API_KEY` set, the same commands
@@ -167,7 +167,7 @@ flowchart LR
 
 - **Money logic is deterministic.** Scoring, the allocation engine, risk metrics, stress tests, fee
   comparison, the nine-rule compliance gate and the quiz are pure Python functions over versioned
-  data files (`backend/data`), unit-tested against the worked examples in the project documentation.
+  data files (`backend/data`), unit-tested against worked examples.
 - **The agent cannot place orders.** Its eleven tools are tiered T0 (read), T1 (the client's own data,
   including goal projections, How to fix and the drift check) and T2 (create, revise or rebalance a
   proposal, always through the gate). There is no T3 tool: execution needs a
@@ -197,13 +197,7 @@ flowchart LR
   officer with a logged reason, reprices every product. Code measures each client's drift from their
   latest executed proposal and runs the gate on the live weights; drift beyond the band raises an alert
   and a briefing. A rebalancing is priced at one market month: if the market moves or the holdings change
-  first, it can no longer be confirmed. Nothing runs in the background and nothing trades on its own
-  ([docs/monitoring-plan.md](docs/monitoring-plan.md)).
-
-Details: the technical documentation, as a formal report with UML diagrams
-([docs/Aegis_Technical_Documentation.pdf](docs/Aegis_Technical_Documentation.pdf)) and as Markdown
-([docs/technical-documentation.md](docs/technical-documentation.md)), and the security self-assessment
-([docs/security-self-assessment.md](docs/security-self-assessment.md)).
+  first, it can no longer be confirmed. Nothing runs in the background and nothing trades on its own.
 
 ## Repository layout
 
@@ -225,10 +219,6 @@ backend/            FastAPI app (Python 3.12)
 frontend/           Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui
   src/lib/api-types.ts   generated from backend/openapi.json (npm run gen:types)
   src/mocks/        MSW mock API for offline UI work (NEXT_PUBLIC_API_MOCK=1)
-evidence/           red-team log, performance report, scenario run, exported operation log
-docs/               technical documentation (PDF and Markdown), security self-assessment, demo script, contract changes,
-                    UI design, v2 plan, monitoring-loop plan
-  report/           sources of the PDF: chapters in Markdown, UML diagrams (draw.io) and the build (./build.sh)
 compose.yaml        one-command run
 Dockerfile          the API and the web app in one container, for the hosted demo (with deploy/start.sh)
 render.yaml         Render Blueprint for the hosted demo
@@ -320,9 +310,7 @@ set `ALLOWED_ORIGINS` directly. Behind HTTPS, also set `COOKIE_SECURE=1`.
 
 The team built Aegis with AI coding assistants (Claude Code), writing from the team's own
 specification (the project documentation). Each change was reviewed, and every number the product
-shows is checked by automated tests against hand calculations. *Confirm with the organiser that this
-use of AI assistants is allowed under the "completed independently" rule, and adjust this statement to
-match their answer.*
+shows is checked by automated tests against hand calculations.
 
 ## Limitations
 

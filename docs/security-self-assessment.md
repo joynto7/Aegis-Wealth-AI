@@ -4,6 +4,10 @@ Deliverable 05: permission-tier implementation and known-risk list. Structure fo
 the project documentation. Code paths are relative to `backend/`; every control listed here has an
 automated test, and the test evidence is in `evidence/`.
 
+The formal version of this document, with diagrams, a summary of the residual risk and references, is
+[Aegis_Security_Self_Assessment.pdf](Aegis_Security_Self_Assessment.pdf), built from [report/](report/)
+(`./build.sh security`).
+
 ## 1. Scope and assets
 
 | Asset | Where it lives | Why it matters |

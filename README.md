@@ -202,7 +202,8 @@ flowchart LR
 
 Details: the technical documentation, as a formal report with UML diagrams
 ([docs/Aegis_Technical_Documentation.pdf](docs/Aegis_Technical_Documentation.pdf)) and as Markdown
-([docs/technical-documentation.md](docs/technical-documentation.md)), and the security self-assessment
+([docs/technical-documentation.md](docs/technical-documentation.md)), and the security self-assessment, also as a
+formal report ([docs/Aegis_Security_Self_Assessment.pdf](docs/Aegis_Security_Self_Assessment.pdf)) and as Markdown
 ([docs/security-self-assessment.md](docs/security-self-assessment.md)).
 
 ## Repository layout
@@ -226,9 +227,9 @@ frontend/           Next.js (App Router), React, TypeScript, Tailwind CSS, shadc
   src/lib/api-types.ts   generated from backend/openapi.json (npm run gen:types)
   src/mocks/        MSW mock API for offline UI work (NEXT_PUBLIC_API_MOCK=1)
 evidence/           red-team log, performance report, scenario run, exported operation log
-docs/               technical documentation (PDF and Markdown), security self-assessment, demo script, contract changes,
-                    UI design, v2 plan, monitoring-loop plan
-  report/           sources of the PDF: chapters in Markdown, UML diagrams (draw.io) and the build (./build.sh)
+docs/               technical documentation and security self-assessment (PDF and Markdown), demo script, contract
+                    changes, UI design, v2 plan, monitoring-loop plan
+  report/           sources of the two PDFs: chapters in Markdown, UML diagrams (draw.io) and the build (./build.sh)
 compose.yaml        one-command run
 Dockerfile          the API and the web app in one container, for the hosted demo (with deploy/start.sh)
 render.yaml         Render Blueprint for the hosted demo
@@ -320,9 +321,7 @@ set `ALLOWED_ORIGINS` directly. Behind HTTPS, also set `COOKIE_SECURE=1`.
 
 The team built Aegis with AI coding assistants (Claude Code), writing from the team's own
 specification (the project documentation). Each change was reviewed, and every number the product
-shows is checked by automated tests against hand calculations. *Confirm with the organiser that this
-use of AI assistants is allowed under the "completed independently" rule, and adjust this statement to
-match their answer.*
+shows is checked by automated tests against hand calculations.
 
 ## Limitations
 

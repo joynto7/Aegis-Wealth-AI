@@ -1,5 +1,7 @@
-// Builds docs/report/Aegis_Technical_Documentation.docx from the Markdown sections in docs/report/src, in the format of
-// a formal project report (see ../PLAN.md §1). Adapted from the report builder of the team's Sentra project.
+// Builds the competition's formal reports from Markdown sections, in the format of a formal project report (see
+// ../PLAN.md §1): docs/report/Aegis_Technical_Documentation.docx from docs/report/src (deliverable 01), and
+// docs/report/Aegis_Security_Self_Assessment.docx from docs/report/src-security (deliverable 05).
+// Adapted from the report builder of the team's Sentra project.
 //
 // Markdown subset:
 //   # CHAPTER n: TITLE     chapter heading (new page, centered, rule below; resets table/figure numbers)
@@ -19,8 +21,9 @@
 //   <!-- ... -->           comment, ignored
 //
 // Usage:
-//   node build.js                         full document
-//   node build.js --from "2.4" out.docx   preview starting at the first heading beginning with "2.4"
+//   node build.js                         the technical documentation
+//   node build.js --doc security          the security self-assessment report
+//   node build.js --from "2.4" out.docx   preview starting at the first heading beginning with "2.4" (with --doc too)
 const fs = require("fs");
 const path = require("path");
 const {
@@ -30,17 +33,33 @@ const {
 } = require("docx");
 
 const ROOT = path.join(__dirname, "..");
-const SRC = path.join(ROOT, "src");
 const TITLE = "Aegis Wealth AI";
 const SUBTITLE = "An AI wealth-advisory agent that works the way a licensed advisor does, inside safe limits";
-// Cover page details. Placeholders in square brackets until the team sends them.
+// The documents this builder makes: their Markdown folder, output file, name, cover lines and version.
+const DOCS = {
+  technical: {
+    src: "src", out: "Aegis_Technical_Documentation.docx", name: "Technical Documentation",
+    cover: ["TECHNICAL DOCUMENTATION", "Deliverable 01: System Architecture, Core Algorithms and Security Design"],
+    version: "Version 1.0, 18 October 2026",
+  },
+  security: {
+    src: "src-security", out: "Aegis_Security_Self_Assessment.docx", name: "Security Self-Assessment Report",
+    cover: ["SECURITY SELF-ASSESSMENT REPORT", "Deliverable 05: Permission-Tier Implementation and Known-Risk List"],
+    version: "Version 1.0, 19 October 2026",
+  },
+};
+const docArg = process.argv.includes("--doc") ? process.argv[process.argv.indexOf("--doc") + 1] : "technical";
+const DOC = DOCS[docArg];
+if (!DOC) throw new Error(`Unknown document "${docArg}": use ${Object.keys(DOCS).join(" or ")}`);
+const SRC = path.join(ROOT, DOC.src);
+// Cover page details for the 2026 FinTechathon International Track submission.
 const COVER = [
-  ["Team", "[Team name]"],
-  ["Members", "[Member 1, University]\n[Member 2, University]\n[Member 3, University]"],
-  ["Contact", "[Contact e-mail]"],
+  ["Team", "NextWave"],
+  ["Members", "JOYNTO GHOSH, Daffodil International University\nMD. Rezwanul Islam, Daffodil International University\nAlif Uddin Nobin, Daffodil International University\nMost.Esrat Jhahan Nur, Daffodil International University"],
+  ["Contact", "joynto241-35-127@diu.edu.bd"],
   ["Source code", "https://github.com/joynto7/Aegis-Wealth-AI"],
   ["Live demo", "https://aegis-wealth-ai.onrender.com"],
-  ["Version and date", "Version 1.0, 18 October 2026"],
+  ["Version and date", DOC.version],
 ];
 // Level-1 heading that starts a numbered chapter: "CHAPTER 3: ..." or "APPENDIX A: ...".
 const chapterOf = (text) => { const m = /^(?:CHAPTER\s+(\d+)|APPENDIX\s+([A-Z])\b)/i.exec(text); return m && (m[1] || m[2]); };
@@ -366,7 +385,7 @@ function convert(md) {
 const args = process.argv.slice(2);
 const fromIdx = args.indexOf("--from");
 const from = fromIdx >= 0 ? args[fromIdx + 1] : null;
-const OUT = from ? path.resolve(args[fromIdx + 2]) : path.join(ROOT, "Aegis_Technical_Documentation.docx");
+const OUT = from ? path.resolve(args[fromIdx + 2]) : path.join(ROOT, DOC.out);
 
 const files = fs.readdirSync(SRC).filter((f) => f.endsWith(".md")).sort();
 let md = files.map((f) => fs.readFileSync(path.join(SRC, f), "utf8")).join("\n\n");
@@ -446,8 +465,8 @@ const cover = [
   center("Topic B: Wealth Advisory Agent", 24, { italics: true, after: 1300 }),
   center(TITLE, 60, { bold: true, after: 200 }),
   center(SUBTITLE, 26, { italics: true, after: 1100 }),
-  center("TECHNICAL DOCUMENTATION", 36, { bold: true, after: 120 }),
-  center("Deliverable 01: System Architecture, Core Algorithms and Security Design", 24, { after: 1300 }),
+  center(DOC.cover[0], 36, { bold: true, after: 120 }),
+  center(DOC.cover[1], 24, { after: 1300 }),
   coverTable(),
 ];
 
@@ -463,7 +482,7 @@ const front = from ? [] : [
 
 const doc = new Document({
   creator: "Aegis Wealth AI team",
-  title: `${TITLE} — Technical Documentation`,
+  title: `${TITLE} — ${DOC.name}`,
   features: { updateFields: true },
   styles: {
     default: { document: { run: { font: FONT, size: 24, color: BLACK }, paragraph: { spacing: BODY } } },

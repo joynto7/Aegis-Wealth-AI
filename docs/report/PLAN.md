@@ -104,4 +104,14 @@ sections in `src/` with `./build.sh`. Where the build differs from the plan:
 - **Every figure was checked against the code** (table and column names from `backend/app/models`, tools and tiers
   from `backend/app/agent/tools.py`, endpoints from `backend/openapi.json`, results from `evidence/`).
 
-To finish before submission: the team's name, members and contact on the cover page (`COVER` in `tools/build.js`).
+The cover carries the team's name, members and contact (`COVER` in `tools/build.js`, and `tools/cover_pdf.py`, which
+replaces the first page of the PDF with the branded cover).
+
+## 8. The security self-assessment (19 October 2026)
+
+Deliverable 05 is built by the same pipeline as a second formal report: `./build.sh security` turns the eight
+Markdown sections in `src-security/` into `docs/Aegis_Security_Self_Assessment.pdf` (32 A4 pages), with its own cover
+lines and version (`DOCS` in `tools/build.js` and in `tools/cover_pdf.py`). It restructures
+`docs/security-self-assessment.md` into seven chapters (tiers, controls, the 25 known risks in four groups, test
+evidence, OWASP mapping, limitations and next steps) and reuses three figures of the technical documentation
+(Figures 4.1, 3.1 and 2.5). Every code location it cites was checked against the code on 19 October 2026.
